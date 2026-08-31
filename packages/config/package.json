@@ -1,0 +1,20 @@
+{
+  "name": "@unicrm/config",
+  "version": "0.0.0",
+  "private": true,
+  "files": [
+    "typescript"
+  ],
+  "exports": {
+    "./typescript/base.json": "./typescript/base.json",
+    "./typescript/nest.json": "./typescript/nest.json",
+    "./typescript/next.json": "./typescript/next.json",
+    "./typescript/package.json": "./typescript/package.json"
+  },
+  "scripts": {
+    "build": "node -e \"process.exit(0)\"",
+    "lint": "node -e \"process.exit(0)\"",
+    "test": "node -e \"process.exit(0)\"",
+    "typecheck": "node -e \"process.exit(0)\""
+  }
+}

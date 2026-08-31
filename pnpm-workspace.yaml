@@ -1,0 +1,17 @@
+packages:
+  - apps/*
+  - packages/*
+
+overrides:
+  deepmerge-ts: 8.0.2
+  electron-to-chromium: 1.5.416
+  ignore: 7.0.6
+
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@tailwindcss/oxide'
+  - esbuild
+  - prisma
+  - sharp

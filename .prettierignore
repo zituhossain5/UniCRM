@@ -1,0 +1,7 @@
+.next
+apps/web/next-env.d.ts
+coverage
+dist
+docs/UNICRM_BLUEPRINT.md
+node_modules
+pnpm-lock.yaml

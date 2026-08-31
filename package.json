@@ -1,0 +1,32 @@
+{
+  "name": "unicrm",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@10.15.1",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "turbo run lint",
+    "prisma:generate": "corepack pnpm --filter @unicrm/api prisma:generate",
+    "prisma:migrate": "corepack pnpm --filter @unicrm/api prisma:migrate",
+    "prisma:studio": "corepack pnpm --filter @unicrm/api prisma:studio",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck"
+  },
+  "devDependencies": {
+    "@eslint/js": "10.0.1",
+    "eslint": "10.9.1",
+    "eslint-config-prettier": "10.1.8",
+    "globals": "17.11.0",
+    "pnpm": "10.15.1",
+    "prettier": "3.9.6",
+    "turbo": "2.10.12",
+    "typescript-eslint": "8.68.0"
+  }
+}
