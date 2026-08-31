@@ -1,9 +1,19 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { APP_GUARD } from '@nestjs/core';
+import { AuthGuard } from './auth/auth.guard';
+import { AuthModule } from './auth/auth.module';
+import { CsrfGuard } from './auth/csrf.guard';
+import { PermissionGuard } from './auth/permission.guard';
+import { IdentityBootstrapService } from './bootstrap.service';
 import { validateEnvironment } from './config/environment';
 import { DatabaseModule } from './database/database.module';
+import { EmailModule } from './email/email.module';
 import { HealthModule } from './health/health.module';
+import { OrganizationsModule } from './organizations/organizations.module';
 import { RedisModule } from './redis/redis.module';
+import { RolesModule } from './roles/roles.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -14,7 +24,18 @@ import { RedisModule } from './redis/redis.module';
     }),
     DatabaseModule,
     RedisModule,
+    EmailModule,
+    AuthModule,
+    UsersModule,
+    RolesModule,
+    OrganizationsModule,
     HealthModule,
+  ],
+  providers: [
+    IdentityBootstrapService,
+    { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: CsrfGuard },
+    { provide: APP_GUARD, useClass: PermissionGuard },
   ],
 })
 export class AppModule {}

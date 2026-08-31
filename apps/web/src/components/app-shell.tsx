@@ -35,6 +35,8 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTheme } from './theme-provider';
+import { useCurrentUser } from './auth-provider';
+import { apiRequest } from '@/lib/api';
 
 interface NavItem {
   href: string;
@@ -81,6 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
+  const user = useCurrentUser();
   const [collapsed, setCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -191,12 +194,34 @@ export function AppShell({ children }: { children: ReactNode }) {
           <DropdownMenu
             label="User menu"
             items={[
-              { label: 'Profile (coming later)', disabled: true },
-              { label: <Link href="/status">System status</Link> },
+              {
+                label: (
+                  <span className="user-menu-identity">
+                    <strong>
+                      {user.firstName} {user.lastName}
+                    </strong>
+                    <small>{user.email}</small>
+                  </span>
+                ),
+                disabled: true,
+              },
+              { label: <Link href="/app/settings/security">Security</Link> },
+              {
+                label: 'Sign out',
+                onClick: () => {
+                  void apiRequest('/auth/logout', { method: 'POST' }).finally(() =>
+                    window.location.assign('/login'),
+                  );
+                },
+              },
             ]}
             trigger={
               <button aria-label="Open user menu" className="avatar-button" type="button">
-                <Avatar fallback="ZH" label="Zitu Hasan" size="sm" />
+                <Avatar
+                  fallback={`${user.firstName[0] ?? ''}${user.lastName[0] ?? ''}`.toUpperCase()}
+                  label={`${user.firstName} ${user.lastName}`}
+                  size="sm"
+                />
               </button>
             }
           />
@@ -291,7 +316,11 @@ function NavLink({
   pathname,
 }: NavItem & { collapsed?: boolean; pathname: string }) {
   const link = (
-    <Link aria-current={pathname === href ? 'page' : undefined} className="nav-link" href={href}>
+    <Link
+      aria-current={pathname === href || pathname.startsWith(`${href}/`) ? 'page' : undefined}
+      className="nav-link"
+      href={href}
+    >
       <Icon aria-hidden="true" size={16} />
       <span>{label}</span>
     </Link>

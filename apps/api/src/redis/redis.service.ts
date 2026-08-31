@@ -16,10 +16,8 @@ export class RedisService implements OnModuleDestroy {
     this.client.on('error', () => undefined);
   }
 
-  async onModuleDestroy(): Promise<void> {
-    if (this.client.status !== 'end') {
-      await this.client.quit();
-    }
+  onModuleDestroy(): void {
+    this.client.disconnect();
   }
 
   async isHealthy(): Promise<boolean> {
@@ -31,5 +29,17 @@ export class RedisService implements OnModuleDestroy {
     } catch {
       return false;
     }
+  }
+
+  async incrementWithExpiry(key: string, ttlSeconds: number): Promise<number> {
+    if (this.client.status === 'wait') {
+      await this.client.connect();
+    }
+    const result = await this.client.multi().incr(key).expire(key, ttlSeconds, 'NX').exec();
+    const count = result?.[0]?.[1];
+    if (typeof count !== 'number') {
+      throw new Error('Redis rate-limit operation failed');
+    }
+    return count;
   }
 }

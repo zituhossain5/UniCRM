@@ -1287,3 +1287,306 @@ kbd {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Milestone 2: identity and access */
+.auth-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 28px 18px;
+  background: var(--background);
+}
+.auth-panel {
+  display: grid;
+  width: min(100%, 390px);
+  gap: 26px;
+  padding: 30px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.auth-brand {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 10px;
+  color: var(--foreground);
+  font-size: 17px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.auth-panel header h1 {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 650;
+}
+.auth-panel header p,
+.settings-section header p {
+  margin: 7px 0 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.auth-form,
+.dialog-form,
+.settings-form {
+  display: grid;
+  gap: 16px;
+}
+.auth-form label,
+.dialog-form label,
+.settings-form label {
+  display: grid;
+  gap: 7px;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+.auth-form .ui-button,
+.auth-form > .ui-button {
+  width: 100%;
+  justify-content: center;
+}
+.auth-link,
+.auth-owner {
+  text-align: center;
+}
+.auth-owner {
+  margin: -8px 0 0;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.auth-message {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+  color: var(--danger);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.auth-message--success {
+  border-color: color-mix(in srgb, var(--success) 35%, var(--border));
+  background: color-mix(in srgb, var(--success) 7%, var(--surface));
+  color: var(--success);
+}
+.auth-invitee {
+  display: grid;
+  gap: 3px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.auth-invitee span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.user-menu-identity {
+  display: grid;
+  min-width: 190px;
+  gap: 2px;
+  color: var(--foreground);
+}
+.user-menu-identity small {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  text-overflow: ellipsis;
+}
+.settings-page {
+  max-width: 1180px;
+}
+.settings-tabs {
+  display: flex;
+  gap: 22px;
+  margin-top: 22px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--border);
+}
+.settings-tabs a {
+  position: relative;
+  flex: 0 0 auto;
+  padding: 10px 1px 11px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.settings-tabs a[aria-current='page'] {
+  color: var(--foreground);
+}
+.settings-tabs a[aria-current='page']::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: var(--primary);
+  content: '';
+}
+.settings-content {
+  padding-top: 28px;
+}
+.settings-section {
+  display: grid;
+  width: min(100%, 720px);
+  gap: 22px;
+}
+.settings-section--wide {
+  width: 100%;
+}
+.settings-section h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+}
+.settings-section-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.settings-form {
+  width: min(100%, 520px);
+}
+.settings-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 20px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.settings-form > .ui-button {
+  width: fit-content;
+}
+.form-two-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+.settings-table {
+  width: 100%;
+  min-width: 940px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.settings-table th,
+.settings-table td {
+  padding: 11px 13px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  vertical-align: middle;
+}
+.settings-table th {
+  background: var(--surface-subtle);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 650;
+  text-transform: uppercase;
+}
+.settings-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.settings-table td:first-child {
+  display: grid;
+  gap: 2px;
+}
+.settings-table td:first-child small {
+  color: var(--primary-text);
+  font-size: 10px;
+}
+.table-actions {
+  display: flex;
+  min-width: 260px;
+  gap: 7px;
+}
+.table-actions .ui-select-trigger {
+  min-width: 120px;
+}
+.permission-picker {
+  display: grid;
+  max-height: 300px;
+  gap: 12px;
+  margin: 0;
+  padding: 14px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.permission-picker legend {
+  padding: 0 5px;
+  font-size: 12px;
+  font-weight: 650;
+}
+.permission-picker .ui-choice-label span span {
+  display: grid;
+  gap: 2px;
+}
+.permission-picker small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 400;
+}
+.role-list,
+.session-list {
+  border-top: 1px solid var(--border);
+}
+.role-row,
+.session-row {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--border);
+}
+.role-row p,
+.session-row p {
+  margin: 5px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.role-title,
+.session-title,
+.role-summary {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.role-summary {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.session-row > svg {
+  flex: 0 0 auto;
+  color: var(--muted-foreground);
+}
+.session-row > div {
+  flex: 1;
+}
+@media (max-width: 640px) {
+  .auth-panel {
+    padding: 24px 20px;
+  }
+  .settings-section-header,
+  .role-row,
+  .session-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .role-row,
+  .session-row {
+    padding: 16px 0;
+  }
+  .form-two-columns {
+    grid-template-columns: 1fr;
+  }
+  .role-summary {
+    justify-content: space-between;
+  }
+}

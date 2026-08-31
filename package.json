@@ -9,12 +9,14 @@
   },
   "scripts": {
     "build": "turbo run build",
+    "bootstrap": "corepack pnpm --filter @unicrm/api bootstrap",
     "dev": "turbo run dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "turbo run lint",
     "prisma:generate": "corepack pnpm --filter @unicrm/api prisma:generate",
     "prisma:migrate": "corepack pnpm --filter @unicrm/api prisma:migrate",
+    "prisma:deploy": "corepack pnpm --filter @unicrm/api prisma:deploy",
     "prisma:studio": "corepack pnpm --filter @unicrm/api prisma:studio",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck"

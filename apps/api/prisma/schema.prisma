@@ -8,4 +8,195 @@ datasource db {
   provider = "postgresql"
 }
 
-// Domain models are intentionally deferred until their blueprint milestones.
+enum OrganizationStatus {
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum UserStatus {
+  INVITED
+  ACTIVE
+  SUSPENDED
+  DISABLED
+}
+
+enum SecurityEventType {
+  LOGIN_SUCCESS
+  LOGIN_FAILED
+  LOGOUT
+  SESSION_REVOKED
+  LOGOUT_ALL
+  PASSWORD_RESET_REQUESTED
+  PASSWORD_RESET_COMPLETED
+  USER_INVITED
+  INVITATION_ACCEPTED
+  ACCOUNT_DISABLED
+  ROLE_CHANGED
+}
+
+model Organization {
+  id             String             @id @default(uuid()) @db.Uuid
+  name           String
+  slug           String             @unique
+  status         OrganizationStatus @default(ACTIVE)
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  users          User[]
+  sessions       AuthSession[]
+  roles          Role[]
+  invitations    UserInvitation[]
+  securityEvents SecurityEvent[]
+
+  @@map("organizations")
+}
+
+model User {
+  id                  String               @id @default(uuid()) @db.Uuid
+  organizationId      String               @map("organization_id") @db.Uuid
+  firstName           String               @map("first_name")
+  lastName            String               @map("last_name")
+  email               String
+  normalizedEmail     String               @unique @map("normalized_email")
+  passwordHash        String?              @map("password_hash")
+  status              UserStatus           @default(INVITED)
+  emailVerifiedAt     DateTime?            @map("email_verified_at")
+  lastLoginAt         DateTime?            @map("last_login_at")
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions            AuthSession[]
+  userRoles           UserRole[]
+  invitationsSent     UserInvitation[]     @relation("InvitationSender")
+  passwordResetTokens PasswordResetToken[]
+  securityEvents      SecurityEvent[]
+
+  @@index([organizationId, status])
+  @@map("users")
+}
+
+model AuthSession {
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  tokenHash      String       @unique @map("token_hash")
+  csrfTokenHash  String       @map("csrf_token_hash")
+  ipAddress      String?      @map("ip_address")
+  userAgent      String?      @map("user_agent")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  lastUsedAt     DateTime     @default(now()) @map("last_used_at")
+  expiresAt      DateTime     @map("expires_at")
+  revokedAt      DateTime?    @map("revoked_at")
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt, expiresAt])
+  @@index([organizationId])
+  @@index([expiresAt])
+  @@map("auth_sessions")
+}
+
+model Role {
+  id              String           @id @default(uuid()) @db.Uuid
+  organizationId  String           @map("organization_id") @db.Uuid
+  name            String
+  description     String?
+  isSystem        Boolean          @default(false) @map("is_system")
+  createdAt       DateTime         @default(now()) @map("created_at")
+  updatedAt       DateTime         @updatedAt @map("updated_at")
+  organization    Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+  invitations     UserInvitation[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("roles")
+}
+
+model Permission {
+  id              String           @id @default(uuid()) @db.Uuid
+  key             String           @unique
+  description     String
+  createdAt       DateTime         @default(now()) @map("created_at")
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId     String   @map("user_id") @db.Uuid
+  roleId     String   @map("role_id") @db.Uuid
+  assignedAt DateTime @default(now()) @map("assigned_at")
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role       Role     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       String     @map("role_id") @db.Uuid
+  permissionId String     @map("permission_id") @db.Uuid
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+model UserInvitation {
+  id              String       @id @default(uuid()) @db.Uuid
+  organizationId  String       @map("organization_id") @db.Uuid
+  invitedById     String       @map("invited_by_id") @db.Uuid
+  roleId          String       @map("role_id") @db.Uuid
+  firstName       String       @map("first_name")
+  lastName        String       @map("last_name")
+  email           String
+  normalizedEmail String       @map("normalized_email")
+  tokenHash       String       @unique @map("token_hash")
+  expiresAt       DateTime     @map("expires_at")
+  acceptedAt      DateTime?    @map("accepted_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  invitedBy       User         @relation("InvitationSender", fields: [invitedById], references: [id], onDelete: Restrict)
+  role            Role         @relation(fields: [roleId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, normalizedEmail])
+  @@index([expiresAt])
+  @@map("user_invitations")
+}
+
+model PasswordResetToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash")
+  expiresAt DateTime  @map("expires_at")
+  usedAt    DateTime? @map("used_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model SecurityEvent {
+  id             String            @id @default(uuid()) @db.Uuid
+  organizationId String?           @map("organization_id") @db.Uuid
+  userId         String?           @map("user_id") @db.Uuid
+  eventType      SecurityEventType @map("event_type")
+  ipAddress      String?           @map("ip_address")
+  userAgent      String?           @map("user_agent")
+  metadata       Json?
+  createdAt      DateTime          @default(now()) @map("created_at")
+  organization   Organization?     @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  user           User?             @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("security_events")
+}

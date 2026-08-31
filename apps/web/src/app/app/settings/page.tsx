@@ -1,9 +1,4 @@
-import { PlaceholderPage } from '@/components/placeholder-page';
+import { redirect } from 'next/navigation';
 export default function Page() {
-  return (
-    <PlaceholderPage
-      description="Workspace settings will be implemented alongside identity and organization foundations."
-      title="Settings"
-    />
-  );
+  redirect('/app/settings/organization');
 }
