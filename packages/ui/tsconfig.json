@@ -1,8 +1,9 @@
 {
   "extends": "../config/typescript/package.json",
   "compilerOptions": {
+    "jsx": "react-jsx",
     "outDir": "dist",
     "rootDir": "src"
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"]
 }

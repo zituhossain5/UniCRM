@@ -30,6 +30,7 @@ const nextConfig: NextConfig = {
   },
   poweredByHeader: false,
   reactStrictMode: true,
+  transpilePackages: ['@unicrm/ui'],
 };
 
 export default nextConfig;
