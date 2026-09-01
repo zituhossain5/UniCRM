@@ -5,6 +5,7 @@ import {
   Button,
   Dialog,
   DropdownMenu,
+  type DropdownItem,
   IconButton,
   Input,
   PageContainer,
@@ -12,6 +13,11 @@ import {
   Sheet,
   Tooltip,
 } from '@unicrm/ui';
+import {
+  CompanyCreateSheet,
+  ContactCreateSheet,
+  LeadCreateSheet,
+} from '@/components/crm/create-sheets';
 import {
   Bell,
   Building2,
@@ -80,6 +86,8 @@ const commandItems = navSections
   .flatMap((section) => section.items)
   .concat({ href: '/app/settings', icon: Settings, label: 'Settings' });
 
+type GlobalCreateTarget = 'lead' | 'company' | 'contact';
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -87,6 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const user = useCurrentUser();
   const [collapsed, setCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [createTarget, setCreateTarget] = useState<GlobalCreateTarget | null>(null);
   const [query, setQuery] = useState('');
 
   useEffect(() => {
@@ -104,6 +113,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     () => commandItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())),
     [query],
   );
+  const createItems = useMemo(() => {
+    const items: DropdownItem[] = [];
+    if (user.permissions.includes('lead.create'))
+      items.push({ label: 'New Lead', onClick: () => setCreateTarget('lead') });
+    if (user.permissions.includes('company.create'))
+      items.push({ label: 'New Company', onClick: () => setCreateTarget('company') });
+    if (user.permissions.includes('contact.create'))
+      items.push({ label: 'New Contact', onClick: () => setCreateTarget('contact') });
+    return items;
+  }, [user.permissions]);
   const navigation = <Navigation collapsed={collapsed} pathname={pathname} />;
 
   return (
@@ -167,10 +186,23 @@ export function AppShell({ children }: { children: ReactNode }) {
           <kbd>Ctrl K</kbd>
         </button>
         <div className="topbar-actions">
-          <Button className="create-button">
-            <Plus size={16} />
-            <span>Create</span>
-          </Button>
+          {createItems.length ? (
+            <DropdownMenu
+              label="Create menu"
+              items={createItems}
+              trigger={
+                <Button aria-label="Create" className="create-button">
+                  <Plus size={16} />
+                  <span>Create</span>
+                </Button>
+              }
+            />
+          ) : (
+            <Button aria-disabled="true" aria-label="Create" className="create-button" disabled>
+              <Plus size={16} />
+              <span>Create</span>
+            </Button>
+          )}
           <Popover
             trigger={
               <IconButton className="notification-button" label="Notifications">
@@ -232,6 +264,40 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="app-main">
         <PageContainer>{children}</PageContainer>
       </main>
+
+      {user.permissions.includes('lead.create') ? (
+        <LeadCreateSheet
+          open={createTarget === 'lead'}
+          onOpenChange={(open) => setCreateTarget(open ? 'lead' : null)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              New lead
+            </button>
+          }
+        />
+      ) : null}
+      {user.permissions.includes('company.create') ? (
+        <CompanyCreateSheet
+          open={createTarget === 'company'}
+          onOpenChange={(open) => setCreateTarget(open ? 'company' : null)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              New company
+            </button>
+          }
+        />
+      ) : null}
+      {user.permissions.includes('contact.create') ? (
+        <ContactCreateSheet
+          open={createTarget === 'contact'}
+          onOpenChange={(open) => setCreateTarget(open ? 'contact' : null)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              New contact
+            </button>
+          }
+        />
+      ) : null}
 
       <Dialog
         description="Navigate between UniCRM areas. Business search will arrive in a later milestone."

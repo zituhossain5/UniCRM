@@ -1,7 +1,9 @@
 'use client';
 import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
+import { ContactCreateSheet } from '@/components/crm/create-sheets';
 import { apiRequest } from '@/lib/api';
+import { onCrmDataChanged } from '@/lib/crm-events';
 import { type CompanyRecord, type ContactRecord, type PaginationMeta } from '@/lib/crm-types';
 import {
   Button,
@@ -12,13 +14,10 @@ import {
   PageHeader,
   Pagination,
   Select,
-  Sheet,
 } from '@unicrm/ui';
 import { Plus, Search, Users } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-
-const CREATE_CONTACT_FORM_ID = 'create-contact-form';
+import { useCallback, useEffect, useState } from 'react';
 
 export function ContactsView() {
   const current = useCurrentUser();
@@ -30,7 +29,6 @@ export function ContactsView() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const canCreate = current.permissions.includes('contact.create');
   const load = useCallback(async () => {
     try {
@@ -61,24 +59,16 @@ export function ContactsView() {
       .then((r) => setCompanies(r.data))
       .catch(() => undefined);
   }, []);
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries([...form.entries()].filter(([, v]) => v !== ''));
-    try {
-      await apiRequest('/contacts', {
-        method: 'POST',
-        body: JSON.stringify({ ...payload, isPrimary: form.get('isPrimary') === 'on' }),
-      });
-      setOpen(false);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Contact creation failed.');
-    } finally {
-      setSaving(false);
-    }
-  }
+  useEffect(
+    () =>
+      onCrmDataChanged(['companies'], () => {
+        void apiRequest<{ data: CompanyRecord[] }>('/companies?limit=100&sort=name&order=asc')
+          .then((r) => setCompanies(r.data))
+          .catch(() => undefined);
+      }),
+    [],
+  );
+  useEffect(() => onCrmDataChanged(['contacts'], () => void load()), [load]);
   return (
     <div className="crm-page">
       <PageHeader
@@ -86,35 +76,17 @@ export function ContactsView() {
         description={`${meta.total} people`}
         actions={
           canCreate ? (
-            <Sheet
+            <ContactCreateSheet
               open={open}
               onOpenChange={setOpen}
-              title="New contact"
-              description="A contact may be linked to a company now or later."
-              footer={
-                <>
-                  <Button
-                    disabled={saving}
-                    onClick={() => setOpen(false)}
-                    type="button"
-                    variant="secondary"
-                  >
-                    Cancel
-                  </Button>
-                  <Button form={CREATE_CONTACT_FORM_ID} loading={saving} type="submit">
-                    Create contact
-                  </Button>
-                </>
-              }
+              onCreated={load}
               trigger={
                 <Button>
                   <Plus size={15} />
                   New contact
                 </Button>
               }
-            >
-              <ContactForm companies={companies} onSubmit={(event) => void create(event)} />
-            </Sheet>
+            />
           ) : undefined
         }
       />
@@ -213,51 +185,5 @@ export function ContactsView() {
         <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
       ) : null}
     </div>
-  );
-}
-function ContactForm({
-  companies,
-  onSubmit,
-}: {
-  companies: CompanyRecord[];
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <form className="dialog-form" id={CREATE_CONTACT_FORM_ID} onSubmit={onSubmit}>
-      <div className="form-two-columns">
-        <label>
-          <span>First name</span>
-          <Input name="firstName" required />
-        </label>
-        <label>
-          <span>Last name</span>
-          <Input name="lastName" required />
-        </label>
-      </div>
-      <Select
-        label="Company"
-        name="companyId"
-        options={companies.map((c) => ({ label: c.name, value: c.id }))}
-        placeholder="No company"
-      />
-      <label>
-        <span>Job title</span>
-        <Input name="jobTitle" />
-      </label>
-      <div className="form-two-columns">
-        <label>
-          <span>Email</span>
-          <Input name="email" type="email" />
-        </label>
-        <label>
-          <span>Phone</span>
-          <Input name="phone" />
-        </label>
-      </div>
-      <label className="native-check">
-        <input name="isPrimary" type="checkbox" />
-        <span>Primary contact for company</span>
-      </label>
-    </form>
   );
 }

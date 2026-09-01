@@ -2,7 +2,9 @@
 
 import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
+import { CompanyCreateSheet } from '@/components/crm/create-sheets';
 import { apiRequest } from '@/lib/api';
+import { onCrmDataChanged } from '@/lib/crm-events';
 import {
   companyStatuses,
   labelize,
@@ -21,13 +23,10 @@ import {
   PageHeader,
   Pagination,
   Select,
-  Sheet,
 } from '@unicrm/ui';
 import { Building2, Plus, Search } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-
-const CREATE_COMPANY_FORM_ID = 'create-company-form';
+import { useCallback, useEffect, useState } from 'react';
 
 export function CompaniesView() {
   const current = useCurrentUser();
@@ -40,7 +39,6 @@ export function CompaniesView() {
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
-  const [saving, setSaving] = useState(false);
   const canCreate = current.permissions.includes('company.create');
   const canReadUsers = current.permissions.includes('user.read');
   const load = useCallback(async () => {
@@ -74,23 +72,7 @@ export function CompaniesView() {
         .then((result) => setUsers(result.data.filter((user) => user.status === 'ACTIVE')))
         .catch(() => undefined);
   }, [canReadUsers]);
-
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError('');
-    const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries([...form.entries()].filter(([, value]) => value !== ''));
-    try {
-      await apiRequest('/companies', { method: 'POST', body: JSON.stringify(payload) });
-      setOpen(false);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Company creation failed.');
-    } finally {
-      setSaving(false);
-    }
-  }
+  useEffect(() => onCrmDataChanged(['companies'], () => void load()), [load]);
 
   return (
     <div className="crm-page">
@@ -99,35 +81,17 @@ export function CompaniesView() {
         description={`${meta.total} prospect and client organizations`}
         actions={
           canCreate ? (
-            <Sheet
+            <CompanyCreateSheet
               open={open}
               onOpenChange={setOpen}
-              title="New company"
-              description="Start with the details your team needs now."
-              footer={
-                <>
-                  <Button
-                    disabled={saving}
-                    onClick={() => setOpen(false)}
-                    type="button"
-                    variant="secondary"
-                  >
-                    Cancel
-                  </Button>
-                  <Button form={CREATE_COMPANY_FORM_ID} loading={saving} type="submit">
-                    Create company
-                  </Button>
-                </>
-              }
+              onCreated={load}
               trigger={
                 <Button>
                   <Plus size={15} />
                   New company
                 </Button>
               }
-            >
-              <CompanyForm users={users} onSubmit={(event) => void create(event)} />
-            </Sheet>
+            />
           ) : undefined
         }
       />
@@ -254,50 +218,5 @@ export function CompaniesView() {
         <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
       ) : null}
     </div>
-  );
-}
-
-function CompanyForm({
-  users,
-  onSubmit,
-}: {
-  users: PersonRef[];
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <form className="dialog-form" id={CREATE_COMPANY_FORM_ID} onSubmit={onSubmit}>
-      <label>
-        <span>Company name</span>
-        <Input name="name" required maxLength={150} />
-      </label>
-      <label>
-        <span>Website</span>
-        <Input name="website" type="url" placeholder="https://example.com" />
-      </label>
-      <div className="form-two-columns">
-        <label>
-          <span>Email</span>
-          <Input name="email" type="email" />
-        </label>
-        <label>
-          <span>Phone</span>
-          <Input name="phone" />
-        </label>
-      </div>
-      <Select
-        label="Status"
-        name="status"
-        defaultValue="PROSPECT"
-        options={companyStatuses.filter((status) => status.value !== 'ARCHIVED')}
-      />
-      {users.length ? (
-        <Select
-          label="Account owner"
-          name="accountOwnerId"
-          options={users.map((user) => ({ label: personName(user), value: user.id }))}
-          placeholder="Unassigned"
-        />
-      ) : null}
-    </form>
   );
 }

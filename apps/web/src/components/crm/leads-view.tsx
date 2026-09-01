@@ -1,15 +1,14 @@
 'use client';
 import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
+import { LeadCreateSheet } from '@/components/crm/create-sheets';
 import { apiRequest } from '@/lib/api';
+import { onCrmDataChanged } from '@/lib/crm-events';
 import {
   formatMoney,
   labelize,
-  leadPriorities,
   leadSources,
   personName,
-  type CompanyRecord,
-  type ContactRecord,
   type LeadRecord,
   type PaginationMeta,
   type PersonRef,
@@ -26,13 +25,10 @@ import {
   Pagination,
   Select,
   Sheet,
-  Textarea,
 } from '@unicrm/ui';
 import { ArrowRight, Plus, Search, Target } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState, type FormEvent } from 'react';
-
-const CREATE_LEAD_FORM_ID = 'create-lead-form';
+import { useCallback, useEffect, useState } from 'react';
 
 const views = [
   { label: 'All', value: 'all' },
@@ -46,8 +42,6 @@ export function LeadsView() {
   const [leads, setLeads] = useState<LeadRecord[]>();
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
-  const [companies, setCompanies] = useState<CompanyRecord[]>([]);
-  const [contacts, setContacts] = useState<ContactRecord[]>([]);
   const [users, setUsers] = useState<PersonRef[]>([]);
   const [view, setView] = useState('all');
   const [search, setSearch] = useState('');
@@ -60,7 +54,6 @@ export function LeadsView() {
   const [createOpen, setCreateOpen] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [selected, setSelected] = useState<LeadRecord>();
-  const [saving, setSaving] = useState(false);
   const canCreate = current.permissions.includes('lead.create');
   const load = useCallback(async () => {
     try {
@@ -88,15 +81,9 @@ export function LeadsView() {
     return () => clearTimeout(timer);
   }, [load]);
   useEffect(() => {
-    void Promise.all([
-      apiRequest<{ data: Pipeline[] }>('/pipelines'),
-      apiRequest<{ data: CompanyRecord[] }>('/companies?limit=100&sort=name&order=asc'),
-      apiRequest<{ data: ContactRecord[] }>('/contacts?limit=100&sort=lastName&order=asc'),
-    ])
-      .then(([p, c, k]) => {
-        setPipelines(p.data);
-        setCompanies(c.data);
-        setContacts(k.data);
+    void apiRequest<{ data: Pipeline[] }>('/pipelines')
+      .then((result) => {
+        setPipelines(result.data);
       })
       .catch(() => undefined);
     if (current.permissions.includes('user.read'))
@@ -104,21 +91,7 @@ export function LeadsView() {
         .then((r) => setUsers(r.data.filter((user) => user.status === 'ACTIVE')))
         .catch(() => undefined);
   }, [current.permissions]);
-  async function create(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries([...form.entries()].filter(([, v]) => v !== ''));
-    try {
-      await apiRequest('/leads', { method: 'POST', body: JSON.stringify(payload) });
-      setCreateOpen(false);
-      await load();
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Lead creation failed.');
-    } finally {
-      setSaving(false);
-    }
-  }
+  useEffect(() => onCrmDataChanged(['leads', 'companies', 'contacts'], () => void load()), [load]);
   const stages = pipelines.find((p) => p.isDefault)?.stages ?? pipelines[0]?.stages ?? [];
   return (
     <div className="crm-page">
@@ -127,40 +100,17 @@ export function LeadsView() {
         description={`${meta.total} records in this view`}
         actions={
           canCreate ? (
-            <Sheet
+            <LeadCreateSheet
               open={createOpen}
               onOpenChange={setCreateOpen}
-              title="New lead"
-              description="Capture the opportunity now; enrich it as the relationship develops."
-              footer={
-                <>
-                  <Button
-                    disabled={saving}
-                    onClick={() => setCreateOpen(false)}
-                    type="button"
-                    variant="secondary"
-                  >
-                    Cancel
-                  </Button>
-                  <Button form={CREATE_LEAD_FORM_ID} loading={saving} type="submit">
-                    Create lead
-                  </Button>
-                </>
-              }
+              onCreated={load}
               trigger={
                 <Button>
                   <Plus size={15} />
                   New lead
                 </Button>
               }
-            >
-              <LeadForm
-                companies={companies}
-                contacts={contacts}
-                users={users}
-                onSubmit={(event) => void create(event)}
-              />
-            </Sheet>
+            />
           ) : undefined
         }
       />
@@ -389,97 +339,5 @@ export function LeadsView() {
         ) : null}
       </Sheet>
     </div>
-  );
-}
-function LeadForm({
-  companies,
-  contacts,
-  users,
-  onSubmit,
-}: {
-  companies: CompanyRecord[];
-  contacts: ContactRecord[];
-  users: PersonRef[];
-  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
-}) {
-  return (
-    <form className="dialog-form" id={CREATE_LEAD_FORM_ID} onSubmit={onSubmit}>
-      <label>
-        <span>Lead title</span>
-        <Input name="title" required placeholder="Website redesign for ABC" />
-      </label>
-      <div className="form-two-columns">
-        <label>
-          <span>First name</span>
-          <Input name="firstName" />
-        </label>
-        <label>
-          <span>Last name</span>
-          <Input name="lastName" />
-        </label>
-      </div>
-      <Select
-        label="Company"
-        name="companyId"
-        options={companies.map((c) => ({ label: c.name, value: c.id }))}
-        placeholder="No company"
-      />
-      <Select
-        label="Contact"
-        name="contactId"
-        options={contacts.map((c) => ({ label: `${c.firstName} ${c.lastName}`, value: c.id }))}
-        placeholder="No contact"
-      />
-      <div className="form-two-columns">
-        <label>
-          <span>Email</span>
-          <Input name="email" type="email" />
-        </label>
-        <label>
-          <span>Phone</span>
-          <Input name="phone" />
-        </label>
-      </div>
-      <div className="form-two-columns">
-        <Select
-          label="Source"
-          name="source"
-          options={leadSources.map((s) => ({ label: labelize(s), value: s }))}
-          placeholder="Choose source"
-        />
-        <Select
-          label="Priority"
-          name="priority"
-          defaultValue="MEDIUM"
-          options={leadPriorities.map((p) => ({ label: labelize(p), value: p }))}
-        />
-      </div>
-      <div className="form-two-columns">
-        <label>
-          <span>Estimated value</span>
-          <Input name="estimatedValue" type="number" min="0" step="0.01" />
-        </label>
-        <label>
-          <span>Currency</span>
-          <Input name="currency" defaultValue="BDT" maxLength={3} />
-        </label>
-      </div>
-      {users.length ? (
-        <Select
-          label="Owner"
-          name="ownerId"
-          options={users.map((u) => ({ label: personName(u), value: u.id }))}
-          placeholder="Unassigned"
-        />
-      ) : null}
-      <label>
-        <span>Next follow-up</span>
-        <Input name="nextFollowUpAt" type="datetime-local" />
-      </label>
-      <label>
-        <span>Notes</span>
-        <Textarea name="notes" />
-      </label>
-    </form>
   );
 }
