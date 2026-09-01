@@ -65,6 +65,7 @@ export interface ContactRecord extends ContactRef {
   alternatePhone: string | null;
   isPrimary: boolean;
   notes: string | null;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
   leads?: Array<{ id: string; title: string; stage: { name: string } }>;
@@ -102,6 +103,7 @@ export interface LeadRecord {
   description: string | null;
   notes: string | null;
   lostReason: string | null;
+  archivedAt: string | null;
   companyId: string | null;
   contactId: string | null;
   ownerId: string | null;

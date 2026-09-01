@@ -1,5 +1,12 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
+import { isUUID } from 'class-validator';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
@@ -14,6 +21,8 @@ export class ContactsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
 
   async list(principal: AuthenticatedPrincipal, query: ContactListQueryDto) {
+    if (query.company && !isUUID(query.company))
+      throw new BadRequestException('company must be a UUID');
     const listQuery = normalizeListQuery(query, 'createdAt', [
       'firstName',
       'lastName',
@@ -98,10 +107,10 @@ export class ContactsService {
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateContactDto) {
-    const existing = await this.get(principal, id);
+    const existing = await this.requireActive(principal.organizationId, id);
     await this.validateCompany(principal.organizationId, dto.companyId);
     return this.prisma.$transaction(async (tx) => {
-      const targetCompanyId = dto.companyId !== undefined ? dto.companyId : existing.company?.id;
+      const targetCompanyId = dto.companyId !== undefined ? dto.companyId : existing.companyId;
       const willBePrimary = dto.isPrimary ?? existing.isPrimary;
       if (willBePrimary && targetCompanyId)
         await tx.contact.updateMany({
@@ -135,7 +144,7 @@ export class ContactsService {
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {
-    await this.get(principal, id);
+    await this.requireActive(principal.organizationId, id);
     return this.prisma.$transaction(async (tx) => {
       const contact = await tx.contact.update({
         where: { id },
@@ -161,5 +170,15 @@ export class ContactsService {
       where: { id: companyId, organizationId, archivedAt: null },
     });
     if (!company) throw new BadRequestException('Company is invalid or unavailable');
+  }
+
+  private async requireActive(organizationId: string, id: string) {
+    const contact = await this.prisma.contact.findFirst({
+      where: { id, organizationId },
+      select: { archivedAt: true, companyId: true, isPrimary: true },
+    });
+    if (!contact) throw new NotFoundException('Contact not found');
+    if (contact.archivedAt) throw new ConflictException('Archived contacts cannot be modified');
+    return contact;
   }
 }

@@ -1,23 +1,25 @@
 import {
   BadRequestException,
-  ForbiddenException,
+  ConflictException,
   Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import type { Prisma } from '../generated/prisma/client';
+import { isUUID } from 'class-validator';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
-import { PERMISSIONS } from '../auth/auth.constants';
 import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
+import { CompanyStatus } from '../generated/prisma/enums';
 import type { CompanyListQueryDto, CreateCompanyDto, UpdateCompanyDto } from './dto/companies.dto';
 
-const companyInclude = {
+const companyListInclude = {
   accountOwner: { select: { id: true, firstName: true, lastName: true } },
   contacts: {
     where: { archivedAt: null },
     orderBy: [{ isPrimary: 'desc' }, { firstName: 'asc' }],
+    take: 1,
     select: {
       id: true,
       firstName: true,
@@ -28,7 +30,16 @@ const companyInclude = {
       isPrimary: true,
     },
   },
-  _count: { select: { leads: true } },
+  _count: {
+    select: {
+      leads: { where: { archivedAt: null, stage: { isWon: false, isLost: false } } },
+    },
+  },
+} satisfies Prisma.CompanyInclude;
+
+const companyInclude = {
+  ...companyListInclude,
+  contacts: { ...companyListInclude.contacts, take: undefined },
 } satisfies Prisma.CompanyInclude;
 
 @Injectable()
@@ -39,6 +50,9 @@ export class CompaniesService {
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: CompanyListQueryDto) {
+    if (query.status && !Object.values(CompanyStatus).includes(query.status))
+      throw new BadRequestException('Unsupported company status');
+    if (query.owner && !isUUID(query.owner)) throw new BadRequestException('owner must be a UUID');
     const listQuery = normalizeListQuery(query, 'createdAt', [
       'name',
       'createdAt',
@@ -61,7 +75,7 @@ export class CompaniesService {
     const [data, total] = await this.prisma.$transaction([
       this.prisma.company.findMany({
         where,
-        include: companyInclude,
+        include: companyListInclude,
         orderBy: { [listQuery.sort]: listQuery.order },
         skip: (listQuery.page - 1) * listQuery.limit,
         take: listQuery.limit,
@@ -110,10 +124,9 @@ export class CompaniesService {
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateCompanyDto) {
-    await this.get(principal, id);
-    if (dto.status === 'ARCHIVED' && !principal.permissions.includes(PERMISSIONS.companyDelete)) {
-      throw new ForbiddenException('Insufficient permission to archive companies');
-    }
+    await this.requireActive(principal.organizationId, id);
+    if (dto.status === 'ARCHIVED')
+      throw new BadRequestException('Use the archive endpoint to archive companies');
     await this.validateOwner(principal.organizationId, dto.accountOwnerId);
     return this.prisma.$transaction(async (tx) => {
       const company = await tx.company.update({
@@ -136,7 +149,7 @@ export class CompaniesService {
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {
-    await this.get(principal, id);
+    await this.requireActive(principal.organizationId, id);
     return this.prisma.$transaction(async (tx) => {
       const company = await tx.company.update({
         where: { id },
@@ -163,5 +176,14 @@ export class CompaniesService {
       where: { id: ownerId, organizationId, status: 'ACTIVE' },
     });
     if (!owner) throw new NotFoundException('Account owner not found');
+  }
+
+  private async requireActive(organizationId: string, id: string) {
+    const company = await this.prisma.company.findFirst({
+      where: { id, organizationId },
+      select: { archivedAt: true },
+    });
+    if (!company) throw new NotFoundException('Company not found');
+    if (company.archivedAt) throw new ConflictException('Archived companies cannot be modified');
   }
 }

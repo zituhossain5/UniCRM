@@ -6,11 +6,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { isISO8601, isUUID } from 'class-validator';
 import type { Prisma } from '../generated/prisma/client';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { PERMISSIONS } from '../auth/auth.constants';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
+import { LeadPriority, LeadSource } from '../generated/prisma/enums';
 import { PipelinesService } from '../pipelines/pipelines.service';
 import type {
   ActivityListQueryDto,
@@ -42,6 +44,32 @@ export class LeadsService {
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: LeadListQueryDto) {
+    if (query.priority && !Object.values(LeadPriority).includes(query.priority))
+      throw new BadRequestException('Unsupported lead priority');
+    if (query.source && !Object.values(LeadSource).includes(query.source))
+      throw new BadRequestException('Unsupported lead source');
+    if (query.view && !['all', 'mine', 'followUpDue', 'won', 'lost'].includes(query.view))
+      throw new BadRequestException('Unsupported lead view');
+    for (const [name, value] of [
+      ['stage', query.stage],
+      ['owner', query.owner],
+      ['company', query.company],
+    ] as const) {
+      if (value && !isUUID(value)) throw new BadRequestException(`${name} must be a UUID`);
+    }
+    for (const [name, value] of [
+      ['createdFrom', query.createdFrom],
+      ['createdTo', query.createdTo],
+    ] as const) {
+      if (value && !isISO8601(value))
+        throw new BadRequestException(`${name} must be an ISO 8601 date`);
+    }
+    if (
+      query.createdFrom &&
+      query.createdTo &&
+      new Date(query.createdFrom) > new Date(query.createdTo)
+    )
+      throw new BadRequestException('createdFrom must not be after createdTo');
     const listQuery = normalizeListQuery(query, 'createdAt', [
       'title',
       'createdAt',
@@ -196,7 +224,7 @@ export class LeadsService {
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadDto) {
-    const existing = await this.get(principal, id);
+    const existing = await this.requireLead(principal, id);
     await this.validateRelationships(
       principal.organizationId,
       dto.companyId !== undefined ? dto.companyId : existing.companyId,
@@ -204,16 +232,18 @@ export class LeadsService {
     );
     return this.prisma.$transaction(async (tx) => {
       const now = new Date();
+      const companyChanged = dto.companyId !== undefined && dto.companyId !== existing.companyId;
       const lead = await tx.lead.update({
         where: { id },
         data: {
           ...dto,
           estimatedValue: dto.estimatedValue,
           ...(dto.email !== undefined ? { normalizedEmail: dto.email.toLowerCase() } : {}),
+          ...(companyChanged ? { lastActivityAt: now } : {}),
         },
         include: leadInclude,
       });
-      if (dto.companyId !== undefined && dto.companyId !== existing.companyId) {
+      if (companyChanged) {
         await tx.leadActivity.create({
           data: {
             organizationId: principal.organizationId,
@@ -225,7 +255,6 @@ export class LeadsService {
             metadata: { fromCompanyId: existing.companyId, toCompanyId: dto.companyId },
           },
         });
-        await tx.lead.update({ where: { id }, data: { lastActivityAt: now } });
       }
       await tx.activityLog.create({
         data: {
@@ -241,16 +270,17 @@ export class LeadsService {
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {
-    await this.get(principal, id);
+    await this.requireLead(principal, id);
     return this.prisma.$transaction(async (tx) => {
+      const now = new Date();
       const lead = await tx.lead.update({
         where: { id },
-        data: { archivedAt: new Date() },
+        data: { archivedAt: now },
         include: leadInclude,
       });
       await tx.followUp.updateMany({
         where: { leadId: id, status: 'PENDING' },
-        data: { status: 'CANCELLED', cancelledAt: new Date() },
+        data: { status: 'CANCELLED', cancelledAt: now },
       });
       await tx.activityLog.create({
         data: {
@@ -266,7 +296,7 @@ export class LeadsService {
   }
 
   async changeStage(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadStageDto) {
-    const lead = await this.get(principal, id);
+    const lead = await this.requireLead(principal, id);
     const stage = await this.prisma.pipelineStage.findFirst({
       where: {
         id: dto.stageId,
@@ -275,6 +305,7 @@ export class LeadsService {
       },
     });
     if (!stage) throw new BadRequestException('Pipeline stage is invalid or unavailable');
+    if (stage.id === lead.stageId) return lead;
     if (stage.isLost && !dto.lostReason)
       throw new BadRequestException('A lost reason is required when marking a lead lost');
     return this.prisma.$transaction(async (tx) => {
@@ -315,7 +346,8 @@ export class LeadsService {
   }
 
   async changeOwner(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadOwnerDto) {
-    const lead = await this.get(principal, id);
+    const lead = await this.requireLead(principal, id);
+    if (dto.ownerId === lead.ownerId) return lead;
     await this.validateRelationships(principal.organizationId, undefined, undefined, dto.ownerId);
     const owner = dto.ownerId
       ? await this.prisma.user.findUnique({ where: { id: dto.ownerId }, select: userSelect })
@@ -371,7 +403,7 @@ export class LeadsService {
   }
 
   async addActivity(principal: AuthenticatedPrincipal, leadId: string, dto: CreateActivityDto) {
-    await this.requireLead(principal, leadId);
+    const lead = await this.requireLead(principal, leadId);
     return this.prisma.$transaction(async (tx) => {
       const occurredAt = dto.occurredAt ? new Date(dto.occurredAt) : new Date();
       const activity = await tx.leadActivity.create({
@@ -384,7 +416,9 @@ export class LeadsService {
         },
         include: { createdBy: { select: userSelect } },
       });
-      await tx.lead.update({ where: { id: leadId }, data: { lastActivityAt: occurredAt } });
+      const lastActivityAt =
+        !lead.lastActivityAt || occurredAt > lead.lastActivityAt ? occurredAt : lead.lastActivityAt;
+      await tx.lead.update({ where: { id: leadId }, data: { lastActivityAt } });
       return activity;
     });
   }
@@ -406,7 +440,7 @@ export class LeadsService {
           dueAt,
           organizationId: principal.organizationId,
           leadId,
-          assignedToId: dto.assignedToId ?? principal.userId,
+          assignedToId: dto.assignedToId === undefined ? principal.userId : dto.assignedToId,
           createdById: principal.userId,
         },
         include: { assignedTo: { select: userSelect } },
@@ -491,6 +525,19 @@ export class LeadsService {
           },
         },
       });
+      await tx.activityLog.create({
+        data: {
+          organizationId: principal.organizationId,
+          actorId: principal.userId,
+          entityType: 'FOLLOW_UP',
+          entityId: id,
+          action: 'FOLLOW_UP_RESCHEDULED',
+          metadata: {
+            fromDueAt: existing.dueAt.toISOString(),
+            toDueAt: dueAt.toISOString(),
+          },
+        },
+      });
       return followUp;
     });
   }
@@ -503,6 +550,18 @@ export class LeadsService {
   }
 
   async listFollowUps(principal: AuthenticatedPrincipal, query: FollowUpListQueryDto) {
+    if (query.scope && !['today', 'overdue', 'upcoming', 'all'].includes(query.scope))
+      throw new BadRequestException('Unsupported follow-up scope');
+    if (query.lead && !isUUID(query.lead)) throw new BadRequestException('lead must be a UUID');
+    const mine = query.mine as unknown;
+    if (
+      mine !== undefined &&
+      mine !== true &&
+      mine !== false &&
+      mine !== 'true' &&
+      mine !== 'false'
+    )
+      throw new BadRequestException('mine must be true or false');
     const listQuery = normalizeListQuery(query, 'dueAt', ['dueAt', 'createdAt']);
     const start = new Date();
     start.setHours(0, 0, 0, 0);
@@ -520,7 +579,7 @@ export class LeadsService {
       organizationId: principal.organizationId,
       status: 'PENDING',
       ...(dueAt ? { dueAt } : {}),
-      ...(query.mine ? { assignedToId: principal.userId } : {}),
+      ...(mine === true || mine === 'true' ? { assignedToId: principal.userId } : {}),
       ...(query.lead ? { leadId: query.lead } : {}),
     };
     const [data, total] = await this.prisma.$transaction([
@@ -596,9 +655,11 @@ export class LeadsService {
 
   private async requireLead(principal: AuthenticatedPrincipal, id: string) {
     const lead = await this.prisma.lead.findFirst({
-      where: { id, organizationId: principal.organizationId, archivedAt: null },
+      where: { id, organizationId: principal.organizationId },
+      include: leadInclude,
     });
     if (!lead) throw new NotFoundException('Lead not found');
+    if (lead.archivedAt) throw new ConflictException('Archived leads cannot be modified');
     return lead;
   }
   private async requireFollowUp(principal: AuthenticatedPrincipal, leadId: string, id: string) {

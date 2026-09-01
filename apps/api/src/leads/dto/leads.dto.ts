@@ -1,6 +1,5 @@
 import { Transform } from 'class-transformer';
 import {
-  IsBoolean,
   IsDateString,
   IsDecimal,
   IsEmail,
@@ -148,8 +147,9 @@ export class FollowUpListQueryDto extends ListQueryDto {
   @IsIn(['today', 'overdue', 'upcoming', 'all'])
   @IsOptional()
   scope: 'today' | 'overdue' | 'upcoming' | 'all' = 'all';
-  @Transform(({ value }) => value === 'true' || value === true) @IsBoolean() @IsOptional() mine =
-    false;
+  @IsIn(['true', 'false'])
+  @IsOptional()
+  mine: 'true' | 'false' = 'false';
   @IsUUID() @IsOptional() lead?: string;
   @IsIn(['dueAt', 'createdAt']) @IsOptional() sort: 'dueAt' | 'createdAt' = 'dueAt';
 }

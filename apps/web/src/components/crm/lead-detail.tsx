@@ -175,177 +175,179 @@ export function LeadDetail({ id }: { id: string }) {
           lead.company?.name || [lead.firstName, lead.lastName].filter(Boolean).join(' ') || 'Lead'
         }
         actions={
-          <div className="record-actions">
-            {canUpdate ? (
-              <Sheet
-                open={editOpen}
-                onOpenChange={setEditOpen}
-                title="Edit lead"
-                footer={
-                  <>
-                    <Button
-                      disabled={busy}
-                      onClick={() => setEditOpen(false)}
-                      type="button"
-                      variant="secondary"
-                    >
-                      Cancel
-                    </Button>
-                    <Button form={EDIT_LEAD_FORM_ID} loading={busy} type="submit">
-                      Save changes
-                    </Button>
-                  </>
-                }
-                trigger={<Button variant="outline">Edit</Button>}
-              >
-                <form
-                  className="dialog-form"
-                  id={EDIT_LEAD_FORM_ID}
-                  onSubmit={(event) => void submitEdit(event)}
+          !lead.archivedAt ? (
+            <div className="record-actions">
+              {canUpdate ? (
+                <Sheet
+                  open={editOpen}
+                  onOpenChange={setEditOpen}
+                  title="Edit lead"
+                  footer={
+                    <>
+                      <Button
+                        disabled={busy}
+                        onClick={() => setEditOpen(false)}
+                        type="button"
+                        variant="secondary"
+                      >
+                        Cancel
+                      </Button>
+                      <Button form={EDIT_LEAD_FORM_ID} loading={busy} type="submit">
+                        Save changes
+                      </Button>
+                    </>
+                  }
+                  trigger={<Button variant="outline">Edit</Button>}
                 >
-                  <label>
-                    <span>Lead title</span>
-                    <Input name="title" defaultValue={lead.title} required />
-                  </label>
-                  <div className="form-two-columns">
+                  <form
+                    className="dialog-form"
+                    id={EDIT_LEAD_FORM_ID}
+                    onSubmit={(event) => void submitEdit(event)}
+                  >
                     <label>
-                      <span>First name</span>
-                      <Input name="firstName" defaultValue={lead.firstName ?? ''} />
+                      <span>Lead title</span>
+                      <Input name="title" defaultValue={lead.title} required />
                     </label>
-                    <label>
-                      <span>Last name</span>
-                      <Input name="lastName" defaultValue={lead.lastName ?? ''} />
-                    </label>
-                  </div>
-                  <Select
-                    label="Company"
-                    name="companyId"
-                    defaultValue={lead.companyId ?? undefined}
-                    options={companies.map((c) => ({ label: c.name, value: c.id }))}
-                    placeholder="No company"
-                  />
-                  <Select
-                    label="Contact"
-                    name="contactId"
-                    defaultValue={lead.contactId ?? undefined}
-                    options={contacts.map((c) => ({
-                      label: `${c.firstName} ${c.lastName}`,
-                      value: c.id,
-                    }))}
-                    placeholder="No contact"
-                  />
-                  <div className="form-two-columns">
-                    <label>
-                      <span>Email</span>
-                      <Input name="email" type="email" defaultValue={lead.email ?? ''} />
-                    </label>
-                    <label>
-                      <span>Phone</span>
-                      <Input name="phone" defaultValue={lead.phone ?? ''} />
-                    </label>
-                  </div>
-                  <div className="form-two-columns">
+                    <div className="form-two-columns">
+                      <label>
+                        <span>First name</span>
+                        <Input name="firstName" defaultValue={lead.firstName ?? ''} />
+                      </label>
+                      <label>
+                        <span>Last name</span>
+                        <Input name="lastName" defaultValue={lead.lastName ?? ''} />
+                      </label>
+                    </div>
                     <Select
-                      label="Source"
-                      name="source"
-                      defaultValue={lead.source ?? undefined}
-                      options={leadSources.map((s) => ({ label: labelize(s), value: s }))}
+                      label="Company"
+                      name="companyId"
+                      defaultValue={lead.companyId ?? undefined}
+                      options={companies.map((c) => ({ label: c.name, value: c.id }))}
+                      placeholder="No company"
                     />
                     <Select
-                      label="Priority"
-                      name="priority"
-                      defaultValue={lead.priority}
-                      options={leadPriorities.map((p) => ({ label: labelize(p), value: p }))}
+                      label="Contact"
+                      name="contactId"
+                      defaultValue={lead.contactId ?? undefined}
+                      options={contacts.map((c) => ({
+                        label: `${c.firstName} ${c.lastName}`,
+                        value: c.id,
+                      }))}
+                      placeholder="No contact"
                     />
-                  </div>
-                  <div className="form-two-columns">
-                    <label>
-                      <span>Estimated value</span>
-                      <Input
-                        name="estimatedValue"
-                        type="number"
-                        step="0.01"
-                        defaultValue={lead.estimatedValue ?? ''}
+                    <div className="form-two-columns">
+                      <label>
+                        <span>Email</span>
+                        <Input name="email" type="email" defaultValue={lead.email ?? ''} />
+                      </label>
+                      <label>
+                        <span>Phone</span>
+                        <Input name="phone" defaultValue={lead.phone ?? ''} />
+                      </label>
+                    </div>
+                    <div className="form-two-columns">
+                      <Select
+                        label="Source"
+                        name="source"
+                        defaultValue={lead.source ?? undefined}
+                        options={leadSources.map((s) => ({ label: labelize(s), value: s }))}
                       />
+                      <Select
+                        label="Priority"
+                        name="priority"
+                        defaultValue={lead.priority}
+                        options={leadPriorities.map((p) => ({ label: labelize(p), value: p }))}
+                      />
+                    </div>
+                    <div className="form-two-columns">
+                      <label>
+                        <span>Estimated value</span>
+                        <Input
+                          name="estimatedValue"
+                          type="number"
+                          step="0.01"
+                          defaultValue={lead.estimatedValue ?? ''}
+                        />
+                      </label>
+                      <label>
+                        <span>Currency</span>
+                        <Input name="currency" maxLength={3} defaultValue={lead.currency} />
+                      </label>
+                    </div>
+                    <label>
+                      <span>Description</span>
+                      <Textarea name="description" defaultValue={lead.description ?? ''} />
                     </label>
                     <label>
-                      <span>Currency</span>
-                      <Input name="currency" maxLength={3} defaultValue={lead.currency} />
+                      <span>Notes</span>
+                      <Textarea name="notes" defaultValue={lead.notes ?? ''} />
                     </label>
-                  </div>
-                  <label>
-                    <span>Description</span>
-                    <Textarea name="description" defaultValue={lead.description ?? ''} />
-                  </label>
-                  <label>
-                    <span>Notes</span>
-                    <Textarea name="notes" defaultValue={lead.notes ?? ''} />
-                  </label>
-                </form>
-              </Sheet>
-            ) : null}
-            {current.permissions.includes('lead.delete') ? (
-              <ConfirmationDialog
-                title="Archive lead"
-                description="The lead will leave active views while its CRM activity and follow-up history remain preserved."
-                confirmLabel="Archive"
-                onConfirm={() => void archive()}
-                trigger={
-                  <Button variant="outline">
-                    <Archive size={14} />
-                    Archive
-                  </Button>
-                }
-              />
-            ) : null}
-            {canActivity ? (
-              <Dialog
-                open={activityOpen}
-                onOpenChange={setActivityOpen}
-                title="Add activity"
-                trigger={
-                  <Button>
-                    <Plus size={15} />
-                    Add activity
-                  </Button>
-                }
-              >
-                <form className="dialog-form" onSubmit={(event) => void submitActivity(event)}>
-                  <Select
-                    label="Activity type"
-                    name="type"
-                    defaultValue="NOTE"
-                    options={[
-                      { label: 'Note', value: 'NOTE' },
-                      { label: 'Call', value: 'CALL' },
-                      { label: 'Meeting', value: 'MEETING' },
-                      { label: 'Email', value: 'EMAIL' },
-                    ]}
-                  />
-                  <label>
-                    <span>Title</span>
-                    <Input name="title" required />
-                  </label>
-                  <label>
-                    <span>Details</span>
-                    <Textarea name="description" />
-                  </label>
-                  <div className="ui-dialog-actions">
-                    <Button loading={busy} type="submit">
+                  </form>
+                </Sheet>
+              ) : null}
+              {current.permissions.includes('lead.delete') ? (
+                <ConfirmationDialog
+                  title="Archive lead"
+                  description="The lead will leave active views while its CRM activity and follow-up history remain preserved."
+                  confirmLabel="Archive"
+                  onConfirm={() => void archive()}
+                  trigger={
+                    <Button variant="outline">
+                      <Archive size={14} />
+                      Archive
+                    </Button>
+                  }
+                />
+              ) : null}
+              {canActivity ? (
+                <Dialog
+                  open={activityOpen}
+                  onOpenChange={setActivityOpen}
+                  title="Add activity"
+                  trigger={
+                    <Button>
+                      <Plus size={15} />
                       Add activity
                     </Button>
-                  </div>
-                </form>
-              </Dialog>
-            ) : null}
-          </div>
+                  }
+                >
+                  <form className="dialog-form" onSubmit={(event) => void submitActivity(event)}>
+                    <Select
+                      label="Activity type"
+                      name="type"
+                      defaultValue="NOTE"
+                      options={[
+                        { label: 'Note', value: 'NOTE' },
+                        { label: 'Call', value: 'CALL' },
+                        { label: 'Meeting', value: 'MEETING' },
+                        { label: 'Email', value: 'EMAIL' },
+                      ]}
+                    />
+                    <label>
+                      <span>Title</span>
+                      <Input name="title" required />
+                    </label>
+                    <label>
+                      <span>Details</span>
+                      <Textarea name="description" />
+                    </label>
+                    <div className="ui-dialog-actions">
+                      <Button loading={busy} type="submit">
+                        Add activity
+                      </Button>
+                    </div>
+                  </form>
+                </Dialog>
+              ) : null}
+            </div>
+          ) : undefined
         }
       />
       {error ? <AuthMessage>{error}</AuthMessage> : null}
       <div className="lead-command-bar">
         <div>
           <span>Stage</span>
-          {current.permissions.includes('lead.stage.update') ? (
+          {!lead.archivedAt && current.permissions.includes('lead.stage.update') ? (
             <Select
               value={lead.stageId}
               onValueChange={(v) => void changeStage(v)}
@@ -359,7 +361,7 @@ export function LeadDetail({ id }: { id: string }) {
         </div>
         <div>
           <span>Owner</span>
-          {current.permissions.includes('lead.assign') && users.length ? (
+          {!lead.archivedAt && current.permissions.includes('lead.assign') && users.length ? (
             <Select
               value={lead.ownerId ?? '__unassigned__'}
               onValueChange={(v) =>
@@ -378,7 +380,7 @@ export function LeadDetail({ id }: { id: string }) {
             <strong>{personName(lead.owner)}</strong>
           )}
         </div>
-        {canActivity ? (
+        {!lead.archivedAt && canActivity ? (
           <Button
             variant="outline"
             onClick={() => {
@@ -463,7 +465,7 @@ export function LeadDetail({ id }: { id: string }) {
                     </strong>
                     <p>{f.notes || `Assigned to ${personName(f.assignedTo)}`}</p>
                   </div>
-                  {f.status === 'PENDING' && canActivity ? (
+                  {!lead.archivedAt && f.status === 'PENDING' && canActivity ? (
                     <div className="follow-actions">
                       <Button
                         variant="ghost"

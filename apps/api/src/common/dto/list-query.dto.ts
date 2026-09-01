@@ -37,14 +37,20 @@ export function normalizeListQuery<TSort extends string>(
 ) {
   const page = Number(query.page ?? 1);
   const limit = Number(query.limit ?? 25);
+  if (!Number.isInteger(page) || page < 1)
+    throw new BadRequestException('page must be a positive integer');
+  if (!Number.isInteger(limit) || limit < 1 || limit > 100)
+    throw new BadRequestException('limit must be an integer between 1 and 100');
   if (query.sort && !allowedSorts.includes(query.sort as TSort))
     throw new BadRequestException('Unsupported sort field');
+  if (query.order !== undefined && query.order !== 'asc' && query.order !== 'desc')
+    throw new BadRequestException('order must be asc or desc');
   const sort = query.sort ? (query.sort as TSort) : defaultSort;
   const order = query.order === 'asc' || query.order === 'desc' ? query.order : 'desc';
 
   return {
-    page: Number.isInteger(page) && page > 0 ? page : 1,
-    limit: Number.isInteger(limit) && limit > 0 ? Math.min(limit, 100) : 25,
+    page,
+    limit,
     order,
     search: typeof query.search === 'string' ? query.search.trim() : undefined,
     sort,

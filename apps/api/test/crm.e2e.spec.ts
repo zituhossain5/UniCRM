@@ -47,6 +47,7 @@ describe('Milestone 3 CRM core', () => {
   let companyB: string;
   let contactA: string;
   let leadA: string;
+  let qualifiedStageId: string;
 
   beforeAll(async () => {
     process.env.AUTH_RATE_LIMIT_MAX = '100';
@@ -141,6 +142,8 @@ describe('Milestone 3 CRM core', () => {
     expect(second[0]!.id).toBe(first[0]!.id);
     expect(first[0]!.stages.find((stage) => stage.name === 'Won')?.isWon).toBe(true);
     expect(first[0]!.stages.find((stage) => stage.name === 'Lost')?.isLost).toBe(true);
+    await agentB.get('/api/v1/pipelines').expect(200);
+    await agentB.get(`/api/v1/pipelines/${first[0]!.id}/stages`).expect(404);
   });
 
   it('creates, reads, updates, paginates, validates sorting, and isolates companies', async () => {
@@ -181,10 +184,43 @@ describe('Milestone 3 CRM core', () => {
       .expect(201);
     contactA = body<{ data: { id: string; company: { id: string } } }>(created).data.id;
     expect(body<{ data: { company: { id: string } } }>(created).data.company.id).toBe(companyA);
+    const secondPrimary = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/contacts')
+        .send({
+          firstName: 'Primary',
+          lastName: 'Replacement',
+          companyId: companyA,
+          isPrimary: true,
+        })
+        .expect(201),
+    ).data;
+    expect((await prisma.contact.findUniqueOrThrow({ where: { id: contactA } })).isPrimary).toBe(
+      false,
+    );
+    expect(
+      body<{ data: { contacts: Array<{ id: string }> } }>(
+        await agentA.get(`/api/v1/companies/${companyA}`).expect(200),
+      ).data.contacts.map((contact) => contact.id),
+    ).toEqual(expect.arrayContaining([contactA, secondPrimary.id]));
     await mutate(agentA, csrfA, 'post', '/api/v1/contacts')
       .send({ firstName: 'Wrong', lastName: 'Tenant', companyId: companyB })
       .expect(400);
+    await mutate(agentA, csrfA, 'patch', `/api/v1/contacts/${contactA}`)
+      .send({ jobTitle: 'CTO', email: 'MINA.UPDATED@example.test' })
+      .expect(200);
+    const list = body<{ data: Array<{ id: string; normalizedEmail: string }> }>(
+      await agentA.get(`/api/v1/contacts?company=${companyA}&search=mina.updated`).expect(200),
+    );
+    expect(list.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: contactA, normalizedEmail: 'mina.updated@example.test' }),
+      ]),
+    );
+    await mutate(agentA, csrfA, 'patch', `/api/v1/contacts/${contactA}`)
+      .send({ companyId: companyB })
+      .expect(400);
     await agentB.get(`/api/v1/contacts/${contactA}`).expect(404);
+    await agentA.get('/api/v1/contacts?page=0').expect(400);
   });
 
   it('creates, filters, updates, assigns, and moves leads with automatic history', async () => {
@@ -212,9 +248,30 @@ describe('Milestone 3 CRM core', () => {
       include: { stages: true },
     });
     const qualified = pipeline.stages.find((stage) => stage.name === 'Qualified')!;
+    qualifiedStageId = qualified.id;
+    const beforeIdempotentOwner = await prisma.leadActivity.count({ where: { leadId: leadA } });
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/owner`)
+      .send({ ownerId: ownerA })
+      .expect(200);
+    expect(await prisma.leadActivity.count({ where: { leadId: leadA } })).toBe(
+      beforeIdempotentOwner,
+    );
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/owner`)
+      .send({ ownerId: null })
+      .expect(200);
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/owner`)
+      .send({ ownerId: ownerA })
+      .expect(200);
     await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/stage`)
       .send({ stageId: qualified.id })
       .expect(200);
+    const beforeIdempotentStage = await prisma.leadActivity.count({ where: { leadId: leadA } });
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/stage`)
+      .send({ stageId: qualified.id })
+      .expect(200);
+    expect(await prisma.leadActivity.count({ where: { leadId: leadA } })).toBe(
+      beforeIdempotentStage,
+    );
     await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/owner`)
       .send({ ownerId: ownerB })
       .expect(400);
@@ -224,12 +281,23 @@ describe('Milestone 3 CRM core', () => {
         .expect(200),
     );
     expect(filtered.data.map((lead) => lead.id)).toContain(leadA);
+    const sourceAndPriority = body<{ data: Array<{ id: string }> }>(
+      await agentA.get('/api/v1/leads?source=REFERRAL&priority=HIGH').expect(200),
+    );
+    expect(sourceAndPriority.data.map((lead) => lead.id)).toContain(leadA);
+    await agentA.get('/api/v1/leads?order=sideways').expect(400);
+    await agentA.get('/api/v1/leads?priority=CRITICAL').expect(400);
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}`)
+      .send({ companyId: companyB })
+      .expect(400);
     const activities = body<{ data: Array<{ type: string; title: string }> }>(
       await agentA.get(`/api/v1/leads/${leadA}/activities`).expect(200),
     );
     expect(activities.data).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ type: 'STATUS_CHANGE', title: 'Stage changed' }),
+        expect.objectContaining({ type: 'OWNER_CHANGE', title: 'Owner changed' }),
+        expect.objectContaining({ type: 'SYSTEM', title: 'Lead created' }),
       ]),
     );
     const lost = pipeline.stages.find((stage) => stage.isLost)!;
@@ -248,11 +316,19 @@ describe('Milestone 3 CRM core', () => {
         await agentA.get('/api/v1/leads?view=won').expect(200),
       ).data.map((lead) => lead.id),
     ).toContain(leadA);
+    await agentB.get('/api/v1/pipelines').expect(200);
+    const pipelineB = await prisma.pipeline.findFirstOrThrow({
+      where: { organizationId: orgB, isDefault: true },
+      include: { stages: true },
+    });
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/stage`)
+      .send({ stageId: pipelineB.stages[0]!.id })
+      .expect(400);
     await agentB.get(`/api/v1/leads/${leadA}`).expect(404);
   });
 
   it('records user activities and isolates the timeline', async () => {
-    for (const type of ['NOTE', 'CALL', 'MEETING'] as const) {
+    for (const type of ['NOTE', 'CALL', 'MEETING', 'EMAIL'] as const) {
       await mutate(agentA, csrfA, 'post', `/api/v1/leads/${leadA}/activities`)
         .send({ type, title: `${type} recorded`, description: 'CRM test activity' })
         .expect(201);
@@ -263,6 +339,19 @@ describe('Milestone 3 CRM core', () => {
     expect(activities.some((activity) => activity.type === 'NOTE')).toBe(true);
     expect(activities.some((activity) => activity.type === 'CALL')).toBe(true);
     expect(activities.some((activity) => activity.type === 'MEETING')).toBe(true);
+    expect(activities.some((activity) => activity.type === 'EMAIL')).toBe(true);
+    const beforeBackdated = await prisma.lead.findUniqueOrThrow({ where: { id: leadA } });
+    await mutate(agentA, csrfA, 'post', `/api/v1/leads/${leadA}/activities`)
+      .send({
+        type: 'NOTE',
+        title: 'Historical note',
+        occurredAt: '2020-01-01T00:00:00.000Z',
+      })
+      .expect(201);
+    const afterBackdated = await prisma.lead.findUniqueOrThrow({ where: { id: leadA } });
+    expect(afterBackdated.lastActivityAt?.toISOString()).toBe(
+      beforeBackdated.lastActivityAt?.toISOString(),
+    );
     await agentB.get(`/api/v1/leads/${leadA}/activities`).expect(404);
     await mutate(agentB, csrfB, 'post', `/api/v1/leads/${leadA}/activities`)
       .send({ type: 'NOTE', title: 'Cross tenant' })
@@ -284,10 +373,55 @@ describe('Milestone 3 CRM core', () => {
         .send({ dueAt: new Date(Date.now() + 86_400_000).toISOString(), type: 'MEETING' })
         .expect(201),
     ).data;
+    const unassigned = body<{ data: { id: string; assignedToId: string | null } }>(
+      await mutate(agentA, csrfA, 'post', `/api/v1/leads/${leadA}/follow-ups`)
+        .send({
+          dueAt: new Date(Date.now() + 172_800_000).toISOString(),
+          type: 'EMAIL',
+          assignedToId: null,
+        })
+        .expect(201),
+    ).data;
+    expect(unassigned.assignedToId).toBeNull();
+    const today = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', `/api/v1/leads/${leadA}/follow-ups`)
+        .send({ dueAt: new Date().toISOString(), type: 'CALL' })
+        .expect(201),
+    ).data;
+    await mutate(agentA, csrfA, 'post', `/api/v1/leads/${leadA}/follow-ups`)
+      .send({ dueAt: new Date().toISOString(), assignedToId: ownerB })
+      .expect(400);
     const overdueList = body<{ data: Array<{ id: string }> }>(
       await agentA.get('/api/v1/follow-ups?scope=overdue&mine=true').expect(200),
     ).data;
     expect(overdueList.map((item) => item.id)).toContain(overdue.id);
+    expect(overdueList.map((item) => item.id)).not.toContain(unassigned.id);
+    await agentA.get('/api/v1/follow-ups?mine=definitely').expect(400);
+    const rescheduledAt = new Date(Date.now() + 259_200_000).toISOString();
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${leadA}/follow-ups/${future.id}`)
+      .send({ dueAt: rescheduledAt, notes: 'Moved after customer request' })
+      .expect(200);
+    expect(
+      await prisma.activityLog.count({
+        where: { entityId: future.id, action: 'FOLLOW_UP_RESCHEDULED' },
+      }),
+    ).toBe(1);
+    const upcoming = body<{ data: Array<{ id: string }> }>(
+      await agentA.get('/api/v1/follow-ups?scope=upcoming').expect(200),
+    ).data;
+    expect(upcoming.map((item) => item.id)).toEqual(
+      expect.arrayContaining([future.id, unassigned.id]),
+    );
+    expect(
+      body<{ data: Array<{ id: string }> }>(
+        await agentA.get('/api/v1/follow-ups?scope=today').expect(200),
+      ).data.map((item) => item.id),
+    ).toContain(today.id);
+    expect(
+      body<{ data: Array<{ id: string }> }>(
+        await agentB.get(`/api/v1/follow-ups?lead=${leadA}`).expect(200),
+      ).data,
+    ).toHaveLength(0);
     await mutate(
       agentA,
       csrfA,
@@ -340,8 +474,64 @@ describe('Milestone 3 CRM core', () => {
         await mutate(roleAgent, roleCsrf, 'post', '/api/v1/leads')
           .send({ title: 'Forbidden' })
           .expect(403);
-      if (roleName === 'Staff')
+      if (roleName === 'Viewer')
+        await mutate(roleAgent, roleCsrf, 'post', '/api/v1/companies')
+          .send({ name: 'Forbidden company' })
+          .expect(403);
+      if (roleName === 'Viewer')
+        await mutate(roleAgent, roleCsrf, 'post', `/api/v1/leads/${leadA}/activities`)
+          .send({ type: 'NOTE', title: 'Forbidden activity' })
+          .expect(403);
+      if (roleName === 'Viewer')
+        await mutate(roleAgent, roleCsrf, 'patch', `/api/v1/leads/${leadA}/stage`)
+          .send({ stageId: qualifiedStageId })
+          .expect(403);
+      if (roleName === 'Staff') {
+        await mutate(roleAgent, roleCsrf, 'patch', `/api/v1/leads/${leadA}/owner`)
+          .send({ ownerId: user.id })
+          .expect(403);
         await mutate(roleAgent, roleCsrf, 'delete', `/api/v1/leads/${leadA}`).expect(403);
+      }
     }
   }, 30_000);
+
+  it('keeps archived CRM records historically readable but immutable', async () => {
+    const disposableContact = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/contacts')
+        .send({ firstName: 'Archive', lastName: 'Contact', companyId: companyA })
+        .expect(201),
+    ).data;
+    await mutate(agentA, csrfA, 'delete', `/api/v1/contacts/${disposableContact.id}`).expect(200);
+    await agentA.get(`/api/v1/contacts/${disposableContact.id}`).expect(200);
+    await mutate(agentA, csrfA, 'patch', `/api/v1/contacts/${disposableContact.id}`)
+      .send({ jobTitle: 'Changed after archive' })
+      .expect(409);
+    await mutate(agentA, csrfA, 'delete', `/api/v1/contacts/${disposableContact.id}`).expect(409);
+
+    const disposableLead = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/leads')
+        .send({ title: 'Archive lifecycle' })
+        .expect(201),
+    ).data;
+    await mutate(agentA, csrfA, 'delete', `/api/v1/leads/${disposableLead.id}`).expect(200);
+    await agentA.get(`/api/v1/leads/${disposableLead.id}`).expect(200);
+    await mutate(agentA, csrfA, 'patch', `/api/v1/leads/${disposableLead.id}`)
+      .send({ title: 'Changed after archive' })
+      .expect(409);
+    await mutate(agentA, csrfA, 'delete', `/api/v1/leads/${disposableLead.id}`).expect(409);
+
+    await mutate(agentA, csrfA, 'patch', `/api/v1/companies/${companyA}`)
+      .send({ status: 'ARCHIVED' })
+      .expect(400);
+    await mutate(agentA, csrfA, 'delete', `/api/v1/companies/${companyA}`).expect(200);
+    await agentA.get(`/api/v1/companies/${companyA}`).expect(200);
+    await mutate(agentA, csrfA, 'patch', `/api/v1/companies/${companyA}`)
+      .send({ industry: 'Changed after archive' })
+      .expect(409);
+    await mutate(agentA, csrfA, 'delete', `/api/v1/companies/${companyA}`).expect(409);
+    const archived = body<{ data: Array<{ id: string }> }>(
+      await agentA.get('/api/v1/companies?status=ARCHIVED').expect(200),
+    );
+    expect(archived.data.map((company) => company.id)).toContain(companyA);
+  });
 });

@@ -88,10 +88,11 @@ export function CompanyDetail({ id }: { id: string }) {
           </Badge>
         }
         actions={
-          current.permissions.includes('company.update') ||
-          current.permissions.includes('company.delete') ? (
+          company.status !== 'ARCHIVED' &&
+          (current.permissions.includes('company.update') ||
+            current.permissions.includes('company.delete')) ? (
             <div className="record-actions">
-              {current.permissions.includes('company.update') ? (
+              {current.permissions.includes('company.update') && company.status !== 'ARCHIVED' ? (
                 <Sheet
                   open={open}
                   onOpenChange={setOpen}

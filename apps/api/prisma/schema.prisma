@@ -1,7 +1,8 @@
 generator client {
-  provider     = "prisma-client"
-  output       = "../src/generated/prisma"
-  moduleFormat = "cjs"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  moduleFormat    = "cjs"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
@@ -296,6 +297,7 @@ model Company {
   leads          Lead[]
 
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, archivedAt, createdAt])
   @@index([organizationId, name])
   @@index([organizationId, accountOwnerId])
   @@map("companies")
@@ -323,7 +325,9 @@ model Contact {
   createdBy       User?        @relation("ContactCreator", fields: [createdById], references: [id], onDelete: SetNull)
   leads           Lead[]
 
+  @@unique([companyId], map: "contacts_one_primary_per_company", where: raw("\"is_primary\" = true AND \"archived_at\" IS NULL"))
   @@index([organizationId, companyId, archivedAt])
+  @@index([organizationId, archivedAt, createdAt])
   @@index([organizationId, lastName, firstName])
   @@index([organizationId, normalizedEmail])
   @@map("contacts")
@@ -407,6 +411,8 @@ model Lead {
   @@index([organizationId, companyId])
   @@index([organizationId, nextFollowUpAt])
   @@index([organizationId, createdAt])
+  @@index([organizationId, priority, archivedAt, createdAt])
+  @@index([organizationId, source, archivedAt, createdAt])
   @@index([organizationId, normalizedEmail])
   @@map("leads")
 }

@@ -93,8 +93,9 @@ export function ContactDetail({ id }: { id: string }) {
         title={`${contact.firstName} ${contact.lastName}`}
         description={contact.jobTitle || contact.company?.name || 'Contact'}
         actions={
-          current.permissions.includes('contact.update') ||
-          current.permissions.includes('contact.delete') ? (
+          !contact.archivedAt &&
+          (current.permissions.includes('contact.update') ||
+            current.permissions.includes('contact.delete')) ? (
             <div className="record-actions">
               {current.permissions.includes('contact.update') ? (
                 <Sheet
