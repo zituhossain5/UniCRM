@@ -4,6 +4,10 @@ export function Card({ className = '', ...props }: HTMLAttributes<HTMLDivElement
   return <div className={`ui-card ${className}`} {...props} />;
 }
 
+export function PageContainer({ className = '', ...props }: HTMLAttributes<HTMLDivElement>) {
+  return <div className={`page-container ${className}`} {...props} />;
+}
+
 export function PageHeader({
   actions,
   description,

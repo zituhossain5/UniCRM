@@ -14,6 +14,10 @@ import { OrganizationsModule } from './organizations/organizations.module';
 import { RedisModule } from './redis/redis.module';
 import { RolesModule } from './roles/roles.module';
 import { UsersModule } from './users/users.module';
+import { CompaniesModule } from './companies/companies.module';
+import { ContactsModule } from './contacts/contacts.module';
+import { LeadsModule } from './leads/leads.module';
+import { PipelinesModule } from './pipelines/pipelines.module';
 
 @Module({
   imports: [
@@ -29,6 +33,10 @@ import { UsersModule } from './users/users.module';
     UsersModule,
     RolesModule,
     OrganizationsModule,
+    CompaniesModule,
+    ContactsModule,
+    PipelinesModule,
+    LeadsModule,
     HealthModule,
   ],
   providers: [

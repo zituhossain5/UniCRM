@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
+import { allowedCorsOrigins } from '../config/cors';
 import type { EnvironmentVariables } from '../config/environment';
 import { PUBLIC_ROUTE } from './auth.constants';
 import { CookieService } from './cookie.service';
@@ -26,10 +27,10 @@ export class CsrfGuard implements CanActivate {
     @Inject(TokenService) private readonly tokens: TokenService,
   ) {
     this.allowedOrigins = new Set(
-      config
-        .get('CORS_ORIGINS', { infer: true })
-        .split(',')
-        .map((origin) => origin.trim()),
+      allowedCorsOrigins(
+        config.get('CORS_ORIGINS', { infer: true }),
+        config.get('NODE_ENV', { infer: true }),
+      ),
     );
   }
 

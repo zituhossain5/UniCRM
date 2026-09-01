@@ -1,8 +1,8 @@
 # UniCRM
 
 UniCRM is UnicodeIT's internal CRM and project operations platform, structured for a future
-multi-tenant SaaS release. Milestones 0-2 provide the monorepo, application shell, and first-party
-identity and access foundation. CRM business modules are intentionally still placeholders.
+multi-tenant SaaS release. Milestones 0-3 provide the monorepo, application shell, first-party
+identity and access foundation, and the core company, contact, lead, activity, and follow-up flow.
 
 The architecture follows [the UniCRM blueprint](docs/UNICRM_BLUEPRINT.md): a pnpm/Turborepo
 TypeScript monorepo, Next.js, a modular NestJS REST API, PostgreSQL through Prisma, and Redis.
@@ -28,8 +28,9 @@ pnpm dev
 
 On PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Before `pnpm bootstrap`, replace
 the example bootstrap password and development email key in `.env`. The bootstrap command is
-idempotent: it creates missing permissions and default roles, but it never resets or recreates an
-existing Owner.
+idempotent: it creates missing permissions, default roles, and the organization's default sales
+pipeline, but it never resets or recreates an existing Owner. Run it once after the Milestone 3
+migration to initialize CRM permissions and the pipeline for organizations created earlier.
 
 Open `http://localhost:3000/login` and sign in with `UNICRM_BOOTSTRAP_ADMIN_EMAIL` and
 `UNICRM_BOOTSTRAP_ADMIN_PASSWORD`.
@@ -41,8 +42,8 @@ Open `http://localhost:3000/login` and sign in with `UNICRM_BOOTSTRAP_ADMIN_EMAI
 | Web             | http://localhost:3000               |
 | API             | http://localhost:4000/api/v1        |
 | Health endpoint | http://localhost:4000/api/v1/health |
-| PostgreSQL      | localhost:5432                      |
-| Redis           | localhost:6379                      |
+| PostgreSQL      | localhost:`POSTGRES_PORT`           |
+| Redis           | localhost:`REDIS_PORT`              |
 
 ## Commands
 
@@ -115,14 +116,26 @@ invitations under `/users`, organization settings under `/organization`, and RBA
 `/permissions`. Every tenant-owned query derives `organizationId` from the validated session.
 
 Default roles are Owner, Admin, Manager, Staff, and Viewer. The centralized permission catalog
-contains only Milestone 2 permissions for users, roles, settings, and personal session management.
-Default roles are immutable presets; custom roles can be created and updated.
+contains identity permissions plus the Milestone 3 company, contact, lead, activity, and pipeline
+permissions. Default roles are immutable presets; custom roles can be created and updated. See
+[CRM Core implementation notes](docs/MILESTONE_3_CRM_CORE.md) for the matrix and API routes.
+
+## CRM Core
+
+CRM records are PostgreSQL-backed and always scoped by the authenticated session's organization.
+Companies, contacts, and leads support server-side search, filtering, safe sorting, and pagination.
+Lead stage changes, owner changes, activities, and follow-up transitions are recorded
+transactionally. `DELETE` endpoints archive records; they do not erase CRM history.
+
+The default pipeline is `Sales Pipeline` with New Lead, Contacted, Qualified, Proposal Sent,
+Negotiation, Won, and Lost stages. Business logic uses stage IDs and `isWon`/`isLost` flags rather
+than stage names. A won lead does not create a project.
 
 ## Repository layout
 
 ```text
 apps/
-  api/          NestJS identity modules and Prisma schema
+  api/          NestJS identity and CRM modules plus Prisma schema
   web/          Next.js App Router frontend
 packages/
   config/       Shared strict TypeScript configurations
@@ -135,7 +148,7 @@ docs/           Product and architecture blueprint
 
 ## Milestone boundary
 
-Milestone 2 implements organization identity, users, invitations, password reset, sessions, RBAC,
-security events, route protection, and settings UI. Leads, companies, contacts, projects, tasks,
-quotations, payments, reports, dashboard business metrics, search, OAuth, MFA, billing, and all later
-milestones remain out of scope.
+Milestone 3 stops at CRM Core: companies, contacts, leads, the standard sales pipeline, lead
+activities, follow-ups, tenant isolation, permissions, and audit history. Projects, tasks,
+quotations, payments, dashboard business metrics, reports, automation, AI, SaaS billing, and later
+modules remain out of scope.

@@ -1,5 +1,22 @@
 import { env } from './env';
 
+const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
+
+function apiBaseUrl(): string {
+  if (typeof window === 'undefined') return env.NEXT_PUBLIC_API_URL;
+
+  const configured = new URL(env.NEXT_PUBLIC_API_URL);
+  if (
+    process.env.NODE_ENV === 'development' &&
+    LOOPBACK_HOSTNAMES.has(configured.hostname) &&
+    LOOPBACK_HOSTNAMES.has(window.location.hostname)
+  ) {
+    configured.hostname = window.location.hostname;
+  }
+
+  return configured.toString().replace(/\/$/, '');
+}
+
 function csrfToken(): string | undefined {
   if (typeof document === 'undefined') return undefined;
   return document.cookie
@@ -26,7 +43,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (csrf && !['GET', 'HEAD'].includes(init.method ?? 'GET'))
     headers.set('x-csrf-token', decodeURIComponent(csrf));
 
-  const response = await fetch(`${env.NEXT_PUBLIC_API_URL}${path}`, {
+  const response = await fetch(`${apiBaseUrl()}${path}`, {
     ...init,
     credentials: 'include',
     headers,

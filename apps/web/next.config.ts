@@ -25,6 +25,7 @@ if (!apiBaseUrl) {
 }
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['localhost', '127.0.0.1'],
   env: {
     NEXT_PUBLIC_API_URL: apiBaseUrl,
   },

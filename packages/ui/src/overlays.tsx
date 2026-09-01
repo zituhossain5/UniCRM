@@ -19,6 +19,10 @@ export interface OverlayProps {
   trigger: ReactElement;
 }
 
+export interface SheetProps extends OverlayProps {
+  footer?: ReactNode;
+}
+
 export function Dialog({
   children,
   description,
@@ -57,7 +61,15 @@ export function Dialog({
   );
 }
 
-export function Sheet({ children, description, onOpenChange, open, title, trigger }: OverlayProps) {
+export function Sheet({
+  children,
+  description,
+  footer,
+  onOpenChange,
+  open,
+  title,
+  trigger,
+}: SheetProps) {
   return (
     <BaseDialog.Root onOpenChange={onOpenChange} open={open}>
       <BaseDialog.Trigger render={trigger} />
@@ -80,7 +92,8 @@ export function Sheet({ children, description, onOpenChange, open, title, trigge
                 }
               />
             </div>
-            <div className="ui-dialog-content">{children}</div>
+            <div className="ui-sheet-content">{children}</div>
+            {footer ? <div className="ui-sheet-footer">{footer}</div> : null}
           </BaseDialog.Popup>
         </BaseDialog.Viewport>
       </BaseDialog.Portal>

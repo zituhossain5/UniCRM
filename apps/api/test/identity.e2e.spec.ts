@@ -37,6 +37,7 @@ describe('Milestone 2 identity and access', () => {
 
   beforeAll(async () => {
     process.env.AUTH_RATE_LIMIT_MAX = '100';
+    process.env.CORS_ORIGINS = origin;
     process.env.DEV_EMAIL_KEY = 'test-development-email-key';
     process.env.NODE_ENV = 'test';
     const { AppModule } = await import('../src/app.module');

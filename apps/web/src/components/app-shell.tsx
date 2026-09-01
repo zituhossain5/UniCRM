@@ -7,6 +7,7 @@ import {
   DropdownMenu,
   IconButton,
   Input,
+  PageContainer,
   Popover,
   Sheet,
   Tooltip,
@@ -228,7 +229,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <main className="app-main">{children}</main>
+      <main className="app-main">
+        <PageContainer>{children}</PageContainer>
+      </main>
 
       <Dialog
         description="Navigate between UniCRM areas. Business search will arrive in a later milestone."

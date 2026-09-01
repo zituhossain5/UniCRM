@@ -1,9 +1,4 @@
-import { PlaceholderPage } from '@/components/placeholder-page';
+import { ContactsView } from '@/components/crm/contacts-view';
 export default function Page() {
-  return (
-    <PlaceholderPage
-      description="Contact management will be implemented in the CRM Core milestone."
-      title="Contacts"
-    />
-  );
+  return <ContactsView />;
 }

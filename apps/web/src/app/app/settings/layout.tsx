@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 export default function SettingsLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="page-container settings-page">
+    <div className="settings-page">
       <PageHeader
         description="Manage your workspace identity, access, and security."
         title="Settings"

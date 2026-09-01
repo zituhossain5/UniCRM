@@ -5,6 +5,7 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
+import { allowedCorsOrigins } from './config/cors';
 import type { EnvironmentVariables } from './config/environment';
 
 async function bootstrap(): Promise<void> {
@@ -26,10 +27,10 @@ async function bootstrap(): Promise<void> {
   app.useGlobalFilters(new AllExceptionsFilter());
   app.enableShutdownHooks();
 
-  const origins = config
-    .get('CORS_ORIGINS', { infer: true })
-    .split(',')
-    .map((origin) => origin.trim());
+  const origins = allowedCorsOrigins(
+    config.get('CORS_ORIGINS', { infer: true }),
+    config.get('NODE_ENV', { infer: true }),
+  );
   app.enableCors({
     credentials: true,
     methods: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE'],

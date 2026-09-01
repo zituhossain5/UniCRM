@@ -1,9 +1,4 @@
-import { PlaceholderPage } from '@/components/placeholder-page';
+import { CompaniesView } from '@/components/crm/companies-view';
 export default function Page() {
-  return (
-    <PlaceholderPage
-      description="Company records will be implemented in the CRM Core milestone."
-      title="Companies"
-    />
-  );
+  return <CompaniesView />;
 }

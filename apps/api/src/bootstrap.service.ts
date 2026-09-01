@@ -2,6 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DEFAULT_ROLES, DEFAULT_ROLE_PERMISSIONS, PERMISSION_CATALOG } from './auth/auth.constants';
 import { PasswordService } from './auth/password.service';
 import { PrismaService } from './database/prisma.service';
+import { DEFAULT_STAGES } from './pipelines/pipelines.service';
 
 @Injectable()
 export class IdentityBootstrapService {
@@ -69,6 +70,21 @@ export class IdentityBootstrapService {
             });
           }
         }
+      }
+
+      const pipeline = await tx.pipeline.upsert({
+        where: {
+          organizationId_name: { organizationId: organization.id, name: 'Sales Pipeline' },
+        },
+        create: { isDefault: true, name: 'Sales Pipeline', organizationId: organization.id },
+        update: { isDefault: true },
+      });
+      for (const stage of DEFAULT_STAGES) {
+        await tx.pipelineStage.upsert({
+          where: { pipelineId_name: { pipelineId: pipeline.id, name: stage.name } },
+          create: { ...stage, organizationId: organization.id, pipelineId: pipeline.id },
+          update: { isLost: stage.isLost, isWon: stage.isWon, position: stage.position },
+        });
       }
 
       if (existingOwner) return { organizationCreated: !existingOrganization, ownerCreated: false };
