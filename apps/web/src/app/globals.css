@@ -1688,6 +1688,198 @@ kbd {
   justify-content: center;
   text-decoration: none;
 }
+
+/* Milestone 4: projects and delivery work */
+.projects-table {
+  min-width: 940px;
+}
+.tasks-table {
+  min-width: 860px;
+}
+.project-progress {
+  position: relative;
+  width: 120px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border);
+}
+.project-progress > span {
+  display: block;
+  max-width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--primary);
+}
+.project-progress small {
+  position: absolute;
+  top: -5px;
+  left: 130px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.project-tabs {
+  margin-top: 2px;
+}
+.project-panel {
+  min-width: 0;
+  padding-top: 8px;
+}
+.project-panel > h2,
+.project-panel .section-heading h2,
+.task-subsection h3 {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 650;
+}
+.record-copy {
+  max-width: 780px;
+  margin: 0;
+  color: var(--subtle-foreground);
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+}
+.member-form,
+.upload-form {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.member-form > label {
+  display: grid;
+  min-width: 190px;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.member-form .ui-select-trigger {
+  min-width: 220px;
+}
+.member-list,
+.file-list,
+.comment-list {
+  border-top: 1px solid var(--border);
+}
+.member-list > div,
+.file-list > div {
+  display: flex;
+  min-height: 58px;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.member-list > div > span,
+.file-list > div > span {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 3px;
+}
+.member-list small,
+.file-list small {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.file-list a,
+.file-list button,
+.comment-list button {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+}
+.file-list a:hover,
+.file-list button:hover,
+.comment-list button:hover {
+  background: var(--surface-subtle);
+  color: var(--foreground);
+}
+.upload-form .ui-input {
+  max-width: 430px;
+}
+.task-detail {
+  display: grid;
+  gap: 24px;
+}
+.task-detail-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.task-edit-form {
+  padding-block: 4px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.inline-actions,
+.comment-form {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.task-subsection {
+  min-width: 0;
+}
+.comment-list article {
+  position: relative;
+  padding: 12px 34px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.comment-list article > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.comment-list time {
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+.comment-list p {
+  margin: 6px 0 0;
+  color: var(--subtle-foreground);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+.comment-list button {
+  position: absolute;
+  top: 28px;
+  right: 0;
+}
+.comment-form {
+  align-items: end;
+  margin-top: 12px;
+}
+.comment-form .ui-textarea {
+  min-height: 72px;
+}
+@media (max-width: 640px) {
+  .member-form,
+  .upload-form,
+  .comment-form {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .member-form > label,
+  .member-form .ui-select-trigger,
+  .upload-form .ui-input {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+  }
+  .member-form .ui-button,
+  .upload-form .ui-button,
+  .comment-form .ui-button {
+    justify-content: center;
+  }
+}
 @media (max-width: 900px) {
   .crm-toolbar {
     flex-wrap: wrap;
@@ -1979,6 +2171,15 @@ kbd {
 }
 .table-actions .ui-select-trigger {
   min-width: 120px;
+}
+.invitation-status {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+}
+.invitation-status small {
+  color: var(--muted-foreground);
+  font-size: 10px;
 }
 .permission-picker {
   display: grid;

@@ -40,12 +40,37 @@ export class UsersService {
     @Inject(TokenService) private readonly tokens: TokenService,
   ) {}
 
-  list(principal: AuthenticatedPrincipal) {
-    return this.prisma.user.findMany({
+  async list(principal: AuthenticatedPrincipal) {
+    const users = await this.prisma.user.findMany({
       where: { organizationId: principal.organizationId },
       orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       select: safeUserSelect,
     });
+    const invitations = await this.prisma.userInvitation.findMany({
+      where: {
+        organizationId: principal.organizationId,
+        acceptedAt: null,
+        normalizedEmail: {
+          in: users
+            .filter(({ status }) => status === 'INVITED')
+            .map(({ email }) => email.toLowerCase()),
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        createdAt: true,
+        expiresAt: true,
+        normalizedEmail: true,
+        role: { select: { id: true, name: true } },
+      },
+    });
+    const byEmail = new Map(
+      invitations.map((invitation) => [invitation.normalizedEmail, invitation]),
+    );
+    return users.map((user) => ({
+      ...user,
+      invitation: byEmail.get(user.email.toLowerCase()) ?? null,
+    }));
   }
 
   async get(principal: AuthenticatedPrincipal, userId: string) {
@@ -54,7 +79,23 @@ export class UsersService {
       select: safeUserSelect,
     });
     if (!user) throw new NotFoundException('User not found');
-    return user;
+    const invitation =
+      user.status === 'INVITED'
+        ? await this.prisma.userInvitation.findFirst({
+            where: {
+              organizationId: principal.organizationId,
+              normalizedEmail: user.email.toLowerCase(),
+              acceptedAt: null,
+            },
+            orderBy: { createdAt: 'desc' },
+            select: {
+              createdAt: true,
+              expiresAt: true,
+              role: { select: { id: true, name: true } },
+            },
+          })
+        : null;
+    return { ...user, invitation };
   }
 
   async update(
@@ -72,6 +113,12 @@ export class UsersService {
     }
     if (dto.status === 'ACTIVE' && existingUser.status === 'INVITED') {
       throw new ConflictException('Invited users must accept their invitation before activation');
+    }
+    if (dto.status && existingUser.status === 'INVITED') {
+      throw new ConflictException('Invited users must accept or cancel their invitation');
+    }
+    if (dto.roleId && existingUser.status === 'INVITED') {
+      throw new ConflictException('Cancel and send a new invitation to change the invited role');
     }
     if (dto.roleId && !principal.permissions.includes(PERMISSIONS.roleManage)) {
       throw new ForbiddenException('Insufficient permission to assign roles');
@@ -179,8 +226,89 @@ export class UsersService {
       id: invitation.id,
       email: invitation.email,
       expiresAt: invitation.expiresAt,
-      invitationUrl,
     };
+  }
+
+  async resendInvitation(
+    principal: AuthenticatedPrincipal,
+    userId: string,
+    request: RequestMetadata,
+  ) {
+    const user = await this.requireInvitedUser(principal, userId);
+    const invitation = await this.prisma.userInvitation.findFirst({
+      where: {
+        organizationId: principal.organizationId,
+        normalizedEmail: user.email.toLowerCase(),
+        acceptedAt: null,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!invitation) throw new ConflictException('No pending invitation exists for this user');
+
+    const rawToken = this.tokens.generate();
+    const expiresAt = new Date(
+      Date.now() + this.config.get('INVITATION_TTL_SECONDS', { infer: true }) * 1000,
+    );
+    await this.prisma.$transaction(async (tx) => {
+      const rotated = await tx.userInvitation.updateMany({
+        where: { id: invitation.id, acceptedAt: null },
+        data: {
+          expiresAt,
+          invitedById: principal.userId,
+          tokenHash: this.tokens.hash(rawToken),
+        },
+      });
+      if (!rotated.count) throw new ConflictException('Invitation is no longer pending');
+      await tx.securityEvent.create({
+        data: {
+          eventType: 'INVITATION_RESENT',
+          ipAddress: request.ipAddress,
+          metadata: { invitedUserId: user.id, invitationId: invitation.id },
+          organizationId: principal.organizationId,
+          userAgent: request.userAgent,
+          userId: principal.userId,
+        },
+      });
+    });
+    const invitationUrl = `${this.config.get('APP_URL', { infer: true })}/invitation?token=${encodeURIComponent(rawToken)}`;
+    await this.email.send({
+      to: user.email,
+      subject: 'Your UniCRM invitation',
+      text: `Accept your invitation: ${invitationUrl}`,
+    });
+    return { id: invitation.id, email: user.email, expiresAt };
+  }
+
+  async cancelInvitation(
+    principal: AuthenticatedPrincipal,
+    userId: string,
+    request: RequestMetadata,
+  ): Promise<void> {
+    const user = await this.requireInvitedUser(principal, userId);
+    await this.prisma.$transaction(async (tx) => {
+      const removed = await tx.userInvitation.deleteMany({
+        where: {
+          organizationId: principal.organizationId,
+          normalizedEmail: user.email.toLowerCase(),
+          acceptedAt: null,
+        },
+      });
+      if (!removed.count) throw new ConflictException('Invitation is no longer pending');
+      const removedUser = await tx.user.deleteMany({
+        where: { id: user.id, organizationId: principal.organizationId, status: 'INVITED' },
+      });
+      if (!removedUser.count) throw new ConflictException('Invitation is no longer pending');
+      await tx.securityEvent.create({
+        data: {
+          eventType: 'INVITATION_CANCELLED',
+          ipAddress: request.ipAddress,
+          metadata: { email: user.email, invitedUserId: user.id },
+          organizationId: principal.organizationId,
+          userAgent: request.userAgent,
+          userId: principal.userId,
+        },
+      });
+    });
   }
 
   async validateInvitation(rawToken: string, request: RequestMetadata) {
@@ -224,7 +352,12 @@ export class UsersService {
     const now = new Date();
     await this.prisma.$transaction(async (tx) => {
       const consumed = await tx.userInvitation.updateMany({
-        where: { id: invitation.id, acceptedAt: null, expiresAt: { gt: now } },
+        where: {
+          id: invitation.id,
+          tokenHash: this.tokens.hash(rawToken),
+          acceptedAt: null,
+          expiresAt: { gt: now },
+        },
         data: { acceptedAt: now },
       });
       if (!consumed.count) throw new UnauthorizedException('Invalid or expired invitation');
@@ -243,5 +376,16 @@ export class UsersService {
         },
       });
     });
+  }
+
+  private async requireInvitedUser(principal: AuthenticatedPrincipal, userId: string) {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, organizationId: principal.organizationId },
+      select: { id: true, email: true, status: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (user.status !== 'INVITED')
+      throw new ConflictException('User is not awaiting an invitation');
+    return user;
   }
 }

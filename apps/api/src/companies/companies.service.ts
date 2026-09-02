@@ -8,6 +8,7 @@ import {
 import type { Prisma } from '../generated/prisma/client';
 import { isUUID } from 'class-validator';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
+import { PERMISSIONS } from '../auth/auth.constants';
 import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
@@ -41,6 +42,15 @@ const companyInclude = {
   ...companyListInclude,
   contacts: { ...companyListInclude.contacts, take: undefined },
 } satisfies Prisma.CompanyInclude;
+
+const companyProjectSelect = {
+  id: true,
+  name: true,
+  status: true,
+  priority: true,
+  progress: true,
+  deadline: true,
+} as const;
 
 @Injectable()
 export class CompaniesService {
@@ -91,13 +101,22 @@ export class CompaniesService {
       include: companyInclude,
     });
     if (!company) throw new NotFoundException('Company not found');
-    const activity = await this.prisma.activityLog.findMany({
-      where: { organizationId: principal.organizationId, entityType: 'COMPANY', entityId: id },
-      include: { actor: { select: { id: true, firstName: true, lastName: true } } },
-      orderBy: { createdAt: 'desc' },
-      take: 25,
-    });
-    return { ...company, activity };
+    const [activity, projects] = await Promise.all([
+      this.prisma.activityLog.findMany({
+        where: { organizationId: principal.organizationId, entityType: 'COMPANY', entityId: id },
+        include: { actor: { select: { id: true, firstName: true, lastName: true } } },
+        orderBy: { createdAt: 'desc' },
+        take: 25,
+      }),
+      principal.permissions.includes(PERMISSIONS.projectRead)
+        ? this.prisma.project.findMany({
+            where: { organizationId: principal.organizationId, companyId: id, archivedAt: null },
+            orderBy: { createdAt: 'desc' },
+            select: companyProjectSelect,
+          })
+        : Promise.resolve([]),
+    ]);
+    return { ...company, activity, projects };
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateCompanyDto) {

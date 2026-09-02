@@ -1,4 +1,4 @@
-import { ForbiddenException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { EnvironmentVariables } from '../config/environment';
@@ -13,6 +13,7 @@ export interface EmailMessage {
 
 @Injectable()
 export class EmailService {
+  private readonly logger = new Logger(EmailService.name);
   private readonly outbox: EmailMessage[] = [];
   private readonly transporter?: Transporter;
 
@@ -44,6 +45,11 @@ export class EmailService {
     }
     this.outbox.unshift({ ...input, createdAt: new Date().toISOString(), id: crypto.randomUUID() });
     this.outbox.splice(50);
+    if (this.config.get('NODE_ENV', { infer: true }) === 'development') {
+      this.logger.log(
+        `Development email\nTo: ${input.to}\nSubject: ${input.subject}\n${input.text}`,
+      );
+    }
   }
 
   readDevelopmentOutbox(key: string | undefined): EmailMessage[] {

@@ -25,6 +25,10 @@ function responseBody<T>(response: request.Response): T {
   return value as T;
 }
 
+function invitationTokenFrom(text: string): string {
+  return new URL(text.split(' ').at(-1)!).searchParams.get('token')!;
+}
+
 describe('Milestone 2 identity and access', () => {
   let app: INestApplication;
   let server: Server;
@@ -169,13 +173,69 @@ describe('Milestone 2 identity and access', () => {
         roleId: staffRole.id,
       })
       .expect(201);
-    const invitationToken = new URL(
-      responseBody<{ data: { invitationUrl: string } }>(invite).data.invitationUrl,
-    ).searchParams.get('token')!;
+    expect(responseBody<{ data: object }>(invite).data).not.toHaveProperty('invitationUrl');
+    const invitedEmail = `${slug}-staff@example.test`;
+    const firstMessage = responseBody<{ data: Array<{ to: string; text: string }> }>(
+      await request(server)
+        .get('/api/v1/dev/emails')
+        .set('x-dev-email-key', 'test-development-email-key')
+        .expect(200),
+    ).data.find((item) => item.to === invitedEmail)!;
+    const firstToken = invitationTokenFrom(firstMessage.text);
     const storedInvitation = await prisma.userInvitation.findFirstOrThrow({
-      where: { normalizedEmail: `${slug}-staff@example.test` },
+      where: { normalizedEmail: invitedEmail },
     });
-    expect(storedInvitation.tokenHash).not.toBe(invitationToken);
+    expect(storedInvitation.tokenHash).not.toBe(firstToken);
+    const invitedUser = await prisma.user.findUniqueOrThrow({
+      where: { normalizedEmail: invitedEmail },
+    });
+    const eligibleBeforeAcceptance = responseBody<{ data: Array<{ id: string }> }>(
+      await ownerAgent.get('/api/v1/projects/reference/users').expect(200),
+    ).data;
+    expect(eligibleBeforeAcceptance.map(({ id }) => id)).not.toContain(invitedUser.id);
+    const listed = responseBody<{
+      data: Array<{ id: string; invitation: { role: { name: string } } | null }>;
+    }>(await ownerAgent.get('/api/v1/users').expect(200)).data.find(
+      (user) => user.id === invitedUser.id,
+    )!;
+    expect(listed.invitation?.role.name).toBe('Staff');
+    const activation = await ownerAgent
+      .patch(`/api/v1/users/${invitedUser.id}`)
+      .set('origin', origin)
+      .set('x-csrf-token', ownerCsrf)
+      .send({ status: 'ACTIVE' })
+      .expect(409);
+    expect(responseBody<{ message: string }>(activation).message).toBe(
+      'Invited users must accept their invitation before activation',
+    );
+
+    const resent = await ownerAgent
+      .post(`/api/v1/users/${invitedUser.id}/invitation/resend`)
+      .set('origin', origin)
+      .set('x-csrf-token', ownerCsrf)
+      .expect(201);
+    expect(responseBody<{ data: object }>(resent).data).not.toHaveProperty('invitationUrl');
+    await request(server).get(`/api/v1/users/invitations/${firstToken}/validate`).expect(401);
+    const resentMessage = responseBody<{ data: Array<{ to: string; text: string }> }>(
+      await request(server)
+        .get('/api/v1/dev/emails')
+        .set('x-dev-email-key', 'test-development-email-key')
+        .expect(200),
+    ).data.find((item) => item.to === invitedEmail)!;
+    const invitationToken = invitationTokenFrom(resentMessage.text);
+    expect(invitationToken).not.toBe(firstToken);
+    expect(
+      (await prisma.userInvitation.findUniqueOrThrow({ where: { id: storedInvitation.id } }))
+        .tokenHash,
+    ).not.toBe(invitationToken);
+    expect(
+      await prisma.securityEvent.count({
+        where: {
+          eventType: 'INVITATION_RESENT',
+          metadata: { path: ['invitedUserId'], equals: invitedUser.id },
+        },
+      }),
+    ).toBe(1);
     await request(server).get(`/api/v1/users/invitations/${invitationToken}/validate`).expect(200);
     await request(server)
       .post(`/api/v1/users/invitations/${invitationToken}/accept`)
@@ -188,10 +248,57 @@ describe('Milestone 2 identity and access', () => {
     const staffAgent = request.agent(server);
     await staffAgent
       .post('/api/v1/auth/login')
-      .send({ email: `${slug}-staff@example.test`, password: 'Staff-password-2026!' })
+      .send({ email: invitedEmail, password: 'Staff-password-2026!' })
       .expect(200);
     await staffAgent.get('/api/v1/users').expect(403);
+    const eligibleUsers = responseBody<{ data: Array<{ id: string }> }>(
+      await ownerAgent.get('/api/v1/projects/reference/users').expect(200),
+    ).data;
+    expect(eligibleUsers.map(({ id }) => id)).toContain(invitedUser.id);
   }, 30_000);
+
+  it('cancels an invitation without activating its placeholder account', async () => {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: {
+        organizationId_name: {
+          organizationId: (await prisma.user.findUniqueOrThrow({ where: { id: ownerId } }))
+            .organizationId,
+          name: 'Viewer',
+        },
+      },
+    });
+    const email = `${slug}-cancelled@example.test`;
+    await ownerAgent
+      .post('/api/v1/users/invitations')
+      .set('origin', origin)
+      .set('x-csrf-token', ownerCsrf)
+      .send({ email, firstName: 'Cancelled', lastName: 'Invite', roleId: role.id })
+      .expect(201);
+    const token = invitationTokenFrom(
+      responseBody<{ data: Array<{ to: string; text: string }> }>(
+        await request(server)
+          .get('/api/v1/dev/emails')
+          .set('x-dev-email-key', 'test-development-email-key')
+          .expect(200),
+      ).data.find((item) => item.to === email)!.text,
+    );
+    const user = await prisma.user.findUniqueOrThrow({ where: { normalizedEmail: email } });
+    await ownerAgent
+      .delete(`/api/v1/users/${user.id}/invitation`)
+      .set('origin', origin)
+      .set('x-csrf-token', ownerCsrf)
+      .expect(204);
+    expect(await prisma.user.findUnique({ where: { id: user.id } })).toBeNull();
+    await request(server).get(`/api/v1/users/invitations/${token}/validate`).expect(401);
+    expect(
+      await prisma.securityEvent.count({
+        where: {
+          eventType: 'INVITATION_CANCELLED',
+          metadata: { path: ['invitedUserId'], equals: user.id },
+        },
+      }),
+    ).toBe(1);
+  });
 
   it('rejects expired invitations', async () => {
     const viewerRole = await prisma.role.findUniqueOrThrow({
@@ -214,9 +321,15 @@ describe('Milestone 2 identity and access', () => {
         roleId: viewerRole.id,
       })
       .expect(201);
-    const token = new URL(
-      responseBody<{ data: { invitationUrl: string } }>(invite).data.invitationUrl,
-    ).searchParams.get('token')!;
+    expect(responseBody<{ data: object }>(invite).data).not.toHaveProperty('invitationUrl');
+    const expiredEmail = `${slug}-expired@example.test`;
+    const message = responseBody<{ data: Array<{ to: string; text: string }> }>(
+      await request(server)
+        .get('/api/v1/dev/emails')
+        .set('x-dev-email-key', 'test-development-email-key')
+        .expect(200),
+    ).data.find((item) => item.to === expiredEmail)!;
+    const token = invitationTokenFrom(message.text);
     await prisma.userInvitation.updateMany({
       where: { normalizedEmail: `${slug}-expired@example.test` },
       data: { expiresAt: new Date(0) },

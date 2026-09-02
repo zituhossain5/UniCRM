@@ -6,7 +6,7 @@ const environmentSchema = z
     API_PORT: z.coerce.number().int().positive().max(65_535).default(4000),
     CORS_ORIGINS: z.string().min(1),
     DATABASE_URL: z.string().startsWith('postgresql://'),
-    APP_URL: z.url().default('http://localhost:3000'),
+    APP_URL: z.url().default('http://localhost:3001'),
     ARGON2_MEMORY_COST: z.coerce.number().int().min(19_456).default(65_536),
     ARGON2_PARALLELISM: z.coerce.number().int().min(1).max(16).default(1),
     ARGON2_TIME_COST: z.coerce.number().int().min(2).max(10).default(3),

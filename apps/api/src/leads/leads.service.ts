@@ -147,7 +147,13 @@ export class LeadsService {
       },
     });
     if (!lead) throw new NotFoundException('Lead not found');
-    return lead;
+    const project = principal.permissions.includes(PERMISSIONS.projectRead)
+      ? await this.prisma.project.findFirst({
+          where: { organizationId: principal.organizationId, sourceLeadId: id },
+          select: { id: true, name: true, status: true, archivedAt: true },
+        })
+      : null;
+    return { ...lead, project };
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateLeadDto) {

@@ -31,6 +31,8 @@ enum SecurityEventType {
   PASSWORD_RESET_REQUESTED
   PASSWORD_RESET_COMPLETED
   USER_INVITED
+  INVITATION_RESENT
+  INVITATION_CANCELLED
   INVITATION_ACCEPTED
   ACCOUNT_DISABLED
   ROLE_CHANGED
@@ -86,6 +88,30 @@ enum FollowUpType {
   OTHER
 }
 
+enum ProjectStatus {
+  PLANNED
+  IN_PROGRESS
+  ON_HOLD
+  IN_REVIEW
+  COMPLETED
+  CANCELLED
+}
+
+enum WorkPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+  BLOCKED
+}
+
 model Organization {
   id             String             @id @default(uuid()) @db.Uuid
   name           String
@@ -106,6 +132,11 @@ model Organization {
   followUps      FollowUp[]
   activityLogs   ActivityLog[]
   pipelineStages PipelineStage[]
+  projects       Project[]
+  projectMembers ProjectMember[]
+  tasks          Task[]
+  taskComments   TaskComment[]
+  attachments    Attachment[]
 
   @@map("organizations")
 }
@@ -138,6 +169,14 @@ model User {
   followUpsAssigned   FollowUp[]           @relation("FollowUpAssignee")
   followUpsCreated    FollowUp[]           @relation("FollowUpCreator")
   activityLogs        ActivityLog[]        @relation("ActivityLogActor")
+  projectsManaged     Project[]            @relation("ProjectManager")
+  projectsCreated     Project[]            @relation("ProjectCreator")
+  projectMemberships  ProjectMember[]
+  tasksAssigned       Task[]               @relation("TaskAssignee")
+  tasksReported       Task[]               @relation("TaskReporter")
+  tasksCreated        Task[]               @relation("TaskCreator")
+  taskComments        TaskComment[]
+  attachmentsUploaded Attachment[]
 
   @@index([organizationId, status])
   @@map("users")
@@ -295,6 +334,7 @@ model Company {
   createdBy      User?         @relation("CompanyCreator", fields: [createdById], references: [id], onDelete: SetNull)
   contacts       Contact[]
   leads          Lead[]
+  projects       Project[]
 
   @@index([organizationId, status, createdAt])
   @@index([organizationId, archivedAt, createdAt])
@@ -405,6 +445,7 @@ model Lead {
   createdBy       User?          @relation("LeadCreator", fields: [createdById], references: [id], onDelete: SetNull)
   activities      LeadActivity[]
   followUps       FollowUp[]
+  project         Project?
 
   @@index([organizationId, stageId, archivedAt])
   @@index([organizationId, ownerId, archivedAt])
@@ -478,4 +519,129 @@ model ActivityLog {
   @@index([organizationId, entityType, entityId, createdAt])
   @@index([organizationId, action, createdAt])
   @@map("activity_logs")
+}
+
+model Project {
+  id               String          @id @default(uuid()) @db.Uuid
+  organizationId   String          @map("organization_id") @db.Uuid
+  companyId        String          @map("company_id") @db.Uuid
+  sourceLeadId     String?         @unique @map("source_lead_id") @db.Uuid
+  name             String
+  description      String?
+  projectManagerId String?         @map("project_manager_id") @db.Uuid
+  status           ProjectStatus   @default(PLANNED)
+  priority         WorkPriority    @default(MEDIUM)
+  startDate        DateTime?       @map("start_date") @db.Date
+  deadline         DateTime?       @db.Date
+  projectValue     Decimal?        @map("project_value") @db.Decimal(19, 2)
+  currency         String          @default("BDT") @db.VarChar(3)
+  progress         Int             @default(0)
+  createdById      String          @map("created_by_id") @db.Uuid
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt @map("updated_at")
+  archivedAt       DateTime?       @map("archived_at")
+  organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  sourceLead       Lead?           @relation(fields: [sourceLeadId], references: [id], onDelete: SetNull)
+  projectManager   User?           @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  createdBy        User            @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  members          ProjectMember[]
+  tasks            Task[]
+  attachments      Attachment[]
+
+  @@index([organizationId, archivedAt, createdAt])
+  @@index([organizationId, companyId, archivedAt])
+  @@index([organizationId, projectManagerId, archivedAt])
+  @@index([organizationId, status, archivedAt])
+  @@index([organizationId, priority, archivedAt])
+  @@index([organizationId, deadline, archivedAt])
+  @@map("projects")
+}
+
+model ProjectMember {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  projectId      String       @map("project_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  role           String?      @db.VarChar(80)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@unique([projectId, userId])
+  @@index([organizationId, userId])
+  @@index([organizationId, projectId])
+  @@map("project_members")
+}
+
+model Task {
+  id               String        @id @default(uuid()) @db.Uuid
+  organizationId   String        @map("organization_id") @db.Uuid
+  projectId        String        @map("project_id") @db.Uuid
+  title            String
+  description      String?
+  assigneeId       String?       @map("assignee_id") @db.Uuid
+  reporterId       String        @map("reporter_id") @db.Uuid
+  status           TaskStatus    @default(TODO)
+  priority         WorkPriority  @default(MEDIUM)
+  startDate        DateTime?     @map("start_date") @db.Date
+  dueDate          DateTime?     @map("due_date") @db.Date
+  estimatedMinutes Int?          @map("estimated_minutes")
+  completedAt      DateTime?     @map("completed_at")
+  createdById      String        @map("created_by_id") @db.Uuid
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+  archivedAt       DateTime?     @map("archived_at")
+  organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project          Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  reporter         User          @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Restrict)
+  createdBy        User          @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  comments         TaskComment[]
+  attachments      Attachment[]
+
+  @@index([organizationId, projectId, archivedAt])
+  @@index([organizationId, assigneeId, status, dueDate])
+  @@index([organizationId, status, dueDate])
+  @@index([organizationId, priority, archivedAt])
+  @@index([organizationId, createdAt])
+  @@map("tasks")
+}
+
+model TaskComment {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  taskId         String       @map("task_id") @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  content        String
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user           User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, taskId, createdAt])
+  @@map("task_comments")
+}
+
+model Attachment {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  projectId      String?      @map("project_id") @db.Uuid
+  taskId         String?      @map("task_id") @db.Uuid
+  fileName       String       @map("file_name")
+  mimeType       String       @map("mime_type")
+  size           Int
+  storageKey     String       @unique @map("storage_key")
+  uploadedById   String       @map("uploaded_by_id") @db.Uuid
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task           Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  uploadedBy     User         @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, projectId, createdAt])
+  @@index([organizationId, taskId, createdAt])
+  @@map("attachments")
 }

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   Inject,
@@ -30,6 +31,29 @@ export class UsersController {
     @Req() request: Request,
   ) {
     return { data: await this.users.invite(principal, dto, requestMetadata(request)) };
+  }
+
+  @RequirePermission(PERMISSIONS.userInvite)
+  @Post(':id/invitation/resend')
+  async resendInvitation(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request,
+  ) {
+    return {
+      data: await this.users.resendInvitation(principal, id, requestMetadata(request)),
+    };
+  }
+
+  @RequirePermission(PERMISSIONS.userInvite)
+  @Delete(':id/invitation')
+  @HttpCode(204)
+  async cancelInvitation(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Req() request: Request,
+  ) {
+    await this.users.cancelInvitation(principal, id, requestMetadata(request));
   }
 
   @Public()

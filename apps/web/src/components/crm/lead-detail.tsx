@@ -43,6 +43,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { ProjectCreateSheet } from '@/components/work/create-sheets';
 
 const EDIT_LEAD_FORM_ID = 'edit-lead-form';
 
@@ -59,6 +60,7 @@ export function LeadDetail({ id }: { id: string }) {
   const [activityOpen, setActivityOpen] = useState(false);
   const [followOpen, setFollowOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [projectOpen, setProjectOpen] = useState(false);
   const [reschedule, setReschedule] = useState<FollowUp>();
   const load = useCallback(async () => {
     try {
@@ -177,6 +179,28 @@ export function LeadDetail({ id }: { id: string }) {
         actions={
           !lead.archivedAt ? (
             <div className="record-actions">
+              {lead.stage.isWon &&
+              lead.companyId &&
+              !lead.project &&
+              current.permissions.includes('project.create') ? (
+                <ProjectCreateSheet
+                  initial={{
+                    companyId: lead.companyId,
+                    currency: lead.currency,
+                    name: lead.title,
+                    projectValue: lead.estimatedValue,
+                    sourceLeadId: lead.id,
+                  }}
+                  onCreated={(project) => router.push(`/app/projects/${project.id}`)}
+                  onOpenChange={setProjectOpen}
+                  open={projectOpen}
+                  trigger={
+                    <Button>
+                      <Plus size={15} /> Create project
+                    </Button>
+                  }
+                />
+              ) : null}
               {canUpdate ? (
                 <Sheet
                   open={editOpen}
@@ -397,6 +421,16 @@ export function LeadDetail({ id }: { id: string }) {
         <section className="record-section">
           <h2>Overview</h2>
           <dl className="detail-list">
+            {lead.project ? (
+              <Detail
+                label="Project"
+                value={
+                  <Link href={`/app/projects/${lead.project.id}`}>
+                    {lead.project.name} · {labelize(lead.project.status)}
+                  </Link>
+                }
+              />
+            ) : null}
             <Detail label="Value" value={formatMoney(lead.estimatedValue, lead.currency)} />
             <Detail label="Source" value={lead.source ? labelize(lead.source) : '-'} />
             <Detail
@@ -545,9 +579,17 @@ export function LeadDetail({ id }: { id: string }) {
           if (!open) setReschedule(undefined);
         }}
         title={reschedule ? 'Reschedule follow-up' : 'Schedule follow-up'}
-        trigger={<span hidden />}
+        trigger={
+          <button aria-hidden className="visually-hidden" tabIndex={-1} type="button">
+            Open follow-up dialog
+          </button>
+        }
       >
-        <form className="dialog-form" onSubmit={(event) => void submitFollow(event)}>
+        <form
+          className="dialog-form"
+          key={reschedule?.id ?? 'new-follow-up'}
+          onSubmit={(event) => void submitFollow(event)}
+        >
           <label>
             <span>Due date and time</span>
             <Input

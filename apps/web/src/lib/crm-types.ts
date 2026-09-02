@@ -57,6 +57,14 @@ export interface CompanyRecord {
   createdAt: string;
   updatedAt: string;
   activity?: Array<{ id: string; action: string; createdAt: string; actor: PersonRef | null }>;
+  projects?: Array<{
+    id: string;
+    name: string;
+    status: string;
+    priority: string;
+    progress: number;
+    deadline: string | null;
+  }>;
 }
 
 export interface ContactRecord extends ContactRef {
@@ -119,6 +127,7 @@ export interface LeadRecord {
   updatedAt: string;
   activities?: LeadActivity[];
   followUps?: FollowUp[];
+  project?: { id: string; name: string; status: string; archivedAt: string | null } | null;
 }
 
 export const companyStatuses = [

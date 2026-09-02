@@ -237,6 +237,26 @@ export function CompanyDetail({ id }: { id: string }) {
           )}
         </section>
         <section className="record-section record-section--wide">
+          <div className="section-heading">
+            <h2>Projects</h2>
+            <span>{company.projects?.length ?? 0}</span>
+          </div>
+          {company.projects?.length ? (
+            <div className="compact-list">
+              {company.projects.map((project) => (
+                <Link key={project.id} href={`/app/projects/${project.id}`}>
+                  <strong>{project.name}</strong>
+                  <span>
+                    {labelize(project.status)} · {project.progress}% complete
+                  </span>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <p className="record-empty">No projects associated with this company.</p>
+          )}
+        </section>
+        <section className="record-section record-section--wide">
           <h2>Recent activity</h2>
           {company.activity?.length ? (
             <div className="activity-list">

@@ -18,6 +18,7 @@ import {
   ContactCreateSheet,
   LeadCreateSheet,
 } from '@/components/crm/create-sheets';
+import { ProjectCreateSheet, TaskCreateSheet } from '@/components/work/create-sheets';
 import {
   Bell,
   Building2,
@@ -86,7 +87,7 @@ const commandItems = navSections
   .flatMap((section) => section.items)
   .concat({ href: '/app/settings', icon: Settings, label: 'Settings' });
 
-type GlobalCreateTarget = 'lead' | 'company' | 'contact';
+type GlobalCreateTarget = 'lead' | 'company' | 'contact' | 'project' | 'task';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -113,6 +114,18 @@ export function AppShell({ children }: { children: ReactNode }) {
     () => commandItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())),
     [query],
   );
+  const filteredCreateCommands = useMemo(
+    () =>
+      [
+        { label: 'Create Project', permission: 'project.create', target: 'project' as const },
+        { label: 'Create Task', permission: 'task.create', target: 'task' as const },
+      ].filter(
+        (item) =>
+          user.permissions.includes(item.permission) &&
+          item.label.toLowerCase().includes(query.toLowerCase()),
+      ),
+    [query, user.permissions],
+  );
   const createItems = useMemo(() => {
     const items: DropdownItem[] = [];
     if (user.permissions.includes('lead.create'))
@@ -121,6 +134,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       items.push({ label: 'New Company', onClick: () => setCreateTarget('company') });
     if (user.permissions.includes('contact.create'))
       items.push({ label: 'New Contact', onClick: () => setCreateTarget('contact') });
+    if (user.permissions.includes('project.create'))
+      items.push({ label: 'New Project', onClick: () => setCreateTarget('project') });
+    if (user.permissions.includes('task.create'))
+      items.push({ label: 'New Task', onClick: () => setCreateTarget('task') });
     return items;
   }, [user.permissions]);
   const navigation = <Navigation collapsed={collapsed} pathname={pathname} />;
@@ -298,6 +315,28 @@ export function AppShell({ children }: { children: ReactNode }) {
           }
         />
       ) : null}
+      {user.permissions.includes('project.create') ? (
+        <ProjectCreateSheet
+          open={createTarget === 'project'}
+          onOpenChange={(open) => setCreateTarget(open ? 'project' : null)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              New project
+            </button>
+          }
+        />
+      ) : null}
+      {user.permissions.includes('task.create') ? (
+        <TaskCreateSheet
+          open={createTarget === 'task'}
+          onOpenChange={(open) => setCreateTarget(open ? 'task' : null)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              New task
+            </button>
+          }
+        />
+      ) : null}
 
       <Dialog
         description="Navigate between UniCRM areas. Business search will arrive in a later milestone."
@@ -321,21 +360,37 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
           </div>
           <div className="command-results">
-            {filteredCommands.length ? (
-              filteredCommands.map((item) => (
-                <button
-                  key={item.href}
-                  onClick={() => {
-                    setCommandOpen(false);
-                    setQuery('');
-                    router.push(item.href);
-                  }}
-                  type="button"
-                >
-                  <item.icon size={16} />
-                  <span>Go to {item.label}</span>
-                </button>
-              ))
+            {filteredCommands.length || filteredCreateCommands.length ? (
+              <>
+                {filteredCreateCommands.map((item) => (
+                  <button
+                    key={item.target}
+                    onClick={() => {
+                      setCommandOpen(false);
+                      setQuery('');
+                      setCreateTarget(item.target);
+                    }}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+                {filteredCommands.map((item) => (
+                  <button
+                    key={item.href}
+                    onClick={() => {
+                      setCommandOpen(false);
+                      setQuery('');
+                      router.push(item.href);
+                    }}
+                    type="button"
+                  >
+                    <item.icon size={16} />
+                    <span>Go to {item.label}</span>
+                  </button>
+                ))}
+              </>
             ) : (
               <p>No matching destinations.</p>
             )}

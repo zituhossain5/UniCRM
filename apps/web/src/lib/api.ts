@@ -2,7 +2,7 @@ import { env } from './env';
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 
-function apiBaseUrl(): string {
+export function apiBaseUrl(): string {
   if (typeof window === 'undefined') return env.NEXT_PUBLIC_API_URL;
 
   const configured = new URL(env.NEXT_PUBLIC_API_URL);
@@ -38,7 +38,8 @@ export class ApiError extends Error {
 
 export async function apiRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const headers = new Headers(init.headers);
-  if (init.body) headers.set('content-type', 'application/json');
+  if (init.body && !(init.body instanceof FormData))
+    headers.set('content-type', 'application/json');
   const csrf = csrfToken();
   if (csrf && !['GET', 'HEAD'].includes(init.method ?? 'GET'))
     headers.set('x-csrf-token', decodeURIComponent(csrf));

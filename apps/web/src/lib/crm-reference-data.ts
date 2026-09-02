@@ -43,6 +43,9 @@ const invalidatedReferences: Record<CrmDataKey, ReferenceKey[]> = {
   companies: ['companies'],
   contacts: ['contacts'],
   leads: [],
+  projects: [],
+  tasks: [],
+  users: ['users'],
 };
 
 async function loadReference<K extends ReferenceKey>(key: K, refresh = false) {

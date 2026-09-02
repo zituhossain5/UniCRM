@@ -18,6 +18,9 @@ import { CompaniesModule } from './companies/companies.module';
 import { ContactsModule } from './contacts/contacts.module';
 import { LeadsModule } from './leads/leads.module';
 import { PipelinesModule } from './pipelines/pipelines.module';
+import { ProjectsModule } from './projects/projects.module';
+import { TasksModule } from './tasks/tasks.module';
+import { AttachmentsModule } from './attachments/attachments.module';
 
 @Module({
   imports: [
@@ -37,6 +40,9 @@ import { PipelinesModule } from './pipelines/pipelines.module';
     ContactsModule,
     PipelinesModule,
     LeadsModule,
+    TasksModule,
+    ProjectsModule,
+    AttachmentsModule,
     HealthModule,
   ],
   providers: [

@@ -1,8 +1,8 @@
 # UniCRM
 
 UniCRM is UnicodeIT's internal CRM and project operations platform, structured for a future
-multi-tenant SaaS release. Milestones 0-3 provide the monorepo, application shell, first-party
-identity and access foundation, and the core company, contact, lead, activity, and follow-up flow.
+multi-tenant SaaS release. Milestones 0-4 provide the monorepo, application shell, first-party
+identity and access foundation, CRM core, and project delivery workflows.
 
 The architecture follows [the UniCRM blueprint](docs/UNICRM_BLUEPRINT.md): a pnpm/Turborepo
 TypeScript monorepo, Next.js, a modular NestJS REST API, PostgreSQL through Prisma, and Redis.
@@ -29,17 +29,18 @@ pnpm dev
 On PowerShell, use `Copy-Item .env.example .env` instead of `cp`. Before `pnpm bootstrap`, replace
 the example bootstrap password and development email key in `.env`. The bootstrap command is
 idempotent: it creates missing permissions, default roles, and the organization's default sales
-pipeline, but it never resets or recreates an existing Owner. Run it once after the Milestone 3
-migration to initialize CRM permissions and the pipeline for organizations created earlier.
+pipeline, but it never resets or recreates an existing Owner. Run it after each permission-bearing
+milestone so organizations created earlier receive the new permission catalog.
 
-Open `http://localhost:3000/login` and sign in with `UNICRM_BOOTSTRAP_ADMIN_EMAIL` and
-`UNICRM_BOOTSTRAP_ADMIN_PASSWORD`.
+For the shortest daily startup, run `pnpm dev:local`; it starts PostgreSQL and Redis with Docker,
+then starts the API and web app together. Open `http://localhost:3001/login` and sign in with
+`UNICRM_BOOTSTRAP_ADMIN_EMAIL` and `UNICRM_BOOTSTRAP_ADMIN_PASSWORD`.
 
 ## Services
 
 | Service         | URL or port                         |
 | --------------- | ----------------------------------- |
-| Web             | http://localhost:3000               |
+| Web             | http://localhost:3001               |
 | API             | http://localhost:4000/api/v1        |
 | Health endpoint | http://localhost:4000/api/v1/health |
 | PostgreSQL      | localhost:`POSTGRES_PORT`           |
@@ -49,6 +50,7 @@ Open `http://localhost:3000/login` and sign in with `UNICRM_BOOTSTRAP_ADMIN_EMAI
 
 ```bash
 pnpm dev                 # Run web and API in watch mode
+pnpm dev:local           # Start Docker dependencies, web, and API together
 pnpm build               # Build every workspace
 pnpm lint                # Run ESLint across the monorepo
 pnpm typecheck           # Run strict TypeScript checks
@@ -84,16 +86,18 @@ must match the session row. The API still enforces tenant scope and permissions 
 
 ## Invitations and reset email
 
-`EMAIL_TRANSPORT=console` is development-only. It stores up to 50 messages in memory without logging
-token URLs. Inspect them while the API process is running:
+`EMAIL_TRANSPORT=console` is development-only. It stores up to 50 messages in memory and prints each
+message, including its invitation/reset URL, in the terminal running `pnpm dev` or `pnpm dev:local`.
+The protected development outbox is also available while that API process is running:
 
 ```bash
 curl -H "X-Dev-Email-Key: <DEV_EMAIL_KEY>" http://localhost:4000/api/v1/dev/emails
 ```
 
-Invitation creation also returns the one-time invitation URL to its authorized caller. Forgot
-password always returns the same response whether an account exists. Invitation and reset tokens
-are random, time-limited, single-use, and stored only as hashes.
+Normal invitation API responses never contain the raw invitation token. Forgot password always
+returns the same response whether an account exists. Invitation and reset tokens are random,
+time-limited, single-use, and stored only as hashes. Resending rotates the pending token and expiry;
+cancelling removes the unactivated placeholder account and retains a security event.
 
 For production, configure:
 
@@ -116,7 +120,7 @@ invitations under `/users`, organization settings under `/organization`, and RBA
 `/permissions`. Every tenant-owned query derives `organizationId` from the validated session.
 
 Default roles are Owner, Admin, Manager, Staff, and Viewer. The centralized permission catalog
-contains identity permissions plus the Milestone 3 company, contact, lead, activity, and pipeline
+contains identity permissions plus company, contact, lead, project, task, comment, and attachment
 permissions. Default roles are immutable presets; custom roles can be created and updated. See
 [CRM Core implementation notes](docs/MILESTONE_3_CRM_CORE.md) for the matrix and API routes.
 
@@ -129,13 +133,31 @@ transactionally. `DELETE` endpoints archive records; they do not erase CRM histo
 
 The default pipeline is `Sales Pipeline` with New Lead, Contacted, Qualified, Proposal Sent,
 Negotiation, Won, and Lost stages. Business logic uses stage IDs and `isWon`/`isLost` flags rather
-than stage names. A won lead does not create a project.
+than stage names. A won lead does not create a project automatically; an authorized user reviews a
+prefilled Project drawer and confirms creation.
+
+## Projects and tasks
+
+Projects belong to one same-organization Company and can optionally link to one won Lead. The
+unique source-Lead link prevents accidental duplicate conversion. Project managers, members, and
+task assignees must be active users in the same organization. A project manager is also maintained
+as a project member. Task assignment deliberately allows any active organization user in V1.
+
+Projects and tasks use archive semantics. Project and task changes write user-facing activity in
+the same transaction as the business update. Money uses PostgreSQL `Decimal`, while project and
+task schedule fields use date-only columns.
+
+Attachment metadata is stored in PostgreSQL with explicit Project or Task foreign keys. File bytes
+are stored by a storage service under `.local/uploads` in development and are never placed in the
+database. Uploads are limited to 10 MB and validate authorization, tenant ownership, file names,
+allowed types, and recognizable file signatures. `UNICRM_UPLOAD_DIR` may override the local path;
+production can replace the storage service with an S3-compatible adapter.
 
 ## Repository layout
 
 ```text
 apps/
-  api/          NestJS identity and CRM modules plus Prisma schema
+  api/          NestJS identity, CRM, project delivery modules, and Prisma schema
   web/          Next.js App Router frontend
 packages/
   config/       Shared strict TypeScript configurations
@@ -148,7 +170,6 @@ docs/           Product and architecture blueprint
 
 ## Milestone boundary
 
-Milestone 3 stops at CRM Core: companies, contacts, leads, the standard sales pipeline, lead
-activities, follow-ups, tenant isolation, permissions, and audit history. Projects, tasks,
-quotations, payments, dashboard business metrics, reports, automation, AI, SaaS billing, and later
-modules remain out of scope.
+Milestone 4 stops at projects, project members, tasks, comments, attachments, project activity, and
+their CRM integrations. Quotations, payments, dashboard business metrics, reports, notifications,
+automation, AI, SaaS billing, and Milestone 5 remain out of scope.
