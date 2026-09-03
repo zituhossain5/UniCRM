@@ -2,7 +2,13 @@
 import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
-import { companyStatuses, labelize, personName, type CompanyRecord } from '@/lib/crm-types';
+import {
+  companyStatuses,
+  formatMoney,
+  labelize,
+  personName,
+  type CompanyRecord,
+} from '@/lib/crm-types';
 import {
   Badge,
   Button,
@@ -15,7 +21,7 @@ import {
   Sheet,
   Textarea,
 } from '@unicrm/ui';
-import { Archive, ArrowLeft, ExternalLink, Pencil } from 'lucide-react';
+import { Archive, ArrowLeft, ExternalLink, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
@@ -90,8 +96,26 @@ export function CompanyDetail({ id }: { id: string }) {
         actions={
           company.status !== 'ARCHIVED' &&
           (current.permissions.includes('company.update') ||
-            current.permissions.includes('company.delete')) ? (
+            current.permissions.includes('company.delete') ||
+            current.permissions.includes('quotation.create') ||
+            current.permissions.includes('payment.create')) ? (
             <div className="record-actions">
+              {current.permissions.includes('quotation.create') ? (
+                <Link
+                  className="ui-button ui-button--secondary"
+                  href={`/app/quotations/new?companyId=${company.id}`}
+                >
+                  <Plus size={14} /> New quotation
+                </Link>
+              ) : null}
+              {current.permissions.includes('payment.create') ? (
+                <Link
+                  className="ui-button ui-button--secondary"
+                  href={`/app/payments?record=1&companyId=${company.id}`}
+                >
+                  <Plus size={14} /> Record payment
+                </Link>
+              ) : null}
               {current.permissions.includes('company.update') && company.status !== 'ARCHIVED' ? (
                 <Sheet
                   open={open}
@@ -255,6 +279,52 @@ export function CompanyDetail({ id }: { id: string }) {
           ) : (
             <p className="record-empty">No projects associated with this company.</p>
           )}
+        </section>
+        <section className="record-section record-section--wide">
+          <div className="section-heading">
+            <h2>Commercial</h2>
+            <span>
+              {(company.quotations?.length ?? 0) + (company.payments?.length ?? 0)} records
+            </span>
+          </div>
+          <div className="record-grid commercial-summary-grid">
+            <div>
+              <h3>Quotations</h3>
+              {company.quotations?.length ? (
+                <div className="compact-list">
+                  {company.quotations.map((quotation) => (
+                    <Link href={`/app/quotations/${quotation.id}`} key={quotation.id}>
+                      <strong>{quotation.quotationNumber}</strong>
+                      <span>
+                        {labelize(quotation.status)} ·{' '}
+                        {formatMoney(quotation.total, quotation.currency)}
+                      </span>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <p className="record-empty">No quotations.</p>
+              )}
+            </div>
+            <div>
+              <h3>Payments</h3>
+              {company.payments?.length ? (
+                <div className="compact-list">
+                  {company.payments.map((payment) => (
+                    <div key={payment.id}>
+                      <strong>{formatMoney(payment.amount, payment.currency)}</strong>
+                      <span>
+                        {payment.reference ??
+                          (payment.method ? labelize(payment.method) : 'Payment')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="record-empty">No payments.</p>
+              )}
+            </div>
+          </div>
         </section>
         <section className="record-section record-section--wide">
           <h2>Recent activity</h2>

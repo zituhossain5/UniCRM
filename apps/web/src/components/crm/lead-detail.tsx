@@ -179,6 +179,14 @@ export function LeadDetail({ id }: { id: string }) {
         actions={
           !lead.archivedAt ? (
             <div className="record-actions">
+              {lead.companyId && current.permissions.includes('quotation.create') ? (
+                <Link
+                  className="ui-button ui-button--secondary"
+                  href={`/app/quotations/new?companyId=${lead.companyId}&contactId=${lead.contactId ?? ''}&leadId=${lead.id}&currency=${lead.currency}`}
+                >
+                  <Plus size={15} /> Create quotation
+                </Link>
+              ) : null}
               {lead.stage.isWon &&
               lead.companyId &&
               !lead.project &&
@@ -470,6 +478,22 @@ export function LeadDetail({ id }: { id: string }) {
             <Detail label="Phone" value={lead.phone || lead.contact?.phone || '-'} />
             <Detail label="Description" value={lead.description || '-'} />
             <Detail label="Notes" value={lead.notes || '-'} />
+            <Detail
+              label="Quotations"
+              value={
+                lead.quotations?.length ? (
+                  <span className="inline-link-list">
+                    {lead.quotations.map((quotation) => (
+                      <Link href={`/app/quotations/${quotation.id}`} key={quotation.id}>
+                        {quotation.quotationNumber} ({labelize(quotation.status)})
+                      </Link>
+                    ))}
+                  </span>
+                ) : (
+                  'None'
+                )
+              }
+            />
             {lead.lostReason ? <Detail label="Lost reason" value={lead.lostReason} /> : null}
           </dl>
         </section>

@@ -1,9 +1,4 @@
-import { PlaceholderPage } from '@/components/placeholder-page';
+import { QuotationsView } from '@/components/commercial/quotations-view';
 export default function Page() {
-  return (
-    <PlaceholderPage
-      description="Quotation workflows will be implemented in the Sales milestone."
-      title="Quotations"
-    />
-  );
+  return <QuotationsView />;
 }

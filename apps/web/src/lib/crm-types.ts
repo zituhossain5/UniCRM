@@ -65,6 +65,22 @@ export interface CompanyRecord {
     progress: number;
     deadline: string | null;
   }>;
+  quotations?: Array<{
+    id: string;
+    quotationNumber: string;
+    status: string;
+    total: string;
+    currency: string;
+    issueDate: string;
+  }>;
+  payments?: Array<{
+    id: string;
+    amount: string;
+    currency: string;
+    paymentDate: string;
+    method: string | null;
+    reference: string | null;
+  }>;
 }
 
 export interface ContactRecord extends ContactRef {
@@ -128,6 +144,14 @@ export interface LeadRecord {
   activities?: LeadActivity[];
   followUps?: FollowUp[];
   project?: { id: string; name: string; status: string; archivedAt: string | null } | null;
+  quotations?: Array<{
+    id: string;
+    quotationNumber: string;
+    status: string;
+    total: string;
+    currency: string;
+    issueDate: string;
+  }>;
 }
 
 export const companyStatuses = [

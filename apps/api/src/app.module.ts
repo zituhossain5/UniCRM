@@ -21,6 +21,8 @@ import { PipelinesModule } from './pipelines/pipelines.module';
 import { ProjectsModule } from './projects/projects.module';
 import { TasksModule } from './tasks/tasks.module';
 import { AttachmentsModule } from './attachments/attachments.module';
+import { PaymentsModule } from './payments/payments.module';
+import { QuotationsModule } from './quotations/quotations.module';
 
 @Module({
   imports: [
@@ -43,6 +45,8 @@ import { AttachmentsModule } from './attachments/attachments.module';
     TasksModule,
     ProjectsModule,
     AttachmentsModule,
+    QuotationsModule,
+    PaymentsModule,
     HealthModule,
   ],
   providers: [

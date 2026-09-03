@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
@@ -39,6 +39,23 @@ const projectInclude = {
   members: {
     include: { user: { select: userSelect } },
     orderBy: { createdAt: 'asc' },
+  },
+  quotations: {
+    where: { archivedAt: null },
+    select: { id: true, quotationNumber: true, status: true, total: true, currency: true },
+    orderBy: { createdAt: 'desc' },
+  },
+  payments: {
+    where: { archivedAt: null },
+    select: {
+      id: true,
+      amount: true,
+      currency: true,
+      paymentDate: true,
+      method: true,
+      reference: true,
+    },
+    orderBy: { paymentDate: 'desc' },
   },
 } satisfies Prisma.ProjectInclude;
 
@@ -104,13 +121,39 @@ export class ProjectsService {
       include: projectInclude,
     });
     if (!project) throw new NotFoundException('Project not found');
-    const activity = await this.prisma.activityLog.findMany({
-      where: { organizationId: principal.organizationId, entityType: 'PROJECT', entityId: id },
-      include: { actor: { select: userSelect } },
-      orderBy: { createdAt: 'desc' },
-      take: 100,
-    });
-    return { ...project, activity };
+    const [activity, quotedAggregate, paymentAggregate] = await this.prisma.$transaction([
+      this.prisma.activityLog.findMany({
+        where: { organizationId: principal.organizationId, entityType: 'PROJECT', entityId: id },
+        include: { actor: { select: userSelect } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      this.prisma.quotation.aggregate({
+        where: {
+          organizationId: principal.organizationId,
+          projectId: id,
+          archivedAt: null,
+          status: { in: ['SENT', 'ACCEPTED'] },
+        },
+        _sum: { total: true },
+      }),
+      this.prisma.payment.aggregate({
+        where: { organizationId: principal.organizationId, projectId: id, archivedAt: null },
+        _sum: { amount: true },
+      }),
+    ]);
+    const received = paymentAggregate._sum.amount ?? new Prisma.Decimal(0);
+    const projectValue = project.projectValue ?? new Prisma.Decimal(0);
+    return {
+      ...project,
+      financials: {
+        projectValue,
+        quotedAmount: quotedAggregate._sum.total ?? new Prisma.Decimal(0),
+        received,
+        outstanding: projectValue.minus(received).toDecimalPlaces(2),
+      },
+      activity,
+    };
   }
 
   listUsers(principal: AuthenticatedPrincipal) {

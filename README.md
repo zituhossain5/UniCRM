@@ -121,7 +121,9 @@ invitations under `/users`, organization settings under `/organization`, and RBA
 
 Default roles are Owner, Admin, Manager, Staff, and Viewer. The centralized permission catalog
 contains identity permissions plus company, contact, lead, project, task, comment, and attachment
-permissions. Default roles are immutable presets; custom roles can be created and updated. See
+permissions, plus quotation and payment permissions. Owner and Admin receive all commercial
+permissions. Manager can fully manage quotations and payments. Staff can create/update draft
+quotations and read payments, while Viewer is read-only. Default roles are immutable presets; custom roles can be created and updated. See
 [CRM Core implementation notes](docs/MILESTONE_3_CRM_CORE.md) for the matrix and API routes.
 
 ## CRM Core
@@ -153,6 +155,24 @@ database. Uploads are limited to 10 MB and validate authorization, tenant owners
 allowed types, and recognizable file signatures. `UNICRM_UPLOAD_DIR` may override the local path;
 production can replace the storage service with an S3-compatible adapter.
 
+## Quotations and payments
+
+Quotation numbers use an organization-owned counter updated atomically in the same transaction as
+the quotation and its items. Numbers are immutable and unique per organization. Quantities,
+prices, discounts, taxes, totals, payments, and balances use Prisma/PostgreSQL Decimal values; the
+API recalculates every item and total and ignores no client-supplied derived amount.
+
+Draft quotation PDFs are generated on demand with PDFKit. Marking a quotation Sent generates one
+immutable PDF snapshot through the existing storage abstraction; later downloads return that
+snapshot, so an accepted quotation remains reproducible. The API never exposes its storage key or
+filesystem path as a download location. Sent, accepted, rejected, and expired financial content is
+not editable.
+
+Project received value is the sum of non-archived payments linked directly to that project. A
+payment linked to both a project and quotation is therefore counted once in the project summary;
+quotation paid/remaining values use payments linked directly to that quotation. Quotations and
+payments are commercial records, not invoices or accounting ledger entries.
+
 ## Repository layout
 
 ```text
@@ -170,6 +190,6 @@ docs/           Product and architecture blueprint
 
 ## Milestone boundary
 
-Milestone 4 stops at projects, project members, tasks, comments, attachments, project activity, and
-their CRM integrations. Quotations, payments, dashboard business metrics, reports, notifications,
-automation, AI, SaaS billing, and Milestone 5 remain out of scope.
+Milestone 5 stops at quotations, quotation PDF snapshots, payments, and project commercial
+balances. Invoices, accounting ledgers, payment gateways, business-metric dashboards, advanced
+reports, notifications, automation, AI, and SaaS billing remain out of scope.

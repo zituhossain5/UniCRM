@@ -6,7 +6,16 @@ export interface AuditInput {
   action: string;
   actorId: string;
   entityId: string;
-  entityType: 'ATTACHMENT' | 'COMPANY' | 'CONTACT' | 'FOLLOW_UP' | 'LEAD' | 'PROJECT' | 'TASK';
+  entityType:
+    | 'ATTACHMENT'
+    | 'COMPANY'
+    | 'CONTACT'
+    | 'FOLLOW_UP'
+    | 'LEAD'
+    | 'PAYMENT'
+    | 'PROJECT'
+    | 'QUOTATION'
+    | 'TASK';
   metadata?: Prisma.InputJsonValue;
   organizationId: string;
 }

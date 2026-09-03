@@ -33,6 +33,27 @@ export interface ProjectRecord extends ProjectRef {
   sourceLead?: { id: string; title: string; stage: { name: string; isWon: boolean } } | null;
   members?: ProjectMember[];
   activity?: WorkActivity[];
+  financials?: {
+    projectValue: string;
+    quotedAmount: string;
+    received: string;
+    outstanding: string;
+  };
+  quotations?: Array<{
+    id: string;
+    quotationNumber: string;
+    status: string;
+    total: string;
+    currency: string;
+  }>;
+  payments?: Array<{
+    id: string;
+    amount: string;
+    currency: string;
+    paymentDate: string;
+    method: string | null;
+    reference: string | null;
+  }>;
   _count: { members: number; tasks: number };
 }
 

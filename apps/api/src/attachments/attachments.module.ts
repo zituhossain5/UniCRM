@@ -12,5 +12,6 @@ import { LocalStorageService } from './local-storage.service';
   imports: [AuditModule],
   controllers: [AttachmentsController, ProjectAttachmentsController, TaskAttachmentsController],
   providers: [AttachmentsService, LocalStorageService],
+  exports: [LocalStorageService],
 })
 export class AttachmentsModule {}

@@ -138,8 +138,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       items.push({ label: 'New Project', onClick: () => setCreateTarget('project') });
     if (user.permissions.includes('task.create'))
       items.push({ label: 'New Task', onClick: () => setCreateTarget('task') });
+    if (user.permissions.includes('quotation.create'))
+      items.push({ label: 'New Quotation', onClick: () => router.push('/app/quotations/new') });
+    if (user.permissions.includes('payment.create'))
+      items.push({ label: 'Record Payment', onClick: () => router.push('/app/payments?record=1') });
     return items;
-  }, [user.permissions]);
+  }, [router, user.permissions]);
   const navigation = <Navigation collapsed={collapsed} pathname={pathname} />;
 
   return (
@@ -360,7 +364,12 @@ export function AppShell({ children }: { children: ReactNode }) {
             />
           </div>
           <div className="command-results">
-            {filteredCommands.length || filteredCreateCommands.length ? (
+            {filteredCommands.length ||
+            filteredCreateCommands.length ||
+            (user.permissions.includes('quotation.create') &&
+              'Create Quotation'.toLowerCase().includes(query.toLowerCase())) ||
+            (user.permissions.includes('payment.create') &&
+              'Record Payment'.toLowerCase().includes(query.toLowerCase())) ? (
               <>
                 {filteredCreateCommands.map((item) => (
                   <button
@@ -376,6 +385,34 @@ export function AppShell({ children }: { children: ReactNode }) {
                     <span>{item.label}</span>
                   </button>
                 ))}
+                {user.permissions.includes('quotation.create') &&
+                'Create Quotation'.toLowerCase().includes(query.toLowerCase()) ? (
+                  <button
+                    onClick={() => {
+                      setCommandOpen(false);
+                      setQuery('');
+                      router.push('/app/quotations/new');
+                    }}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    <span>Create Quotation</span>
+                  </button>
+                ) : null}
+                {user.permissions.includes('payment.create') &&
+                'Record Payment'.toLowerCase().includes(query.toLowerCase()) ? (
+                  <button
+                    onClick={() => {
+                      setCommandOpen(false);
+                      setQuery('');
+                      router.push('/app/payments?record=1');
+                    }}
+                    type="button"
+                  >
+                    <Plus size={16} />
+                    <span>Record Payment</span>
+                  </button>
+                ) : null}
                 {filteredCommands.map((item) => (
                   <button
                     key={item.href}

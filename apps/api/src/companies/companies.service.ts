@@ -101,7 +101,7 @@ export class CompaniesService {
       include: companyInclude,
     });
     if (!company) throw new NotFoundException('Company not found');
-    const [activity, projects] = await Promise.all([
+    const [activity, projects, quotations, payments] = await Promise.all([
       this.prisma.activityLog.findMany({
         where: { organizationId: principal.organizationId, entityType: 'COMPANY', entityId: id },
         include: { actor: { select: { id: true, firstName: true, lastName: true } } },
@@ -115,8 +115,36 @@ export class CompaniesService {
             select: companyProjectSelect,
           })
         : Promise.resolve([]),
+      principal.permissions.includes(PERMISSIONS.quotationRead)
+        ? this.prisma.quotation.findMany({
+            where: { organizationId: principal.organizationId, companyId: id, archivedAt: null },
+            select: {
+              id: true,
+              quotationNumber: true,
+              status: true,
+              total: true,
+              currency: true,
+              issueDate: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+      principal.permissions.includes(PERMISSIONS.paymentRead)
+        ? this.prisma.payment.findMany({
+            where: { organizationId: principal.organizationId, companyId: id, archivedAt: null },
+            select: {
+              id: true,
+              amount: true,
+              currency: true,
+              paymentDate: true,
+              method: true,
+              reference: true,
+            },
+            orderBy: { paymentDate: 'desc' },
+          })
+        : Promise.resolve([]),
     ]);
-    return { ...company, activity, projects };
+    return { ...company, activity, projects, quotations, payments };
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateCompanyDto) {

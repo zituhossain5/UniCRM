@@ -35,7 +35,7 @@ import { useCallback, useEffect, useId, useState, type FormEvent } from 'react';
 import { TaskCreateSheet } from './create-sheets';
 import { TaskQuickView } from './task-quick-view';
 
-const tabs = ['overview', 'tasks', 'team', 'activity', 'files'] as const;
+const tabs = ['overview', 'tasks', 'team', 'financials', 'activity', 'files'] as const;
 type ProjectTab = (typeof tabs)[number];
 
 export function ProjectDetail({ id }: { id: string }) {
@@ -514,6 +514,121 @@ export function ProjectDetail({ id }: { id: string }) {
               </div>
             ))}
           </div>
+        </section>
+      ) : null}
+      {tab === 'financials' ? (
+        <section className="project-panel">
+          <div className="section-heading">
+            <h2>Financials</h2>
+            <div className="page-action-row">
+              {current.permissions.includes('quotation.create') ? (
+                <Link
+                  className="ui-button ui-button--secondary"
+                  href={`/app/quotations/new?companyId=${project.companyId}&projectId=${project.id}&currency=${project.currency}`}
+                >
+                  New quotation
+                </Link>
+              ) : null}
+              {current.permissions.includes('payment.create') ? (
+                <Link
+                  className="ui-button ui-button--primary"
+                  href={`/app/payments?record=1&companyId=${project.companyId}&projectId=${project.id}`}
+                >
+                  Record payment
+                </Link>
+              ) : null}
+            </div>
+          </div>
+          <div className="financial-summary">
+            <div>
+              <span>Project value</span>
+              <strong>
+                {formatMoney(
+                  project.financials?.projectValue ?? project.projectValue,
+                  project.currency,
+                )}
+              </strong>
+            </div>
+            <div>
+              <span>Quoted amount</span>
+              <strong>
+                {formatMoney(project.financials?.quotedAmount ?? '0', project.currency)}
+              </strong>
+            </div>
+            <div>
+              <span>Received</span>
+              <strong>{formatMoney(project.financials?.received ?? '0', project.currency)}</strong>
+            </div>
+            <div>
+              <span>
+                {Number(project.financials?.outstanding ?? 0) < 0 ? 'Overpaid' : 'Outstanding'}
+              </span>
+              <strong>
+                {formatMoney(
+                  String(Math.abs(Number(project.financials?.outstanding ?? 0))),
+                  project.currency,
+                )}
+              </strong>
+            </div>
+          </div>
+          <h2>Quotations</h2>
+          {project.quotations?.length ? (
+            <div className="crm-table-wrap">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>Quotation</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {project.quotations.map((quotation) => (
+                    <tr key={quotation.id}>
+                      <td>
+                        <Link href={`/app/quotations/${quotation.id}`}>
+                          {quotation.quotationNumber}
+                        </Link>
+                      </td>
+                      <td>
+                        <Badge>{labelize(quotation.status)}</Badge>
+                      </td>
+                      <td>{formatMoney(quotation.total, quotation.currency)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="record-empty">No linked quotations.</p>
+          )}
+          <h2 className="financial-subheading">Payments</h2>
+          {project.payments?.length ? (
+            <div className="crm-table-wrap">
+              <table className="crm-table">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Amount</th>
+                    <th>Method</th>
+                    <th>Reference</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {project.payments.map((payment) => (
+                    <tr key={payment.id}>
+                      <td>{formatDateOnly(payment.paymentDate)}</td>
+                      <td>{formatMoney(payment.amount, payment.currency)}</td>
+                      <td>{payment.method ? labelize(payment.method) : '-'}</td>
+                      <td>{payment.reference ?? '-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="record-empty">No linked payments.</p>
+          )}
         </section>
       ) : null}
       {tab === 'activity' ? (

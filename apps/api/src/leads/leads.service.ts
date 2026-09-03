@@ -147,13 +147,29 @@ export class LeadsService {
       },
     });
     if (!lead) throw new NotFoundException('Lead not found');
-    const project = principal.permissions.includes(PERMISSIONS.projectRead)
-      ? await this.prisma.project.findFirst({
-          where: { organizationId: principal.organizationId, sourceLeadId: id },
-          select: { id: true, name: true, status: true, archivedAt: true },
-        })
-      : null;
-    return { ...lead, project };
+    const [project, quotations] = await Promise.all([
+      principal.permissions.includes(PERMISSIONS.projectRead)
+        ? this.prisma.project.findFirst({
+            where: { organizationId: principal.organizationId, sourceLeadId: id },
+            select: { id: true, name: true, status: true, archivedAt: true },
+          })
+        : Promise.resolve(null),
+      principal.permissions.includes(PERMISSIONS.quotationRead)
+        ? this.prisma.quotation.findMany({
+            where: { organizationId: principal.organizationId, leadId: id, archivedAt: null },
+            select: {
+              id: true,
+              quotationNumber: true,
+              status: true,
+              total: true,
+              currency: true,
+              issueDate: true,
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        : Promise.resolve([]),
+    ]);
+    return { ...lead, project, quotations };
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateLeadDto) {
