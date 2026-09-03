@@ -45,6 +45,11 @@ export function TasksView() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected] = useState<string | null>(null);
+
+  useEffect(() => {
+    const taskId = new URLSearchParams(window.location.search).get('task');
+    if (taskId) setSelected(taskId);
+  }, []);
   const load = useCallback(async () => {
     try {
       setError('');

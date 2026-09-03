@@ -23,6 +23,10 @@ import { TasksModule } from './tasks/tasks.module';
 import { AttachmentsModule } from './attachments/attachments.module';
 import { PaymentsModule } from './payments/payments.module';
 import { QuotationsModule } from './quotations/quotations.module';
+import { DashboardModule } from './dashboard/dashboard.module';
+import { ReportsModule } from './reports/reports.module';
+import { SearchModule } from './search/search.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -35,6 +39,7 @@ import { QuotationsModule } from './quotations/quotations.module';
     RedisModule,
     EmailModule,
     AuthModule,
+    NotificationsModule,
     UsersModule,
     RolesModule,
     OrganizationsModule,
@@ -47,6 +52,9 @@ import { QuotationsModule } from './quotations/quotations.module';
     AttachmentsModule,
     QuotationsModule,
     PaymentsModule,
+    DashboardModule,
+    ReportsModule,
+    SearchModule,
     HealthModule,
   ],
   providers: [

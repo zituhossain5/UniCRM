@@ -45,11 +45,15 @@ import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTheme } from './theme-provider';
 import { useCurrentUser } from './auth-provider';
 import { apiRequest } from '@/lib/api';
+import { useQuery } from '@tanstack/react-query';
+import type { SearchResults } from '@/lib/operational-types';
+import { NotificationBellContent, UnreadBadge } from './operational/notification-center';
 
 interface NavItem {
   href: string;
   icon: typeof LayoutDashboard;
   label: string;
+  permission?: string;
 }
 interface NavSection {
   label?: string;
@@ -57,7 +61,16 @@ interface NavSection {
 }
 
 const navSections: readonly NavSection[] = [
-  { items: [{ href: '/app/dashboard', icon: LayoutDashboard, label: 'Overview' }] },
+  {
+    items: [
+      {
+        href: '/app/dashboard',
+        icon: LayoutDashboard,
+        label: 'Overview',
+        permission: 'dashboard.read',
+      },
+    ],
+  },
   {
     label: 'CRM',
     items: [
@@ -80,7 +93,16 @@ const navSections: readonly NavSection[] = [
       { href: '/app/payments', icon: CircleDollarSign, label: 'Payments' },
     ],
   },
-  { items: [{ href: '/app/reports', icon: ChartNoAxesColumn, label: 'Reports' }] },
+  {
+    items: [
+      {
+        href: '/app/reports',
+        icon: ChartNoAxesColumn,
+        label: 'Reports',
+        permission: 'reports.read',
+      },
+    ],
+  },
 ];
 
 const commandItems = navSections
@@ -97,7 +119,23 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [collapsed, setCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [createTarget, setCreateTarget] = useState<GlobalCreateTarget | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [query, setQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedQuery(query.trim()), 250);
+    return () => window.clearTimeout(timer);
+  }, [query]);
+
+  const search = useQuery({
+    queryKey: ['global-search', debouncedQuery],
+    queryFn: () =>
+      apiRequest<{ data: SearchResults }>(`/search?q=${encodeURIComponent(debouncedQuery)}`),
+    enabled: commandOpen && debouncedQuery.length >= 2,
+    staleTime: 30_000,
+  });
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -110,9 +148,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, []);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+    setNotificationsOpen(false);
+  }, [pathname]);
+
   const filteredCommands = useMemo(
-    () => commandItems.filter((item) => item.label.toLowerCase().includes(query.toLowerCase())),
-    [query],
+    () =>
+      commandItems.filter(
+        (item) =>
+          (!item.permission || user.permissions.includes(item.permission)) &&
+          item.label.toLowerCase().includes(query.toLowerCase()),
+      ),
+    [query, user.permissions],
   );
   const filteredCreateCommands = useMemo(
     () =>
@@ -144,7 +192,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       items.push({ label: 'Record Payment', onClick: () => router.push('/app/payments?record=1') });
     return items;
   }, [router, user.permissions]);
-  const navigation = <Navigation collapsed={collapsed} pathname={pathname} />;
+  const navigation = (
+    <Navigation collapsed={collapsed} pathname={pathname} permissions={user.permissions} />
+  );
 
   return (
     <div className={`app-frame${collapsed ? ' app-frame--collapsed' : ''}`}>
@@ -188,6 +238,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="mobile-nav">
           <Sheet
             description="Navigate UniCRM"
+            onOpenChange={setMobileNavOpen}
+            open={mobileNavOpen}
             title="UniCRM"
             trigger={
               <IconButton label="Open navigation">
@@ -196,8 +248,19 @@ export function AppShell({ children }: { children: ReactNode }) {
             }
           >
             <div className="mobile-navigation">
-              {navigation}
-              <NavLink href="/app/settings" icon={Settings} label="Settings" pathname={pathname} />
+              <Navigation
+                collapsed={collapsed}
+                onNavigate={() => setMobileNavOpen(false)}
+                pathname={pathname}
+                permissions={user.permissions}
+              />
+              <NavLink
+                href="/app/settings"
+                icon={Settings}
+                label="Settings"
+                onNavigate={() => setMobileNavOpen(false)}
+                pathname={pathname}
+              />
             </div>
           </Sheet>
         </div>
@@ -225,15 +288,18 @@ export function AppShell({ children }: { children: ReactNode }) {
             </Button>
           )}
           <Popover
+            onOpenChange={setNotificationsOpen}
+            open={notificationsOpen}
+            popupClassName="notification-popover-popup"
             trigger={
               <IconButton className="notification-button" label="Notifications">
                 <Bell size={17} />
+                <UnreadBadge />
               </IconButton>
             }
           >
             <div className="notification-popover">
-              <strong>No new notifications</strong>
-              <span>Updates will appear here.</span>
+              <NotificationBellContent onActivate={() => setNotificationsOpen(false)} />
             </div>
           </Popover>
           <Tooltip content={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
@@ -343,7 +409,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       ) : null}
 
       <Dialog
-        description="Navigate between UniCRM areas. Business search will arrive in a later milestone."
+        description="Search records, navigate, or create work."
         onOpenChange={setCommandOpen}
         open={commandOpen}
         title="Command palette"
@@ -359,11 +425,31 @@ export function AppShell({ children }: { children: ReactNode }) {
             <Input
               autoFocus
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Type a page name..."
+              placeholder="Search UniCRM..."
               value={query}
             />
           </div>
           <div className="command-results">
+            {query.trim().length >= 2 ? (
+              <div className="search-result-groups">
+                <p className="command-section-label">Search results</p>
+                {search.isLoading ? (
+                  <p>Searching…</p>
+                ) : search.isError ? (
+                  <p className="overdue-text">Search unavailable.</p>
+                ) : (
+                  <SearchResultGroups
+                    results={search.data?.data}
+                    navigate={(href) => {
+                      setCommandOpen(false);
+                      setQuery('');
+                      router.push(href);
+                    }}
+                  />
+                )}
+              </div>
+            ) : null}
+            <p className="command-section-label">Commands</p>
             {filteredCommands.length ||
             filteredCreateCommands.length ||
             (user.permissions.includes('quotation.create') &&
@@ -447,22 +533,122 @@ export function AppShell({ children }: { children: ReactNode }) {
   );
 }
 
-function Navigation({ collapsed = false, pathname }: { collapsed?: boolean; pathname: string }) {
+function SearchResultGroups({
+  navigate,
+  results,
+}: {
+  navigate: (href: string) => void;
+  results?: SearchResults;
+}) {
+  if (!results) return null;
+  const groups = [
+    [
+      'Companies',
+      results.companies.map((item) => ({
+        id: item.id,
+        label: item.name,
+        detail: item.email,
+        href: `/app/companies/${item.id}`,
+      })),
+    ],
+    [
+      'Contacts',
+      results.contacts.map((item) => ({
+        id: item.id,
+        label: `${item.firstName} ${item.lastName}`,
+        detail: item.company?.name,
+        href: `/app/contacts/${item.id}`,
+      })),
+    ],
+    [
+      'Leads',
+      results.leads.map((item) => ({
+        id: item.id,
+        label: item.title,
+        detail: item.company?.name ?? item.stage.name,
+        href: `/app/leads/${item.id}`,
+      })),
+    ],
+    [
+      'Projects',
+      results.projects.map((item) => ({
+        id: item.id,
+        label: item.name,
+        detail: item.company.name,
+        href: `/app/projects/${item.id}`,
+      })),
+    ],
+    [
+      'Tasks',
+      results.tasks.map((item) => ({
+        id: item.id,
+        label: item.title,
+        detail: item.project.name,
+        href: `/app/tasks?task=${item.id}`,
+      })),
+    ],
+    [
+      'Quotations',
+      results.quotations.map((item) => ({
+        id: item.id,
+        label: item.quotationNumber,
+        detail: item.company.name,
+        href: `/app/quotations/${item.id}`,
+      })),
+    ],
+  ] as const;
+  if (!groups.some(([, items]) => items.length)) return <p>No matching records.</p>;
+  return (
+    <>
+      {groups
+        .filter(([, items]) => items.length)
+        .map(([name, items]) => (
+          <section className="search-result-group" key={name}>
+            <small>{name}</small>
+            {items.map((item) => (
+              <button key={item.id} onClick={() => navigate(item.href)} type="button">
+                <Search size={15} />
+                <span>
+                  <strong>{item.label}</strong>
+                  {item.detail ? <small>{item.detail}</small> : null}
+                </span>
+              </button>
+            ))}
+          </section>
+        ))}
+    </>
+  );
+}
+
+function Navigation({
+  collapsed = false,
+  onNavigate,
+  pathname,
+  permissions,
+}: {
+  collapsed?: boolean;
+  onNavigate?: () => void;
+  pathname: string;
+  permissions: string[];
+}) {
   return (
     <nav aria-label="Primary navigation" className="sidebar-navigation">
       {navSections.map((section, index) => (
         <div className="nav-section" key={section.label ?? index}>
           {section.label ? <p>{section.label}</p> : null}
-          {section.items.map((item) => (
-            <NavLink
-              collapsed={collapsed}
-              href={item.href}
-              icon={item.icon}
-              key={item.href}
-              label={item.label}
-              pathname={pathname}
-            />
-          ))}
+          {section.items
+            .filter((item) => !item.permission || permissions.includes(item.permission))
+            .map((item) => (
+              <NavLink
+                collapsed={collapsed}
+                href={item.href}
+                icon={item.icon}
+                key={item.href}
+                label={item.label}
+                onNavigate={onNavigate}
+                pathname={pathname}
+              />
+            ))}
         </div>
       ))}
     </nav>
@@ -474,13 +660,15 @@ function NavLink({
   href,
   icon: Icon,
   label,
+  onNavigate,
   pathname,
-}: NavItem & { collapsed?: boolean; pathname: string }) {
+}: NavItem & { collapsed?: boolean; onNavigate?: () => void; pathname: string }) {
   const link = (
     <Link
       aria-current={pathname === href || pathname.startsWith(`${href}/`) ? 'page' : undefined}
       className="nav-link"
       href={href}
+      onClick={onNavigate}
     >
       <Icon aria-hidden="true" size={16} />
       <span>{label}</span>

@@ -101,13 +101,29 @@ export function Sheet({
   );
 }
 
-export function Popover({ children, trigger }: { children: ReactNode; trigger: ReactElement }) {
+export function Popover({
+  children,
+  onOpenChange,
+  open,
+  popupClassName,
+  trigger,
+}: {
+  children: ReactNode;
+  onOpenChange?: (open: boolean) => void;
+  open?: boolean;
+  popupClassName?: string;
+  trigger: ReactElement;
+}) {
   return (
-    <BasePopover.Root>
+    <BasePopover.Root onOpenChange={onOpenChange} open={open}>
       <BasePopover.Trigger render={trigger} />
       <BasePopover.Portal>
         <BasePopover.Positioner className="ui-popup-positioner" sideOffset={6}>
-          <BasePopover.Popup className="ui-popover-popup">{children}</BasePopover.Popup>
+          <BasePopover.Popup
+            className={`ui-popover-popup${popupClassName ? ` ${popupClassName}` : ''}`}
+          >
+            {children}
+          </BasePopover.Popup>
         </BasePopover.Positioner>
       </BasePopover.Portal>
     </BasePopover.Root>

@@ -12,6 +12,7 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type {
   CreateTaskDto,
   TaskListQueryDto,
@@ -41,6 +42,7 @@ export class TasksService {
   constructor(
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(NotificationsService) private readonly notifications: NotificationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: TaskListQueryDto) {
@@ -138,6 +140,21 @@ export class TasksService {
         },
         tx,
       );
+      if (task.assigneeId && task.assigneeId !== principal.userId) {
+        await this.notifications.create(
+          {
+            organizationId: principal.organizationId,
+            userId: task.assigneeId,
+            type: 'TASK_ASSIGNED',
+            title: 'Task assigned',
+            message: task.title,
+            entityType: 'TASK',
+            entityId: task.id,
+            dedupeKey: `task:${task.id}:assigned:${task.assigneeId}`,
+          },
+          tx,
+        );
+      }
       return task;
     });
   }
@@ -205,6 +222,25 @@ export class TasksService {
             entityType: 'PROJECT',
             organizationId: principal.organizationId,
             metadata: { taskId: task.id, title: task.title },
+          },
+          tx,
+        );
+      }
+      if (
+        dto.assigneeId &&
+        dto.assigneeId !== existing.assigneeId &&
+        dto.assigneeId !== principal.userId
+      ) {
+        await this.notifications.create(
+          {
+            organizationId: principal.organizationId,
+            userId: dto.assigneeId,
+            type: 'TASK_ASSIGNED',
+            title: 'Task assigned',
+            message: task.title,
+            entityType: 'TASK',
+            entityId: task.id,
+            dedupeKey: `task:${task.id}:assigned:${dto.assigneeId}`,
           },
           tx,
         );

@@ -10,6 +10,7 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type { CreatePaymentDto, PaymentListQueryDto, UpdatePaymentDto } from './dto/payments.dto';
 
 const include = {
@@ -26,6 +27,7 @@ export class PaymentsService {
   constructor(
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(NotificationsService) private readonly notifications: NotificationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: PaymentListQueryDto) {
@@ -151,6 +153,27 @@ export class PaymentsService {
         principal.userId,
         'recorded',
       );
+      const recipient = payment.projectId
+        ? await tx.project.findFirst({
+            where: { id: payment.projectId, organizationId: principal.organizationId },
+            select: { projectManagerId: true },
+          })
+        : null;
+      if (recipient?.projectManagerId && recipient.projectManagerId !== principal.userId) {
+        await this.notifications.create(
+          {
+            organizationId: principal.organizationId,
+            userId: recipient.projectManagerId,
+            type: 'PAYMENT_RECORDED',
+            title: 'Payment recorded',
+            message: `${payment.currency} ${payment.amount.toFixed(2)}`,
+            entityType: 'PAYMENT',
+            entityId: payment.id,
+            dedupeKey: `payment:${payment.id}:recorded`,
+          },
+          tx,
+        );
+      }
       return payment;
     });
   }

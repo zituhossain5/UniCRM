@@ -1,9 +1,4 @@
-import { PlaceholderPage } from '@/components/placeholder-page';
+import { ReportsView } from '@/components/operational/reports-view';
 export default function Page() {
-  return (
-    <PlaceholderPage
-      description="Reports will be implemented after the underlying CRM workflows are available."
-      title="Reports"
-    />
-  );
+  return <ReportsView />;
 }

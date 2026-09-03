@@ -12,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import { LocalStorageService } from '../attachments/local-storage.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import type {
   CreateQuotationDto,
   QuotationListQueryDto,
@@ -52,6 +53,7 @@ export class QuotationsService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(LocalStorageService) private readonly storage: LocalStorageService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(QuotationPdfService) private readonly pdf: QuotationPdfService,
   ) {}
 
@@ -392,6 +394,21 @@ export class QuotationsService {
           principal.userId,
           status.toLowerCase(),
         );
+        if (action === 'accept' && quotation.createdById !== principal.userId) {
+          await this.notifications.create(
+            {
+              organizationId: principal.organizationId,
+              userId: quotation.createdById,
+              type: 'QUOTATION_ACCEPTED',
+              title: 'Quotation accepted',
+              message: quotation.quotationNumber,
+              entityType: 'QUOTATION',
+              entityId: quotation.id,
+              dedupeKey: `quotation:${quotation.id}:accepted`,
+            },
+            tx,
+          );
+        }
         return publicQuotation(
           await tx.quotation.findUniqueOrThrow({ where: { id }, include: detailInclude }),
         );

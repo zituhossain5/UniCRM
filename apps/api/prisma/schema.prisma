@@ -134,11 +134,22 @@ enum PaymentMethod {
   OTHER
 }
 
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_DUE_SOON
+  TASK_OVERDUE
+  FOLLOW_UP_DUE
+  PROJECT_DEADLINE_SOON
+  QUOTATION_ACCEPTED
+  PAYMENT_RECORDED
+}
+
 model Organization {
   id               String                  @id @default(uuid()) @db.Uuid
   name             String
   slug             String                  @unique
   status           OrganizationStatus      @default(ACTIVE)
+  timezone         String                  @default("UTC") @db.VarChar(64)
   createdAt        DateTime                @default(now()) @map("created_at")
   updatedAt        DateTime                @updatedAt @map("updated_at")
   users            User[]
@@ -163,6 +174,7 @@ model Organization {
   quotations       Quotation[]
   quotationItems   QuotationItem[]
   payments         Payment[]
+  notifications    Notification[]
 
   @@map("organizations")
 }
@@ -205,6 +217,7 @@ model User {
   attachmentsUploaded Attachment[]
   quotationsCreated   Quotation[]          @relation("QuotationCreator")
   paymentsRecorded    Payment[]            @relation("PaymentRecorder")
+  notifications       Notification[]
 
   @@index([organizationId, status])
   @@map("users")
@@ -785,4 +798,24 @@ model Payment {
   @@index([organizationId, projectId, paymentDate])
   @@index([organizationId, quotationId, paymentDate])
   @@map("payments")
+}
+
+model Notification {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  type           NotificationType
+  title          String           @db.VarChar(160)
+  message        String           @db.VarChar(500)
+  entityType     String?          @map("entity_type") @db.VarChar(40)
+  entityId       String?          @map("entity_id") @db.Uuid
+  dedupeKey      String           @map("dedupe_key") @db.VarChar(220)
+  readAt         DateTime?        @map("read_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId, dedupeKey])
+  @@index([organizationId, userId, readAt, createdAt])
+  @@map("notifications")
 }

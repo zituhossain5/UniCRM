@@ -1,9 +1,4 @@
-import { PlaceholderPage } from '@/components/placeholder-page';
+import { DashboardView } from '@/components/operational/dashboard-view';
 export default function Page() {
-  return (
-    <PlaceholderPage
-      description="Dashboard insights will be implemented when CRM data and reporting foundations exist."
-      title="Overview"
-    />
-  );
+  return <DashboardView />;
 }

@@ -2,6 +2,9 @@ export const PUBLIC_ROUTE = 'unicrm:public-route';
 export const REQUIRED_PERMISSIONS = 'unicrm:required-permissions';
 
 export const PERMISSIONS = {
+  dashboardRead: 'dashboard.read',
+  reportsRead: 'reports.read',
+  notificationsRead: 'notifications.read',
   activityCreate: 'activity.create',
   activityRead: 'activity.read',
   companyCreate: 'company.create',
@@ -61,6 +64,9 @@ export const PERMISSIONS = {
 export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 
 export const PERMISSION_CATALOG: ReadonlyArray<{ key: PermissionKey; description: string }> = [
+  { key: PERMISSIONS.dashboardRead, description: 'View the operational dashboard' },
+  { key: PERMISSIONS.reportsRead, description: 'View operational reports' },
+  { key: PERMISSIONS.notificationsRead, description: 'View personal notifications' },
   { key: PERMISSIONS.companyCreate, description: 'Create companies' },
   { key: PERMISSIONS.companyRead, description: 'View companies' },
   { key: PERMISSIONS.companyUpdate, description: 'Update companies' },
@@ -123,6 +129,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<(typeof DEFAULT_ROLES)[number], Pe
   Owner: PERMISSION_CATALOG.map(({ key }) => key),
   Admin: PERMISSION_CATALOG.map(({ key }) => key),
   Manager: [
+    PERMISSIONS.dashboardRead,
+    PERMISSIONS.reportsRead,
+    PERMISSIONS.notificationsRead,
     PERMISSIONS.companyCreate,
     PERMISSIONS.companyRead,
     PERMISSIONS.companyUpdate,
@@ -170,6 +179,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<(typeof DEFAULT_ROLES)[number], Pe
     PERMISSIONS.securitySessionsRevoke,
   ],
   Staff: [
+    PERMISSIONS.dashboardRead,
+    PERMISSIONS.reportsRead,
+    PERMISSIONS.notificationsRead,
     PERMISSIONS.companyCreate,
     PERMISSIONS.companyRead,
     PERMISSIONS.companyUpdate,
@@ -204,6 +216,9 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<(typeof DEFAULT_ROLES)[number], Pe
     PERMISSIONS.securitySessionsRevoke,
   ],
   Viewer: [
+    PERMISSIONS.dashboardRead,
+    PERMISSIONS.reportsRead,
+    PERMISSIONS.notificationsRead,
     PERMISSIONS.companyRead,
     PERMISSIONS.contactRead,
     PERMISSIONS.leadRead,
