@@ -7,12 +7,16 @@ RUN corepack enable
 FROM base AS deps
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json ./
 COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
 COPY packages/config/package.json packages/config/package.json
 COPY packages/config/typescript/package.json packages/config/typescript/package.json
 COPY packages/types/package.json packages/types/package.json
-RUN pnpm install --frozen-lockfile
+COPY packages/ui/package.json packages/ui/package.json
+COPY packages/validation/package.json packages/validation/package.json
+RUN pnpm install --frozen-lockfile --prod=false
 
 FROM deps AS build
+ENV DATABASE_URL=postgresql://unicrm:placeholder@localhost:5432/unicrm?schema=public
 COPY apps/api apps/api
 COPY packages packages
 RUN pnpm --filter @unicrm/api prisma:generate
@@ -29,6 +33,7 @@ COPY --from=deps /app/apps/api/node_modules ./apps/api/node_modules
 COPY --from=deps /app/packages ./packages
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY --from=build /app/apps/api/prisma ./apps/api/prisma
+COPY --from=build /app/apps/api/prisma.config.ts ./apps/api/prisma.config.ts
 COPY --from=build /app/apps/api/package.json ./apps/api/package.json
 USER node
 WORKDIR /app/apps/api

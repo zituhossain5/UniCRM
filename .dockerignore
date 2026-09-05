@@ -1,0 +1,14 @@
+.git
+.next
+.turbo
+.local
+backups
+node_modules
+**/node_modules
+**/.next
+**/dist
+**/tsconfig.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.production.example

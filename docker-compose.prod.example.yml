@@ -63,10 +63,10 @@ services:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
-        NEXT_PUBLIC_API_URL: /api/v1
+        NEXT_PUBLIC_API_URL: https://crm.example.com/api/v1
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_URL: /api/v1
+      NEXT_PUBLIC_API_URL: https://crm.example.com/api/v1
       NEXT_PUBLIC_CSRF_COOKIE_NAME: ${NEXT_PUBLIC_CSRF_COOKIE_NAME:-unicrm_csrf}
     depends_on:
       api:
