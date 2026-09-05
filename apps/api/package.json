@@ -12,11 +12,14 @@
     "prisma:studio": "prisma studio",
     "bootstrap": "tsx src/bootstrap.ts",
     "start": "node dist/main.js",
+    "start:worker": "node dist/worker.js",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "worker": "nest start --entryFile worker"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.864.0",
     "@nestjs/common": "11.2.3",
     "@nestjs/config": "4.0.4",
     "@nestjs/core": "11.2.3",
@@ -25,6 +28,7 @@
     "@prisma/client": "7.10.0",
     "@unicrm/types": "workspace:*",
     "argon2": "0.44.0",
+    "bullmq": "^5.58.5",
     "class-transformer": "0.5.1",
     "class-validator": "0.14.2",
     "cookie-parser": "1.4.7",

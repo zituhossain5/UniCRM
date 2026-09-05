@@ -12,4 +12,16 @@ export class HealthController {
   check(): Promise<HealthResponse> {
     return this.healthService.check();
   }
+
+  @Get('live')
+  @Public()
+  live() {
+    return this.healthService.live();
+  }
+
+  @Get('ready')
+  @Public()
+  ready(): Promise<HealthResponse> {
+    return this.healthService.ready();
+  }
 }

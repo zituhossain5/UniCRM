@@ -1,11 +1,4 @@
-import {
-  Inject,
-  Injectable,
-  Logger,
-  NotFoundException,
-  OnModuleDestroy,
-  OnModuleInit,
-} from '@nestjs/common';
+import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { NotificationType, Prisma } from '../generated/prisma/client';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { addUtcDays, utcToday } from '../common/date-range';
@@ -25,26 +18,8 @@ type NotificationInput = {
 };
 
 @Injectable()
-export class NotificationsService implements OnModuleInit, OnModuleDestroy {
-  private readonly logger = new Logger(NotificationsService.name);
-  private timer?: NodeJS.Timeout;
+export class NotificationsService {
   constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
-
-  onModuleInit() {
-    this.timer = setInterval(
-      () =>
-        void this.generateScheduled().catch((error: unknown) =>
-          this.logger.warn(
-            `Notification sweep failed: ${error instanceof Error ? error.message : 'unknown error'}`,
-          ),
-        ),
-      15 * 60_000,
-    );
-    this.timer.unref();
-  }
-  onModuleDestroy() {
-    if (this.timer) clearInterval(this.timer);
-  }
 
   async create(
     input: NotificationInput,

@@ -7,11 +7,13 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Request, Response } from 'express';
+import { requestIdFrom } from '../request-context';
 
 interface ErrorResponse {
   error: string;
   message: string | string[];
   path: string;
+  requestId?: string;
   statusCode: number;
   timestamp: string;
 }
@@ -35,7 +37,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       );
     }
 
-    const body = this.toErrorResponse(httpResponse, status, request.url);
+    const body = this.toErrorResponse(httpResponse, status, request.url, requestIdFrom(request));
     response.status(status).json(body);
   }
 
@@ -43,6 +45,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response: string | object | undefined,
     statusCode: number,
     path: string,
+    requestId?: string,
   ): ErrorResponse {
     let message: string | string[] = 'Internal server error';
     let error = HttpStatus[statusCode] ?? 'Error';
@@ -58,6 +61,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
       error,
       message,
       path,
+      requestId,
       statusCode,
       timestamp: new Date().toISOString(),
     };

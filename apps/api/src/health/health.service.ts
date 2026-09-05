@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, ServiceUnavailableException } from '@nestjs/common';
 import type { DependencyStatus, HealthResponse } from '@unicrm/types';
 import { PrismaService } from '../database/prisma.service';
 import { RedisService } from '../redis/redis.service';
@@ -27,6 +27,21 @@ export class HealthService {
       status: databaseHealthy && redisHealthy ? 'ok' : 'degraded',
       timestamp: new Date().toISOString(),
     };
+  }
+
+  live() {
+    return { status: 'ok' as const, timestamp: new Date().toISOString() };
+  }
+
+  async ready(): Promise<HealthResponse> {
+    const result = await this.check();
+    if (result.status !== 'ok') {
+      throw new ServiceUnavailableException({
+        message: 'UniCRM dependencies are not ready',
+        ...result,
+      });
+    }
+    return result;
   }
 
   private toStatus(healthy: boolean): DependencyStatus {

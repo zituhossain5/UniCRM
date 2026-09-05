@@ -45,4 +45,23 @@ describe('GET /api/v1/health', () => {
     const timestamp = z.object({ timestamp: z.iso.datetime() }).parse(responseBody).timestamp;
     expect(timestamp).toBeTruthy();
   });
+
+  it('separates liveness from readiness', async () => {
+    const moduleRef = await Test.createTestingModule({
+      controllers: [HealthController],
+      providers: [
+        HealthService,
+        { provide: PrismaService, useValue: { isHealthy: () => Promise.resolve(true) } },
+        { provide: RedisService, useValue: { isHealthy: () => Promise.resolve(false) } },
+      ],
+    }).compile();
+
+    app = moduleRef.createNestApplication();
+    app.setGlobalPrefix('api/v1');
+    await app.init();
+
+    const server = app.getHttpServer() as Server;
+    await request(server).get('/api/v1/health/live').expect(200);
+    await request(server).get('/api/v1/health/ready').expect(503);
+  });
 });

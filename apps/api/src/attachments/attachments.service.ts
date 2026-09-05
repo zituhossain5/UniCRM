@@ -1,9 +1,12 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { basename } from 'node:path';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
+import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../database/prisma.service';
-import { LocalStorageService } from './local-storage.service';
+import { RateLimitService } from '../auth/rate-limit.service';
+import { ATTACHMENT_STORAGE, type AttachmentStorage } from './storage.service';
 
 export interface UploadedFile {
   buffer: Buffer;
@@ -12,7 +15,6 @@ export interface UploadedFile {
   size: number;
 }
 
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 const ALLOWED_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -27,8 +29,10 @@ const uploaderSelect = { id: true, firstName: true, lastName: true } as const;
 export class AttachmentsService {
   constructor(
     @Inject(AuditService) private readonly audit: AuditService,
-    @Inject(LocalStorageService) private readonly storage: LocalStorageService,
+    @Inject(ConfigService) private readonly config: ConfigService<EnvironmentVariables, true>,
+    @Inject(ATTACHMENT_STORAGE) private readonly storage: AttachmentStorage,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(RateLimitService) private readonly rateLimit: RateLimitService,
   ) {}
 
   async listProject(principal: AuthenticatedPrincipal, projectId: string) {
@@ -95,6 +99,10 @@ export class AttachmentsService {
     if ('projectId' in parent)
       await this.requireProject(principal.organizationId, parent.projectId);
     else await this.requireTask(principal.organizationId, parent.taskId);
+    await this.rateLimit.consume('upload', `${principal.organizationId}:${principal.userId}`, {
+      limit: this.config.get('UPLOAD_RATE_LIMIT_MAX', { infer: true }),
+      windowSeconds: this.config.get('UPLOAD_RATE_LIMIT_WINDOW_SECONDS', { infer: true }),
+    });
     this.validateFile(file);
     const safeName = [...basename(file.originalname)]
       .filter((character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127)
@@ -103,7 +111,7 @@ export class AttachmentsService {
     if (!safeName || safeName !== file.originalname || safeName.length > 255)
       throw new BadRequestException('Invalid file name');
     const storageKey = crypto.randomUUID();
-    await this.storage.put(storageKey, file.buffer);
+    await this.storage.put(storageKey, file.buffer, { contentType: file.mimetype });
     try {
       return await this.prisma.$transaction(async (tx) => {
         const attachment = await tx.attachment.create({
@@ -139,8 +147,11 @@ export class AttachmentsService {
 
   private validateFile(file?: UploadedFile): asserts file is UploadedFile {
     if (!file) throw new BadRequestException('A file is required');
-    if (file.size < 1 || file.size > MAX_FILE_SIZE)
-      throw new BadRequestException('File size must be between 1 byte and 10 MB');
+    const maxBytes = this.config.get('FILE_UPLOAD_MAX_BYTES', { infer: true });
+    if (file.size < 1 || file.size > maxBytes)
+      throw new BadRequestException(
+        `File size must be between 1 byte and ${Math.floor(maxBytes / (1024 * 1024))} MB`,
+      );
     if (!ALLOWED_TYPES.has(file.mimetype)) throw new BadRequestException('Unsupported file type');
     const bytes = file.buffer;
     const validSignature =

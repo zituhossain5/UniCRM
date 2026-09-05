@@ -9,7 +9,7 @@ import {
 import { Prisma } from '../generated/prisma/client';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
-import { LocalStorageService } from '../attachments/local-storage.service';
+import { ATTACHMENT_STORAGE, type AttachmentStorage } from '../attachments/storage.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -51,7 +51,7 @@ function publicQuotation<T extends { pdfSnapshotKey: string | null }>(quotation:
 export class QuotationsService {
   constructor(
     @Inject(AuditService) private readonly audit: AuditService,
-    @Inject(LocalStorageService) private readonly storage: LocalStorageService,
+    @Inject(ATTACHMENT_STORAGE) private readonly storage: AttachmentStorage,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(QuotationPdfService) private readonly pdf: QuotationPdfService,

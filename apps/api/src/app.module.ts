@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
 import { AuthGuard } from './auth/auth.guard';
@@ -6,10 +6,14 @@ import { AuthModule } from './auth/auth.module';
 import { CsrfGuard } from './auth/csrf.guard';
 import { PermissionGuard } from './auth/permission.guard';
 import { IdentityBootstrapService } from './bootstrap.service';
+import { RequestContextMiddleware } from './common/request-context.middleware';
+import { RequestLoggingMiddleware } from './common/request-logging.middleware';
+import { StructuredLogger } from './common/structured-logger.service';
 import { validateEnvironment } from './config/environment';
 import { DatabaseModule } from './database/database.module';
 import { EmailModule } from './email/email.module';
 import { HealthModule } from './health/health.module';
+import { JobsModule } from './jobs/jobs.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { RedisModule } from './redis/redis.module';
 import { RolesModule } from './roles/roles.module';
@@ -37,6 +41,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     }),
     DatabaseModule,
     RedisModule,
+    JobsModule,
     EmailModule,
     AuthModule,
     NotificationsModule,
@@ -59,9 +64,14 @@ import { NotificationsModule } from './notifications/notifications.module';
   ],
   providers: [
     IdentityBootstrapService,
+    StructuredLogger,
     { provide: APP_GUARD, useClass: AuthGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
   ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestContextMiddleware, RequestLoggingMiddleware).forRoutes('*');
+  }
+}

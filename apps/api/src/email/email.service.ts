@@ -2,6 +2,7 @@ import { ForbiddenException, Inject, Injectable, Logger, NotFoundException } fro
 import { ConfigService } from '@nestjs/config';
 import nodemailer, { type Transporter } from 'nodemailer';
 import type { EnvironmentVariables } from '../config/environment';
+import { JobsService } from '../jobs/jobs.service';
 
 export interface EmailMessage {
   id: string;
@@ -12,8 +13,8 @@ export interface EmailMessage {
 }
 
 @Injectable()
-export class EmailService {
-  private readonly logger = new Logger(EmailService.name);
+export class EmailTransportService {
+  private readonly logger = new Logger(EmailTransportService.name);
   private readonly outbox: EmailMessage[] = [];
   private readonly transporter?: Transporter;
 
@@ -35,10 +36,12 @@ export class EmailService {
     }
   }
 
-  async send(input: Omit<EmailMessage, 'id' | 'createdAt'>): Promise<void> {
+  async deliver(input: Omit<EmailMessage, 'id' | 'createdAt'>): Promise<void> {
     if (this.transporter) {
       await this.transporter.sendMail({
-        from: this.config.get('EMAIL_FROM', { infer: true }),
+        from:
+          this.config.get('SMTP_FROM', { infer: true }) ??
+          this.config.get('EMAIL_FROM', { infer: true }),
         ...input,
       });
       return;
@@ -46,9 +49,7 @@ export class EmailService {
     this.outbox.unshift({ ...input, createdAt: new Date().toISOString(), id: crypto.randomUUID() });
     this.outbox.splice(50);
     if (this.config.get('NODE_ENV', { infer: true }) === 'development') {
-      this.logger.log(
-        `Development email\nTo: ${input.to}\nSubject: ${input.subject}\n${input.text}`,
-      );
+      this.logger.log(`Development email queued for ${input.to}: ${input.subject}`);
     }
   }
 
@@ -59,5 +60,26 @@ export class EmailService {
       throw new ForbiddenException('Invalid development email key');
     }
     return this.outbox;
+  }
+}
+
+@Injectable()
+export class EmailService {
+  constructor(
+    @Inject(ConfigService) private readonly config: ConfigService<EnvironmentVariables, true>,
+    @Inject(EmailTransportService) private readonly transport: EmailTransportService,
+    @Inject(JobsService) private readonly jobs: JobsService,
+  ) {}
+
+  async send(input: Omit<EmailMessage, 'id' | 'createdAt'>): Promise<void> {
+    if (this.config.get('EMAIL_DELIVERY_MODE', { infer: true }) === 'queue') {
+      await this.jobs.enqueueEmail(input);
+      return;
+    }
+    await this.transport.deliver(input);
+  }
+
+  readDevelopmentOutbox(key: string | undefined): EmailMessage[] {
+    return this.transport.readDevelopmentOutbox(key);
   }
 }
