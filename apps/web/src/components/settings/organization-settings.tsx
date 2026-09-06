@@ -12,6 +12,7 @@ interface Organization {
   slug: string;
   status: string;
   createdAt: string;
+  defaultCurrency: string;
 }
 
 export function OrganizationSettings() {
@@ -33,7 +34,10 @@ export function OrganizationSettings() {
     try {
       const result = await apiRequest<{ data: Organization }>('/organization', {
         method: 'PATCH',
-        body: JSON.stringify({ name: data.get('name') }),
+        body: JSON.stringify({
+          name: data.get('name'),
+          defaultCurrency: data.get('defaultCurrency'),
+        }),
       });
       setOrganization(result.data);
       setSaved(true);
@@ -58,6 +62,16 @@ export function OrganizationSettings() {
           <label>
             <span>Slug</span>
             <Input disabled value={organization.slug} />
+          </label>
+          <label>
+            <span>Default currency</span>
+            <Input
+              defaultValue={organization.defaultCurrency}
+              disabled={!canUpdate}
+              name="defaultCurrency"
+              required
+              maxLength={3}
+            />
           </label>
           <div className="settings-meta">
             <span>Status: {organization.status}</span>

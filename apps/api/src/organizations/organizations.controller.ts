@@ -21,6 +21,7 @@ export class OrganizationsController {
           slug: true,
           status: true,
           timezone: true,
+          defaultCurrency: true,
           createdAt: true,
           updatedAt: true,
         },
@@ -37,13 +38,17 @@ export class OrganizationsController {
     return {
       data: await this.prisma.organization.update({
         where: { id: principal.organizationId },
-        data: { name: dto.name.trim() },
+        data: {
+          ...(dto.name ? { name: dto.name.trim() } : {}),
+          ...(dto.defaultCurrency ? { defaultCurrency: dto.defaultCurrency } : {}),
+        },
         select: {
           id: true,
           name: true,
           slug: true,
           status: true,
           timezone: true,
+          defaultCurrency: true,
           createdAt: true,
           updatedAt: true,
         },

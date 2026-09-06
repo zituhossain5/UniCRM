@@ -1,6 +1,12 @@
 'use client';
 
 import { AuthMessage } from '@/components/auth-screen';
+import {
+  AdditionalInformationFields,
+  configurableRecordPayload,
+  RecordMetadataSummary,
+  useRecordConfiguration,
+} from '@/components/configuration/record-configuration';
 import { useCurrentUser } from '@/components/auth-provider';
 import { apiBaseUrl, apiRequest } from '@/lib/api';
 import { emitCrmDataChanged } from '@/lib/crm-events';
@@ -52,6 +58,7 @@ export function ProjectDetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [taskOpen, setTaskOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<string | null>(null);
+  const configuration = useRecordConfiguration('PROJECT');
   const load = useCallback(async () => {
     try {
       setError('');
@@ -78,10 +85,10 @@ export function ProjectDetail({ id }: { id: string }) {
     setBusy(true);
     setError('');
     try {
-      const data = Object.fromEntries(new FormData(event.currentTarget).entries()) as Record<
-        string,
-        string | number | null
-      >;
+      const form = event.currentTarget;
+      const data = configurableRecordPayload(form, configuration.definitions, {
+        includeEmptyValues: true,
+      }) as Record<string, unknown>;
       if (typeof data.progress === 'string') data.progress = Number(data.progress);
       for (const key of [
         'projectManagerId',
@@ -91,7 +98,10 @@ export function ProjectDetail({ id }: { id: string }) {
         'description',
       ])
         if (data[key] === '') data[key] = null;
-      await apiRequest(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
+      await apiRequest(`/projects/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(data),
+      });
       emitCrmDataChanged(['projects']);
       setEditOpen(false);
       await load();
@@ -297,6 +307,12 @@ export function ProjectDetail({ id }: { id: string }) {
                       <span>Description</span>
                       <Textarea defaultValue={project.description ?? ''} name="description" />
                     </label>
+                    <AdditionalInformationFields
+                      definitions={configuration.definitions}
+                      entries={project.customFields}
+                      selectedTags={project.tags}
+                      tags={configuration.tags}
+                    />
                   </form>
                 </Sheet>
               ) : null}
@@ -364,6 +380,7 @@ export function ProjectDetail({ id }: { id: string }) {
               </div>
             </dl>
           </section>
+          <RecordMetadataSummary entries={project.customFields} tags={project.tags} />
           <section className="record-section">
             <h2>Schedule & value</h2>
             <dl className="detail-list">

@@ -31,6 +31,9 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { ReportsModule } from './reports/reports.module';
 import { SearchModule } from './search/search.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CustomFieldsModule } from './custom-fields/custom-fields.module';
+import { TagsModule } from './tags/tags.module';
+import { SavedViewsModule } from './saved-views/saved-views.module';
 
 @Module({
   imports: [
@@ -51,6 +54,9 @@ import { NotificationsModule } from './notifications/notifications.module';
     CompaniesModule,
     ContactsModule,
     PipelinesModule,
+    CustomFieldsModule,
+    TagsModule,
+    SavedViewsModule,
     LeadsModule,
     TasksModule,
     ProjectsModule,

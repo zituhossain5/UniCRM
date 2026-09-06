@@ -1,5 +1,11 @@
 'use client';
 import { AuthMessage } from '@/components/auth-screen';
+import {
+  AdditionalInformationFields,
+  configurableRecordPayload,
+  RecordMetadataSummary,
+  useRecordConfiguration,
+} from '@/components/configuration/record-configuration';
 import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
 import {
@@ -33,6 +39,7 @@ export function CompanyDetail({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const configuration = useRecordConfiguration('COMPANY');
   const load = useCallback(async () => {
     try {
       setError('');
@@ -47,8 +54,7 @@ export function CompanyDetail({ id }: { id: string }) {
   async function update(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
-    const data = new FormData(event.currentTarget);
-    const payload = Object.fromEntries([...data.entries()].filter(([, value]) => value !== ''));
+    const payload = configurableRecordPayload(event.currentTarget, configuration.definitions);
     try {
       await apiRequest(`/companies/${id}`, { method: 'PATCH', body: JSON.stringify(payload) });
       setOpen(false);
@@ -180,6 +186,12 @@ export function CompanyDetail({ id }: { id: string }) {
                       <span>Notes</span>
                       <Textarea name="notes" defaultValue={company.notes ?? ''} />
                     </label>
+                    <AdditionalInformationFields
+                      definitions={configuration.definitions}
+                      entries={company.customFields}
+                      selectedTags={company.tags}
+                      tags={configuration.tags}
+                    />
                   </form>
                 </Sheet>
               ) : null}
@@ -237,6 +249,7 @@ export function CompanyDetail({ id }: { id: string }) {
             <Detail label="Notes" value={company.notes || '-'} />
           </dl>
         </section>
+        <RecordMetadataSummary entries={company.customFields} tags={company.tags} />
         <section className="record-section">
           <div className="section-heading">
             <h2>Contacts</h2>

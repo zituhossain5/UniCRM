@@ -40,6 +40,171 @@
   --z-toast: 200;
 }
 
+/* Milestone 8 configuration surfaces */
+.saved-views-bar,
+.settings-inline-form,
+.configuration-row,
+.configuration-row > div,
+.pipeline-card header,
+.pipeline-card header > div,
+.record-tags,
+.tag-choice-list,
+.dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.saved-views-bar {
+  min-height: 2.75rem;
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted-foreground);
+  flex-wrap: wrap;
+}
+.saved-views-bar .ui-select-trigger {
+  min-width: 12rem;
+}
+.saved-view-hint,
+.saved-view-error {
+  font-size: 0.75rem;
+}
+.saved-view-error {
+  color: var(--danger);
+}
+.metadata-filter-input {
+  max-width: 10rem;
+}
+.additional-information {
+  display: grid;
+  gap: 0.9rem;
+  margin: 0.4rem 0 0;
+  padding: 1rem 0 0;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+.additional-information legend {
+  padding: 0 0.45rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 650;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.tag-choice-field {
+  display: grid;
+  gap: 0.5rem;
+}
+.tag-choice-field > span {
+  font-size: 0.82rem;
+  font-weight: 550;
+}
+.tag-choice-list {
+  flex-wrap: wrap;
+}
+.record-tags {
+  flex-wrap: wrap;
+  margin-top: 0.3rem;
+}
+.record-tags .ui-badge {
+  font-size: 0.68rem;
+}
+.record-metadata-section {
+  align-self: stretch;
+}
+.settings-inline-form {
+  max-width: 30rem;
+  margin: 1rem 0;
+}
+.configuration-list {
+  display: grid;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.configuration-row {
+  justify-content: space-between;
+  min-height: 3.4rem;
+  padding: 0.65rem 0.85rem;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.configuration-row:last-child {
+  border-bottom: 0;
+}
+.configuration-row--details > div:first-child {
+  display: grid;
+  gap: 0.15rem;
+}
+.configuration-row--details span {
+  font-size: 0.75rem;
+  color: var(--muted-foreground);
+}
+.pipeline-settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));
+  gap: 0.9rem;
+}
+.pipeline-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  overflow: hidden;
+}
+.pipeline-card header {
+  justify-content: space-between;
+  padding: 0.75rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+}
+.pipeline-card ol {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pipeline-card li {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-height: 2.5rem;
+  padding: 0.45rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.84rem;
+}
+.pipeline-card li:last-child {
+  border-bottom: 0;
+}
+.pipeline-stage-editor {
+  display: grid;
+  gap: 0.35rem;
+}
+.pipeline-stage-heading,
+.pipeline-stage-row {
+  display: grid;
+  grid-template-columns: minmax(9rem, 1fr) 2.5rem 2.5rem auto;
+  gap: 0.4rem;
+  align-items: center;
+}
+.pipeline-stage-heading {
+  font-size: 0.72rem;
+  color: var(--muted-foreground);
+  text-transform: uppercase;
+}
+.pipeline-stage-row > div {
+  display: flex;
+}
+
+@media (max-width: 720px) {
+  .saved-view-hint {
+    display: none;
+  }
+  .pipeline-stage-heading,
+  .pipeline-stage-row {
+    grid-template-columns: minmax(7rem, 1fr) 2rem 2rem;
+  }
+  .pipeline-stage-row > div {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Milestone 5 commercial workspace */
 .page-action-row,
 .quotation-status-line,

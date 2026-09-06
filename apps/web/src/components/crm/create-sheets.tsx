@@ -5,6 +5,12 @@ import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
 import { emitCrmDataChanged } from '@/lib/crm-events';
 import {
+  AdditionalInformationFields,
+  configurableRecordPayload,
+  useRecordConfiguration,
+} from '@/components/configuration/record-configuration';
+import type { CustomFieldDefinition, Tag } from '@/lib/configuration-types';
+import {
   companyStatuses,
   labelize,
   leadPriorities,
@@ -12,6 +18,7 @@ import {
   type CompanyRecord,
   type ContactRecord,
   type PersonRef,
+  type Pipeline,
 } from '@/lib/crm-types';
 import { useCrmReferenceData, userOptions } from '@/lib/crm-reference-data';
 import { Button, Input, Select, Sheet, Textarea } from '@unicrm/ui';
@@ -32,6 +39,7 @@ export function CompanyCreateSheet({ onCreated, onOpenChange, open, trigger }: C
   const [formKey, setFormKey] = useState(0);
   const canReadUsers = current.permissions.includes('user.read');
   const { error: referenceError, loading, users } = useCrmReferenceData({ users: canReadUsers });
+  const configuration = useRecordConfiguration('COMPANY');
 
   useEffect(() => {
     if (open) setFormKey((key) => key + 1);
@@ -42,7 +50,7 @@ export function CompanyCreateSheet({ onCreated, onOpenChange, open, trigger }: C
     event.preventDefault();
     setSaving(true);
     setError('');
-    const payload = formPayload(event.currentTarget);
+    const payload = configurableRecordPayload(event.currentTarget, configuration.definitions);
     try {
       await apiRequest('/companies', { method: 'POST', body: JSON.stringify(payload) });
       emitCrmDataChanged(['companies']);
@@ -85,6 +93,8 @@ export function CompanyCreateSheet({ onCreated, onOpenChange, open, trigger }: C
         key={formKey}
         onSubmit={(event) => void create(event)}
         users={users}
+        definitions={configuration.definitions}
+        tags={configuration.tags}
       />
     </Sheet>
   );
@@ -96,6 +106,7 @@ export function ContactCreateSheet({ onCreated, onOpenChange, open, trigger }: C
   const [error, setError] = useState('');
   const [formKey, setFormKey] = useState(0);
   const { companies, error: referenceError, loading } = useCrmReferenceData({ companies: true });
+  const configuration = useRecordConfiguration('CONTACT');
 
   useEffect(() => {
     if (open) setFormKey((key) => key + 1);
@@ -107,7 +118,7 @@ export function ContactCreateSheet({ onCreated, onOpenChange, open, trigger }: C
     setSaving(true);
     setError('');
     const form = new FormData(event.currentTarget);
-    const payload = formPayload(event.currentTarget);
+    const payload = configurableRecordPayload(event.currentTarget, configuration.definitions);
     try {
       await apiRequest('/contacts', {
         method: 'POST',
@@ -153,6 +164,8 @@ export function ContactCreateSheet({ onCreated, onOpenChange, open, trigger }: C
         formKey={formKey}
         key={formKey}
         onSubmit={(event) => void create(event)}
+        definitions={configuration.definitions}
+        tags={configuration.tags}
       />
     </Sheet>
   );
@@ -164,6 +177,7 @@ export function LeadCreateSheet({ onCreated, onOpenChange, open, trigger }: Crea
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [formKey, setFormKey] = useState(0);
+  const [pipelines, setPipelines] = useState<Pipeline[]>([]);
   const canReadUsers = current.permissions.includes('user.read');
   const canAssignLead = current.permissions.includes('lead.assign');
   const {
@@ -173,17 +187,23 @@ export function LeadCreateSheet({ onCreated, onOpenChange, open, trigger }: Crea
     loading,
     users,
   } = useCrmReferenceData({ companies: true, contacts: true, users: canReadUsers });
+  const configuration = useRecordConfiguration('LEAD');
 
   useEffect(() => {
     if (open) setFormKey((key) => key + 1);
     else setError('');
   }, [open]);
+  useEffect(() => {
+    void apiRequest<{ data: Pipeline[] }>('/pipelines')
+      .then((result) => setPipelines(result.data))
+      .catch(() => undefined);
+  }, []);
 
   async function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
     setError('');
-    const payload = formPayload(event.currentTarget);
+    const payload = configurableRecordPayload(event.currentTarget, configuration.definitions);
     try {
       await apiRequest('/leads', { method: 'POST', body: JSON.stringify(payload) });
       emitCrmDataChanged(['leads', 'companies']);
@@ -229,21 +249,28 @@ export function LeadCreateSheet({ onCreated, onOpenChange, open, trigger }: Crea
         key={formKey}
         onSubmit={(event) => void create(event)}
         users={users}
+        definitions={configuration.definitions}
+        tags={configuration.tags}
+        pipelines={pipelines}
       />
     </Sheet>
   );
 }
 
 function CompanyForm({
+  definitions,
   formId,
   formKey,
   onSubmit,
   users,
+  tags,
 }: {
+  definitions: CustomFieldDefinition[];
   formId: string;
   formKey: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   users: PersonRef[];
+  tags: Tag[];
 }) {
   return (
     <form className="dialog-form" id={formId} key={formKey} onSubmit={onSubmit}>
@@ -279,6 +306,7 @@ function CompanyForm({
           placeholder="Unassigned"
         />
       ) : null}
+      <AdditionalInformationFields definitions={definitions} tags={tags} />
     </form>
   );
 }
@@ -288,11 +316,15 @@ function ContactForm({
   formId,
   formKey,
   onSubmit,
+  definitions,
+  tags,
 }: {
   companies: CompanyRecord[];
   formId: string;
   formKey: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  definitions: CustomFieldDefinition[];
+  tags: Tag[];
 }) {
   return (
     <form className="dialog-form" id={formId} key={formKey} onSubmit={onSubmit}>
@@ -332,6 +364,7 @@ function ContactForm({
         <input name="isPrimary" type="checkbox" />
         <span>Primary contact for company</span>
       </label>
+      <AdditionalInformationFields definitions={definitions} tags={tags} />
     </form>
   );
 }
@@ -344,6 +377,9 @@ function LeadForm({
   formKey,
   onSubmit,
   users,
+  definitions,
+  tags,
+  pipelines,
 }: {
   canAssignLead: boolean;
   companies: CompanyRecord[];
@@ -352,9 +388,14 @@ function LeadForm({
   formKey: number;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   users: PersonRef[];
+  definitions: CustomFieldDefinition[];
+  tags: Tag[];
+  pipelines: Pipeline[];
 }) {
   const [companyId, setCompanyId] = useState('');
   const [contactId, setContactId] = useState('');
+  const [pipelineId, setPipelineId] = useState('');
+  const [stageId, setStageId] = useState('');
   const availableContacts = useMemo(
     () => (companyId ? contacts.filter((contact) => contact.company?.id === companyId) : contacts),
     [companyId, contacts],
@@ -364,6 +405,14 @@ function LeadForm({
     if (contactId && !availableContacts.some((contact) => contact.id === contactId))
       setContactId('');
   }, [availableContacts, contactId]);
+  useEffect(() => {
+    if (!pipelineId && pipelines.length) {
+      const pipeline = pipelines.find((item) => item.isDefault) ?? pipelines[0]!;
+      setPipelineId(pipeline.id);
+      setStageId(pipeline.stages[0]?.id ?? '');
+    }
+  }, [pipelineId, pipelines]);
+  const pipelineStages = pipelines.find((pipeline) => pipeline.id === pipelineId)?.stages ?? [];
 
   return (
     <form className="dialog-form" id={formId} key={formKey} onSubmit={onSubmit}>
@@ -371,6 +420,26 @@ function LeadForm({
         <span>Lead title</span>
         <Input name="title" required placeholder="Website redesign for ABC" />
       </label>
+      <div className="form-two-columns">
+        <Select
+          label="Pipeline"
+          name="pipelineId"
+          value={pipelineId || null}
+          onValueChange={(value) => {
+            const next = value ?? '';
+            setPipelineId(next);
+            setStageId(pipelines.find((pipeline) => pipeline.id === next)?.stages[0]?.id ?? '');
+          }}
+          options={pipelines.map((pipeline) => ({ label: pipeline.name, value: pipeline.id }))}
+        />
+        <Select
+          label="Stage"
+          name="stageId"
+          value={stageId || null}
+          onValueChange={(value) => setStageId(value ?? '')}
+          options={pipelineStages.map((stage) => ({ label: stage.name, value: stage.id }))}
+        />
+      </div>
       <div className="form-two-columns">
         <label>
           <span>First name</span>
@@ -453,6 +522,7 @@ function LeadForm({
         <span>Next follow-up</span>
         <Input name="nextFollowUpAt" type="datetime-local" />
       </label>
+      <AdditionalInformationFields definitions={definitions} tags={tags} />
       <label>
         <span>Notes</span>
         <Textarea name="notes" />
@@ -465,10 +535,6 @@ function FormNotice({ error, loading }: { error: string; loading: boolean }) {
   if (error) return <AuthMessage>{error}</AuthMessage>;
   if (loading) return <p className="form-helper">Loading options...</p>;
   return null;
-}
-
-function formPayload(form: HTMLFormElement) {
-  return Object.fromEntries([...new FormData(form).entries()].filter(([, value]) => value !== ''));
 }
 
 function useStableFormId(prefix: string) {

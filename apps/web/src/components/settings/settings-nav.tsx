@@ -11,6 +11,13 @@ export function SettingsNav() {
     { label: 'Organization', href: '/app/settings/organization', permission: 'settings.read' },
     { label: 'Users', href: '/app/settings/users', permission: 'user.read' },
     { label: 'Roles & Permissions', href: '/app/settings/roles', permission: 'role.read' },
+    {
+      label: 'Custom Fields',
+      href: '/app/settings/custom-fields',
+      permission: 'custom_field.read',
+    },
+    { label: 'Pipelines', href: '/app/settings/pipelines', permission: 'pipeline.read' },
+    { label: 'Tags', href: '/app/settings/tags', permission: 'tag.read' },
     { label: 'Security', href: '/app/settings/security', permission: 'security.sessions.read' },
   ];
   return (

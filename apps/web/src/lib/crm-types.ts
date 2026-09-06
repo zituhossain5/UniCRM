@@ -36,7 +36,7 @@ export interface Pipeline {
   stages: Stage[];
 }
 
-export interface CompanyRecord {
+export interface CompanyRecord extends ConfigurableRecordMetadata {
   id: string;
   name: string;
   website: string | null;
@@ -83,7 +83,7 @@ export interface CompanyRecord {
   }>;
 }
 
-export interface ContactRecord extends ContactRef {
+export interface ContactRecord extends ContactRef, ConfigurableRecordMetadata {
   company: CompanyRef | null;
   jobTitle: string | null;
   alternatePhone: string | null;
@@ -112,7 +112,7 @@ export interface FollowUp {
   notes: string | null;
   assignedTo: PersonRef | null;
 }
-export interface LeadRecord {
+export interface LeadRecord extends ConfigurableRecordMetadata {
   id: string;
   title: string;
   firstName: string | null;
@@ -187,3 +187,4 @@ export const formatMoney = (value: string | null, currency: string) =>
         maximumFractionDigits: 2,
       }).format(Number(value))
     : '-';
+import type { ConfigurableRecordMetadata } from './configuration-types';

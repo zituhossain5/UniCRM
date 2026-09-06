@@ -1,5 +1,11 @@
 'use client';
 import { AuthMessage } from '@/components/auth-screen';
+import {
+  AdditionalInformationFields,
+  configurableRecordPayload,
+  RecordMetadataSummary,
+  useRecordConfiguration,
+} from '@/components/configuration/record-configuration';
 import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
 import {
@@ -62,6 +68,7 @@ export function LeadDetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   const [reschedule, setReschedule] = useState<FollowUp>();
+  const configuration = useRecordConfiguration('LEAD');
   const load = useCallback(async () => {
     try {
       setError('');
@@ -102,9 +109,12 @@ export function LeadDetail({ id }: { id: string }) {
       setBusy(false);
     }
   }
-  async function changeStage(stageId: string | null) {
+  async function changeStage(stageId: string | null, pipelineId?: string) {
     if (!stageId || !lead || stageId === lead.stageId) return;
-    const stage = stages.find((s) => s.id === stageId);
+    const targetPipelineId = pipelineId ?? lead.pipelineId;
+    const stage = pipelines
+      .find((pipeline) => pipeline.id === targetPipelineId)
+      ?.stages.find((item) => item.id === stageId);
     let lostReason: string | undefined;
     if (stage?.isLost) {
       lostReason = window.prompt('Reason this lead was lost')?.trim();
@@ -112,7 +122,7 @@ export function LeadDetail({ id }: { id: string }) {
     }
     await mutate(`/leads/${id}/stage`, {
       method: 'PATCH',
-      body: JSON.stringify({ stageId, lostReason }),
+      body: JSON.stringify({ stageId, pipelineId: targetPipelineId, lostReason }),
     });
   }
   async function submitActivity(event: FormEvent<HTMLFormElement>) {
@@ -129,7 +139,7 @@ export function LeadDetail({ id }: { id: string }) {
   async function submitFollow(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries([...form.entries()].filter(([, v]) => v !== ''));
+    const payload = Object.fromEntries([...form.entries()].filter(([, value]) => value !== ''));
     const path = reschedule
       ? `/leads/${id}/follow-ups/${reschedule.id}`
       : `/leads/${id}/follow-ups`;
@@ -142,8 +152,7 @@ export function LeadDetail({ id }: { id: string }) {
   }
   async function submitEdit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries([...form.entries()].filter(([, v]) => v !== ''));
+    const payload = configurableRecordPayload(event.currentTarget, configuration.definitions);
     if (await mutate(`/leads/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }))
       setEditOpen(false);
   }
@@ -314,6 +323,12 @@ export function LeadDetail({ id }: { id: string }) {
                       <span>Notes</span>
                       <Textarea name="notes" defaultValue={lead.notes ?? ''} />
                     </label>
+                    <AdditionalInformationFields
+                      definitions={configuration.definitions}
+                      entries={lead.customFields}
+                      selectedTags={lead.tags}
+                      tags={configuration.tags}
+                    />
                   </form>
                 </Sheet>
               ) : null}
@@ -377,6 +392,21 @@ export function LeadDetail({ id }: { id: string }) {
       />
       {error ? <AuthMessage>{error}</AuthMessage> : null}
       <div className="lead-command-bar">
+        <div>
+          <span>Pipeline</span>
+          {!lead.archivedAt && current.permissions.includes('lead.stage.update') ? (
+            <Select
+              value={lead.pipelineId}
+              onValueChange={(value) => {
+                const pipeline = pipelines.find((item) => item.id === value);
+                if (pipeline?.stages[0]) void changeStage(pipeline.stages[0].id, pipeline.id);
+              }}
+              options={pipelines.map((pipeline) => ({ label: pipeline.name, value: pipeline.id }))}
+            />
+          ) : (
+            <strong>{lead.pipeline.name}</strong>
+          )}
+        </div>
         <div>
           <span>Stage</span>
           {!lead.archivedAt && current.permissions.includes('lead.stage.update') ? (
@@ -497,6 +527,7 @@ export function LeadDetail({ id }: { id: string }) {
             {lead.lostReason ? <Detail label="Lost reason" value={lead.lostReason} /> : null}
           </dl>
         </section>
+        <RecordMetadataSummary entries={lead.customFields} tags={lead.tags} />
         <section className="record-section">
           <div className="section-heading">
             <h2>Follow-ups</h2>

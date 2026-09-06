@@ -3,6 +3,7 @@
 import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
 import { CompanyCreateSheet } from '@/components/crm/create-sheets';
+import { MetadataListControls, SavedViewsBar } from '@/components/configuration/list-configuration';
 import { apiRequest } from '@/lib/api';
 import { onCrmDataChanged } from '@/lib/crm-events';
 import {
@@ -36,6 +37,9 @@ export function CompaniesView() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [owner, setOwner] = useState('');
+  const [sort, setSort] = useState('name');
+  const [tag, setTag] = useState('');
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -47,12 +51,18 @@ export function CompaniesView() {
       const params = new URLSearchParams({
         page: String(page),
         limit: '25',
-        sort: 'name',
-        order: 'asc',
+        sort,
+        order: sort === 'name' ? 'asc' : 'desc',
       });
       if (search.trim()) params.set('search', search.trim());
       if (status) params.set('status', status);
       if (owner) params.set('owner', owner);
+      if (tag) params.set('tag', tag);
+      if (
+        Object.keys(customFields).length &&
+        Object.values(customFields).every((value) => value !== '')
+      )
+        params.set('customFields', JSON.stringify(customFields));
       const result = await apiRequest<{ data: CompanyRecord[]; meta: PaginationMeta }>(
         `/companies?${params}`,
       );
@@ -61,7 +71,7 @@ export function CompaniesView() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load companies.');
     }
-  }, [owner, page, search, status]);
+  }, [customFields, owner, page, search, sort, status, tag]);
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
@@ -73,6 +83,27 @@ export function CompaniesView() {
         .catch(() => undefined);
   }, [canReadUsers]);
   useEffect(() => onCrmDataChanged(['companies'], () => void load()), [load]);
+  const applySavedView = useCallback(
+    (
+      filters: Record<string, unknown>,
+      savedSort: { field: string; order: 'asc' | 'desc' } | null,
+    ) => {
+      setSearch(typeof filters.search === 'string' ? filters.search : '');
+      setStatus(typeof filters.status === 'string' ? filters.status : '');
+      setOwner(typeof filters.owner === 'string' ? filters.owner : '');
+      setTag(typeof filters.tag === 'string' ? filters.tag : '');
+      setCustomFields(
+        filters.customFields &&
+          typeof filters.customFields === 'object' &&
+          !Array.isArray(filters.customFields)
+          ? (filters.customFields as Record<string, unknown>)
+          : {},
+      );
+      if (savedSort) setSort(savedSort.field);
+      setPage(1);
+    },
+    [],
+  );
 
   return (
     <div className="crm-page">
@@ -94,6 +125,12 @@ export function CompaniesView() {
             />
           ) : undefined
         }
+      />
+      <SavedViewsBar
+        entityType="COMPANY"
+        filters={{ search, status, owner, tag, customFields }}
+        sort={{ field: sort, order: sort === 'name' ? 'asc' : 'desc' }}
+        onApply={applySavedView}
       />
       <div className="crm-toolbar">
         <label className="crm-search">
@@ -131,6 +168,28 @@ export function CompaniesView() {
             placeholder="Owner"
           />
         ) : null}
+        <MetadataListControls
+          entityType="COMPANY"
+          tag={tag}
+          onTagChange={(value) => {
+            setTag(value);
+            setPage(1);
+          }}
+          customFields={customFields}
+          onCustomFieldsChange={(value) => {
+            setCustomFields(value);
+            setPage(1);
+          }}
+        />
+        <Select
+          value={sort}
+          onValueChange={(value) => value && setSort(value)}
+          options={[
+            { label: 'Company name', value: 'name' },
+            { label: 'Recently updated', value: 'updatedAt' },
+            { label: 'Newest', value: 'createdAt' },
+          ]}
+        />
       </div>
       {error && !companies ? (
         <ErrorState
@@ -177,6 +236,15 @@ export function CompaniesView() {
                       <Link className="crm-record-link" href={`/app/companies/${company.id}`}>
                         <strong>{company.name}</strong>
                         <span>{company.website || company.email || 'No contact details'}</span>
+                        {company.tags?.length ? (
+                          <span className="record-tags">
+                            {company.tags.map((item) => (
+                              <Badge key={item.id} tone="neutral">
+                                {item.name}
+                              </Badge>
+                            ))}
+                          </span>
+                        ) : null}
                       </Link>
                     </td>
                     <td>

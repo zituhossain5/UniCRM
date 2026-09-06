@@ -11,7 +11,9 @@ import { SecurityEventsService } from './security-events.service';
 import { TokenService } from './token.service';
 
 const userInclude = {
-  organization: { select: { id: true, name: true, slug: true, status: true } },
+  organization: {
+    select: { id: true, name: true, slug: true, status: true, defaultCurrency: true },
+  },
   userRoles: {
     include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
   },

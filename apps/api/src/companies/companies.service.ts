@@ -13,6 +13,8 @@ import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import { CompanyStatus } from '../generated/prisma/enums';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
+import { TagsService } from '../tags/tags.service';
 import type { CompanyListQueryDto, CreateCompanyDto, UpdateCompanyDto } from './dto/companies.dto';
 
 const companyListInclude = {
@@ -52,11 +54,20 @@ const companyProjectSelect = {
   deadline: true,
 } as const;
 
+function intersectIds(first?: string[], second?: string[]) {
+  if (!first) return second;
+  if (!second) return first;
+  const set = new Set(second);
+  return first.filter((id) => set.has(id));
+}
+
 @Injectable()
 export class CompaniesService {
   constructor(
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(CustomFieldsService) private readonly customFields: CustomFieldsService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TagsService) private readonly tags: TagsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: CompanyListQueryDto) {
@@ -69,11 +80,20 @@ export class CompaniesService {
       'updatedAt',
       'status',
     ]);
+    const recordIds = intersectIds(
+      await this.tags.matchingEntityIds(principal.organizationId, 'COMPANY', query.tag),
+      await this.customFields.matchingEntityIds(
+        principal.organizationId,
+        'COMPANY',
+        query.customFields,
+      ),
+    );
     const where: Prisma.CompanyWhereInput = {
       organizationId: principal.organizationId,
       archivedAt: query.status === 'ARCHIVED' ? { not: null } : null,
       ...(query.status ? { status: query.status } : {}),
       ...(query.owner ? { accountOwnerId: query.owner } : {}),
+      ...(recordIds ? { id: { in: recordIds } } : {}),
       ...(listQuery.search
         ? {
             OR: ['name', 'email', 'phone', 'website'].map((field) => ({
@@ -92,7 +112,10 @@ export class CompaniesService {
       }),
       this.prisma.company.count({ where }),
     ]);
-    return { data, meta: paginationMeta(listQuery.page, listQuery.limit, total) };
+    return {
+      data: await this.decorate(principal.organizationId, data),
+      meta: paginationMeta(listQuery.page, listQuery.limit, total),
+    };
   }
 
   async get(principal: AuthenticatedPrincipal, id: string) {
@@ -144,18 +167,37 @@ export class CompaniesService {
           })
         : Promise.resolve([]),
     ]);
-    return { ...company, activity, projects, quotations, payments };
+    return (
+      await this.decorate(principal.organizationId, [
+        { ...company, activity, projects, quotations, payments },
+      ])
+    )[0];
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateCompanyDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     if (dto.status === 'ARCHIVED')
       throw new BadRequestException('New companies cannot be archived');
     await this.validateOwner(principal.organizationId, dto.accountOwnerId);
-    return this.prisma.$transaction(async (tx) => {
+    const { customFields, tagIds, ...companyInput } = dto;
+    const company = await this.prisma.$transaction(async (tx) => {
       const company = await tx.company.create({
-        data: { ...dto, createdById: principal.userId, organizationId: principal.organizationId },
+        data: {
+          ...companyInput,
+          createdById: principal.userId,
+          organizationId: principal.organizationId,
+        },
         include: companyInclude,
       });
+      await this.customFields.saveValues(
+        tx,
+        principal.organizationId,
+        'COMPANY',
+        company.id,
+        customFields,
+        true,
+      );
+      await this.tags.sync(tx, principal.organizationId, 'COMPANY', company.id, tagIds);
       await this.audit.create(
         {
           action: 'COMPANY_CREATED',
@@ -168,19 +210,31 @@ export class CompaniesService {
       );
       return company;
     });
+    return (await this.decorate(principal.organizationId, [company]))[0];
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateCompanyDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     await this.requireActive(principal.organizationId, id);
     if (dto.status === 'ARCHIVED')
       throw new BadRequestException('Use the archive endpoint to archive companies');
     await this.validateOwner(principal.organizationId, dto.accountOwnerId);
-    return this.prisma.$transaction(async (tx) => {
+    const { customFields, tagIds, ...companyInput } = dto;
+    const company = await this.prisma.$transaction(async (tx) => {
       const company = await tx.company.update({
         where: { id },
-        data: dto,
+        data: companyInput,
         include: companyInclude,
       });
+      await this.customFields.saveValues(
+        tx,
+        principal.organizationId,
+        'COMPANY',
+        id,
+        customFields,
+        false,
+      );
+      await this.tags.sync(tx, principal.organizationId, 'COMPANY', id, tagIds);
       await this.audit.create(
         {
           action: 'COMPANY_UPDATED',
@@ -193,6 +247,7 @@ export class CompaniesService {
       );
       return company;
     });
+    return (await this.decorate(principal.organizationId, [company]))[0];
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {
@@ -223,6 +278,14 @@ export class CompaniesService {
       where: { id: ownerId, organizationId, status: 'ACTIVE' },
     });
     if (!owner) throw new NotFoundException('Account owner not found');
+  }
+
+  private async decorate<T extends { id: string }>(organizationId: string, records: T[]) {
+    return this.tags.decorate(
+      organizationId,
+      'COMPANY',
+      await this.customFields.decorate(organizationId, 'COMPANY', records),
+    );
   }
 
   private async requireActive(organizationId: string, id: string) {

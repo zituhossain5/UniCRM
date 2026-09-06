@@ -10,6 +10,8 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
+import { TagsService } from '../tags/tags.service';
 import type {
   AddProjectMemberDto,
   CreateProjectDto,
@@ -63,11 +65,20 @@ function dateOnly(value: string | null | undefined) {
   return value ? new Date(`${value.slice(0, 10)}T00:00:00.000Z`) : undefined;
 }
 
+function intersectIds(first?: string[], second?: string[]) {
+  if (!first) return second;
+  if (!second) return first;
+  const set = new Set(second);
+  return first.filter((id) => set.has(id));
+}
+
 @Injectable()
 export class ProjectsService {
   constructor(
     @Inject(AuditService) private readonly audit: AuditService,
+    @Inject(CustomFieldsService) private readonly customFields: CustomFieldsService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TagsService) private readonly tags: TagsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: ProjectListQueryDto) {
@@ -80,9 +91,18 @@ export class ProjectsService {
       'priority',
       'progress',
     ]);
+    const recordIds = intersectIds(
+      await this.tags.matchingEntityIds(principal.organizationId, 'PROJECT', query.tag),
+      await this.customFields.matchingEntityIds(
+        principal.organizationId,
+        'PROJECT',
+        query.customFields,
+      ),
+    );
     const where: Prisma.ProjectWhereInput = {
       organizationId: principal.organizationId,
       archivedAt: null,
+      ...(recordIds ? { id: { in: recordIds } } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
       ...(query.manager ? { projectManagerId: query.manager } : {}),
@@ -112,7 +132,10 @@ export class ProjectsService {
       }),
       this.prisma.project.count({ where }),
     ]);
-    return { data, meta: paginationMeta(listQuery.page, listQuery.limit, total) };
+    return {
+      data: await this.decorate(principal.organizationId, data),
+      meta: paginationMeta(listQuery.page, listQuery.limit, total),
+    };
   }
 
   async get(principal: AuthenticatedPrincipal, id: string) {
@@ -144,7 +167,7 @@ export class ProjectsService {
     ]);
     const received = paymentAggregate._sum.amount ?? new Prisma.Decimal(0);
     const projectValue = project.projectValue ?? new Prisma.Decimal(0);
-    return {
+    const result = {
       ...project,
       financials: {
         projectValue,
@@ -154,6 +177,7 @@ export class ProjectsService {
       },
       activity,
     };
+    return (await this.decorate(principal.organizationId, [result]))[0];
   }
 
   listUsers(principal: AuthenticatedPrincipal) {
@@ -165,13 +189,14 @@ export class ProjectsService {
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateProjectDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     await this.validateCompany(principal.organizationId, dto.companyId);
     await this.validateManager(principal.organizationId, dto.projectManagerId);
     await this.validateSourceLead(principal.organizationId, dto.sourceLeadId, dto.companyId);
     this.validateDates(dto.startDate, dto.deadline);
-    const { startDate, deadline, currency, ...input } = dto;
+    const { startDate, deadline, currency, customFields, tagIds, ...input } = dto;
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const project = await this.prisma.$transaction(async (tx) => {
         const project = await tx.project.create({
           data: {
             ...input,
@@ -194,6 +219,15 @@ export class ProjectsService {
           },
           include: projectInclude,
         });
+        await this.customFields.saveValues(
+          tx,
+          principal.organizationId,
+          'PROJECT',
+          project.id,
+          customFields,
+          true,
+        );
+        await this.tags.sync(tx, principal.organizationId, 'PROJECT', project.id, tagIds);
         await this.audit.create(
           {
             action: 'PROJECT_CREATED',
@@ -207,6 +241,7 @@ export class ProjectsService {
         );
         return project;
       });
+      return (await this.decorate(principal.organizationId, [project]))[0];
     } catch (cause) {
       if (cause instanceof Error && 'code' in cause && cause.code === 'P2002')
         throw new ConflictException('A project has already been created from this lead');
@@ -215,6 +250,7 @@ export class ProjectsService {
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateProjectDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     const existing = await this.requireActive(principal.organizationId, id);
     const companyId = dto.companyId ?? existing.companyId;
     if (dto.companyId) await this.validateCompany(principal.organizationId, dto.companyId);
@@ -229,8 +265,8 @@ export class ProjectsService {
     const finalDeadline = dto.deadline === undefined ? existingDeadline : dateOnly(dto.deadline);
     if (finalStartDate && finalDeadline && finalStartDate > finalDeadline)
       throw new BadRequestException('startDate must not be after deadline');
-    const { startDate, deadline, currency, ...input } = dto;
-    return this.prisma.$transaction(async (tx) => {
+    const { startDate, deadline, currency, customFields, tagIds, ...input } = dto;
+    const project = await this.prisma.$transaction(async (tx) => {
       if (
         dto.projectManagerId !== undefined &&
         dto.projectManagerId !== existing.projectManagerId
@@ -272,6 +308,15 @@ export class ProjectsService {
         },
         include: projectInclude,
       });
+      await this.customFields.saveValues(
+        tx,
+        principal.organizationId,
+        'PROJECT',
+        id,
+        customFields,
+        false,
+      );
+      await this.tags.sync(tx, principal.organizationId, 'PROJECT', id, tagIds);
       await this.audit.create(
         {
           action: 'PROJECT_UPDATED',
@@ -302,6 +347,7 @@ export class ProjectsService {
       );
       return project;
     });
+    return (await this.decorate(principal.organizationId, [project]))[0];
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {
@@ -391,6 +437,14 @@ export class ProjectsService {
   private validateDates(startDate?: string | null, deadline?: string | null) {
     if (startDate && deadline && dateOnly(startDate)! > dateOnly(deadline)!)
       throw new BadRequestException('startDate must not be after deadline');
+  }
+
+  private async decorate<T extends { id: string }>(organizationId: string, records: T[]) {
+    return this.tags.decorate(
+      organizationId,
+      'PROJECT',
+      await this.customFields.decorate(organizationId, 'PROJECT', records),
+    );
   }
 
   private async validateCompany(organizationId: string, companyId: string) {

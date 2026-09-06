@@ -42,49 +42,56 @@ export class IdentityBootstrapService {
           data: { name: input.organizationName.trim(), slug: input.organizationSlug },
         }));
 
-      for (const permission of PERMISSION_CATALOG) {
-        await tx.permission.upsert({
-          where: { key: permission.key },
-          create: permission,
-          update: { description: permission.description },
-        });
-      }
+      await tx.permission.createMany({ data: [...PERMISSION_CATALOG], skipDuplicates: true });
       const permissions = await tx.permission.findMany();
       const permissionIds = new Map(
         permissions.map((permission) => [permission.key, permission.id]),
       );
 
+      const roleIds = new Map<string, string>();
       for (const roleName of DEFAULT_ROLES) {
         const role = await tx.role.upsert({
           where: { organizationId_name: { organizationId: organization.id, name: roleName } },
           create: { isSystem: true, name: roleName, organizationId: organization.id },
           update: { isSystem: true },
         });
-        for (const key of DEFAULT_ROLE_PERMISSIONS[roleName]) {
-          const permissionId = permissionIds.get(key);
-          if (permissionId) {
-            await tx.rolePermission.upsert({
-              where: { roleId_permissionId: { roleId: role.id, permissionId } },
-              create: { roleId: role.id, permissionId },
-              update: {},
-            });
-          }
-        }
+        roleIds.set(roleName, role.id);
       }
-
-      const pipeline = await tx.pipeline.upsert({
-        where: {
-          organizationId_name: { organizationId: organization.id, name: 'Sales Pipeline' },
-        },
-        create: { isDefault: true, name: 'Sales Pipeline', organizationId: organization.id },
-        update: { isDefault: true },
-      });
-      for (const stage of DEFAULT_STAGES) {
-        await tx.pipelineStage.upsert({
-          where: { pipelineId_name: { pipelineId: pipeline.id, name: stage.name } },
-          create: { ...stage, organizationId: organization.id, pipelineId: pipeline.id },
-          update: { isLost: stage.isLost, isWon: stage.isWon, position: stage.position },
+      const rolePermissions = DEFAULT_ROLES.flatMap((roleName) => {
+        const roleId = roleIds.get(roleName);
+        if (!roleId) return [];
+        return DEFAULT_ROLE_PERMISSIONS[roleName].flatMap((key) => {
+          const permissionId = permissionIds.get(key);
+          return permissionId ? [{ roleId, permissionId }] : [];
         });
+      });
+      await tx.rolePermission.createMany({ data: rolePermissions, skipDuplicates: true });
+
+      const defaultPipeline = await tx.pipeline.findFirst({
+        where: { organizationId: organization.id, isDefault: true, archivedAt: null },
+      });
+      if (!defaultPipeline) {
+        const firstPipeline = await tx.pipeline.findFirst({
+          where: { organizationId: organization.id, archivedAt: null },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (firstPipeline) {
+          await tx.pipeline.update({ where: { id: firstPipeline.id }, data: { isDefault: true } });
+        } else {
+          await tx.pipeline.create({
+            data: {
+              isDefault: true,
+              name: 'Sales Pipeline',
+              organizationId: organization.id,
+              stages: {
+                create: DEFAULT_STAGES.map((stage) => ({
+                  ...stage,
+                  organizationId: organization.id,
+                })),
+              },
+            },
+          });
+        }
       }
 
       if (existingOwner) return { organizationCreated: !existingOrganization, ownerCreated: false };

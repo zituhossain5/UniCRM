@@ -1,10 +1,13 @@
 import { Transform, Type } from 'class-transformer';
 import {
+  ArrayUnique,
+  IsArray,
   IsDecimal,
   IsEnum,
   IsISO8601,
   IsIn,
   IsInt,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -21,6 +24,8 @@ import { ProjectStatus, WorkPriority } from '../../generated/prisma/enums';
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
 export class ProjectListQueryDto extends ListQueryDto {
+  @IsUUID() @IsOptional() tag?: string;
+  @IsString() @IsOptional() customFields?: string;
   @IsEnum(ProjectStatus)
   @IsOptional()
   status?: ProjectStatus;
@@ -52,6 +57,8 @@ export class ProjectListQueryDto extends ListQueryDto {
 }
 
 export class CreateProjectDto {
+  @IsObject() @IsOptional() customFields?: Record<string, unknown>;
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) @IsOptional() tagIds?: string[];
   @Transform(trim)
   @IsString()
   @MinLength(1)

@@ -1,5 +1,11 @@
 'use client';
 import { AuthMessage } from '@/components/auth-screen';
+import {
+  AdditionalInformationFields,
+  configurableRecordPayload,
+  RecordMetadataSummary,
+  useRecordConfiguration,
+} from '@/components/configuration/record-configuration';
 import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
 import type { CompanyRecord, ContactRecord } from '@/lib/crm-types';
@@ -30,6 +36,7 @@ export function ContactDetail({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const configuration = useRecordConfiguration('CONTACT');
   const load = useCallback(async () => {
     try {
       setError('');
@@ -47,12 +54,15 @@ export function ContactDetail({ id }: { id: string }) {
   async function update(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaving(true);
-    const form = new FormData(event.currentTarget);
-    const payload = Object.fromEntries([...form.entries()].filter(([, v]) => v !== ''));
+    const form = event.currentTarget;
+    const payload = configurableRecordPayload(form, configuration.definitions);
     try {
       await apiRequest(`/contacts/${id}`, {
         method: 'PATCH',
-        body: JSON.stringify({ ...payload, isPrimary: form.get('isPrimary') === 'on' }),
+        body: JSON.stringify({
+          ...payload,
+          isPrimary: new FormData(form).get('isPrimary') === 'on',
+        }),
       });
       setOpen(false);
       await load();
@@ -168,6 +178,12 @@ export function ContactDetail({ id }: { id: string }) {
                       <span>Notes</span>
                       <Textarea name="notes" defaultValue={contact.notes ?? ''} />
                     </label>
+                    <AdditionalInformationFields
+                      definitions={configuration.definitions}
+                      entries={contact.customFields}
+                      selectedTags={contact.tags}
+                      tags={configuration.tags}
+                    />
                   </form>
                 </Sheet>
               ) : null}
@@ -218,6 +234,7 @@ export function ContactDetail({ id }: { id: string }) {
             <Detail label="Notes" value={contact.notes || '-'} />
           </dl>
         </section>
+        <RecordMetadataSummary entries={contact.customFields} tags={contact.tags} />
         <section className="record-section">
           <h2>Associated leads</h2>
           {contact.leads?.length ? (

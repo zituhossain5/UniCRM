@@ -1,8 +1,11 @@
 import { Transform } from 'class-transformer';
 import {
+  ArrayUnique,
+  IsArray,
   IsBoolean,
   IsEmail,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -17,6 +20,8 @@ const email = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class ContactListQueryDto extends ListQueryDto {
+  @IsUUID() @IsOptional() tag?: string;
+  @IsString() @IsOptional() customFields?: string;
   @IsUUID()
   @IsOptional()
   company?: string;
@@ -27,6 +32,8 @@ export class ContactListQueryDto extends ListQueryDto {
 }
 
 export class CreateContactDto {
+  @IsObject() @IsOptional() customFields?: Record<string, unknown>;
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) @IsOptional() tagIds?: string[];
   @Transform(trim)
   @IsString()
   @MinLength(1)

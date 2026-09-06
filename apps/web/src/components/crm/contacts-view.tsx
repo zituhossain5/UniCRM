@@ -2,10 +2,12 @@
 import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
 import { ContactCreateSheet } from '@/components/crm/create-sheets';
+import { MetadataListControls, SavedViewsBar } from '@/components/configuration/list-configuration';
 import { apiRequest } from '@/lib/api';
 import { onCrmDataChanged } from '@/lib/crm-events';
 import { type CompanyRecord, type ContactRecord, type PaginationMeta } from '@/lib/crm-types';
 import {
+  Badge,
   Button,
   EmptyState,
   ErrorState,
@@ -26,6 +28,9 @@ export function ContactsView() {
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [search, setSearch] = useState('');
   const [company, setCompany] = useState('');
+  const [sort, setSort] = useState('lastName');
+  const [tag, setTag] = useState('');
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
@@ -36,11 +41,17 @@ export function ContactsView() {
       const p = new URLSearchParams({
         page: String(page),
         limit: '25',
-        sort: 'lastName',
+        sort,
         order: 'asc',
       });
       if (search.trim()) p.set('search', search.trim());
       if (company) p.set('company', company);
+      if (tag) p.set('tag', tag);
+      if (
+        Object.keys(customFields).length &&
+        Object.values(customFields).every((value) => value !== '')
+      )
+        p.set('customFields', JSON.stringify(customFields));
       const result = await apiRequest<{ data: ContactRecord[]; meta: PaginationMeta }>(
         `/contacts?${p}`,
       );
@@ -49,7 +60,7 @@ export function ContactsView() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load contacts.');
     }
-  }, [company, page, search]);
+  }, [company, customFields, page, search, sort, tag]);
   useEffect(() => {
     const timer = setTimeout(() => void load(), 250);
     return () => clearTimeout(timer);
@@ -69,6 +80,26 @@ export function ContactsView() {
     [],
   );
   useEffect(() => onCrmDataChanged(['contacts'], () => void load()), [load]);
+  const applySavedView = useCallback(
+    (
+      filters: Record<string, unknown>,
+      savedSort: { field: string; order: 'asc' | 'desc' } | null,
+    ) => {
+      setSearch(typeof filters.search === 'string' ? filters.search : '');
+      setCompany(typeof filters.company === 'string' ? filters.company : '');
+      setTag(typeof filters.tag === 'string' ? filters.tag : '');
+      setCustomFields(
+        filters.customFields &&
+          typeof filters.customFields === 'object' &&
+          !Array.isArray(filters.customFields)
+          ? (filters.customFields as Record<string, unknown>)
+          : {},
+      );
+      if (savedSort) setSort(savedSort.field);
+      setPage(1);
+    },
+    [],
+  );
   return (
     <div className="crm-page">
       <PageHeader
@@ -89,6 +120,12 @@ export function ContactsView() {
             />
           ) : undefined
         }
+      />
+      <SavedViewsBar
+        entityType="CONTACT"
+        filters={{ search, company, tag, customFields }}
+        sort={{ field: sort, order: 'asc' }}
+        onApply={applySavedView}
       />
       <div className="crm-toolbar">
         <label className="crm-search">
@@ -114,6 +151,28 @@ export function ContactsView() {
             ...companies.map((c) => ({ label: c.name, value: c.id })),
           ]}
           placeholder="Company"
+        />
+        <MetadataListControls
+          entityType="CONTACT"
+          tag={tag}
+          onTagChange={(value) => {
+            setTag(value);
+            setPage(1);
+          }}
+          customFields={customFields}
+          onCustomFieldsChange={(value) => {
+            setCustomFields(value);
+            setPage(1);
+          }}
+        />
+        <Select
+          value={sort}
+          onValueChange={(value) => value && setSort(value)}
+          options={[
+            { label: 'Last name', value: 'lastName' },
+            { label: 'First name', value: 'firstName' },
+            { label: 'Newest', value: 'createdAt' },
+          ]}
         />
       </div>
       {error && !contacts ? (
@@ -159,6 +218,15 @@ export function ContactsView() {
                         {contact.firstName} {contact.lastName}
                       </strong>
                       {contact.isPrimary ? <span>Primary contact</span> : null}
+                      {contact.tags?.length ? (
+                        <span className="record-tags">
+                          {contact.tags.map((item) => (
+                            <Badge key={item.id} tone="neutral">
+                              {item.name}
+                            </Badge>
+                          ))}
+                        </span>
+                      ) : null}
                     </Link>
                   </td>
                   <td>

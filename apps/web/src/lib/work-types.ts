@@ -1,4 +1,5 @@
 import type { CompanyRef, PaginationMeta, PersonRef } from './crm-types';
+import type { ConfigurableRecordMetadata } from './configuration-types';
 
 export interface ProjectRef {
   id: string;
@@ -13,7 +14,7 @@ export interface ProjectMember {
   user: PersonRef;
 }
 
-export interface ProjectRecord extends ProjectRef {
+export interface ProjectRecord extends ProjectRef, ConfigurableRecordMetadata {
   companyId: string;
   sourceLeadId: string | null;
   projectManagerId: string | null;

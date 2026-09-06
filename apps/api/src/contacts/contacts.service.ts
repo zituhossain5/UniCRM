@@ -10,15 +10,28 @@ import { isUUID } from 'class-validator';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
+import { TagsService } from '../tags/tags.service';
 import type { ContactListQueryDto, CreateContactDto, UpdateContactDto } from './dto/contacts.dto';
 
 const contactInclude = {
   company: { select: { id: true, name: true, status: true } },
 } as const;
 
+function intersectIds(first?: string[], second?: string[]) {
+  if (!first) return second;
+  if (!second) return first;
+  const set = new Set(second);
+  return first.filter((id) => set.has(id));
+}
+
 @Injectable()
 export class ContactsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(CustomFieldsService) private readonly customFields: CustomFieldsService,
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TagsService) private readonly tags: TagsService,
+  ) {}
 
   async list(principal: AuthenticatedPrincipal, query: ContactListQueryDto) {
     if (query.company && !isUUID(query.company))
@@ -29,10 +42,19 @@ export class ContactsService {
       'createdAt',
       'updatedAt',
     ]);
+    const recordIds = intersectIds(
+      await this.tags.matchingEntityIds(principal.organizationId, 'CONTACT', query.tag),
+      await this.customFields.matchingEntityIds(
+        principal.organizationId,
+        'CONTACT',
+        query.customFields,
+      ),
+    );
     const where: Prisma.ContactWhereInput = {
       organizationId: principal.organizationId,
       archivedAt: null,
       ...(query.company ? { companyId: query.company } : {}),
+      ...(recordIds ? { id: { in: recordIds } } : {}),
       ...(listQuery.search
         ? {
             OR: [
@@ -55,7 +77,10 @@ export class ContactsService {
       }),
       this.prisma.contact.count({ where }),
     ]);
-    return { data, meta: paginationMeta(listQuery.page, listQuery.limit, total) };
+    return {
+      data: await this.decorate(principal.organizationId, data),
+      meta: paginationMeta(listQuery.page, listQuery.limit, total),
+    };
   }
 
   async get(principal: AuthenticatedPrincipal, id: string) {
@@ -71,12 +96,14 @@ export class ContactsService {
       },
     });
     if (!contact) throw new NotFoundException('Contact not found');
-    return contact;
+    return (await this.decorate(principal.organizationId, [contact]))[0];
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateContactDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     await this.validateCompany(principal.organizationId, dto.companyId);
     const normalizedEmail = dto.email?.trim().toLowerCase();
+    const { customFields, tagIds, ...contactInput } = dto;
     const contact = await this.prisma.$transaction(async (tx) => {
       if (dto.isPrimary && dto.companyId)
         await tx.contact.updateMany({
@@ -85,13 +112,22 @@ export class ContactsService {
         });
       const created = await tx.contact.create({
         data: {
-          ...dto,
+          ...contactInput,
           normalizedEmail,
           createdById: principal.userId,
           organizationId: principal.organizationId,
         },
         include: contactInclude,
       });
+      await this.customFields.saveValues(
+        tx,
+        principal.organizationId,
+        'CONTACT',
+        created.id,
+        customFields,
+        true,
+      );
+      await this.tags.sync(tx, principal.organizationId, 'CONTACT', created.id, tagIds);
       await tx.activityLog.create({
         data: {
           action: 'CONTACT_CREATED',
@@ -103,13 +139,15 @@ export class ContactsService {
       });
       return created;
     });
-    return contact;
+    return (await this.decorate(principal.organizationId, [contact]))[0];
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateContactDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     const existing = await this.requireActive(principal.organizationId, id);
     await this.validateCompany(principal.organizationId, dto.companyId);
-    return this.prisma.$transaction(async (tx) => {
+    const { customFields, tagIds, ...contactInput } = dto;
+    const contact = await this.prisma.$transaction(async (tx) => {
       const targetCompanyId = dto.companyId !== undefined ? dto.companyId : existing.companyId;
       const willBePrimary = dto.isPrimary ?? existing.isPrimary;
       if (willBePrimary && targetCompanyId)
@@ -124,12 +162,21 @@ export class ContactsService {
       const updated = await tx.contact.update({
         where: { id },
         data: {
-          ...dto,
+          ...contactInput,
           ...(dto.companyId === null ? { isPrimary: false } : {}),
           ...(dto.email !== undefined ? { normalizedEmail: dto.email.trim().toLowerCase() } : {}),
         },
         include: contactInclude,
       });
+      await this.customFields.saveValues(
+        tx,
+        principal.organizationId,
+        'CONTACT',
+        id,
+        customFields,
+        false,
+      );
+      await this.tags.sync(tx, principal.organizationId, 'CONTACT', id, tagIds);
       await tx.activityLog.create({
         data: {
           action: 'CONTACT_UPDATED',
@@ -141,6 +188,7 @@ export class ContactsService {
       });
       return updated;
     });
+    return (await this.decorate(principal.organizationId, [contact]))[0];
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {
@@ -170,6 +218,14 @@ export class ContactsService {
       where: { id: companyId, organizationId, archivedAt: null },
     });
     if (!company) throw new BadRequestException('Company is invalid or unavailable');
+  }
+
+  private async decorate<T extends { id: string }>(organizationId: string, records: T[]) {
+    return this.tags.decorate(
+      organizationId,
+      'CONTACT',
+      await this.customFields.decorate(organizationId, 'CONTACT', records),
+    );
   }
 
   private async requireActive(organizationId: string, id: string) {

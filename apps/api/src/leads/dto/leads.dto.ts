@@ -1,10 +1,13 @@
 import { Transform } from 'class-transformer';
 import {
+  ArrayUnique,
+  IsArray,
   IsDateString,
   IsDecimal,
   IsEmail,
   IsEnum,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUUID,
@@ -26,6 +29,9 @@ const email = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class LeadListQueryDto extends ListQueryDto {
+  @IsUUID() @IsOptional() pipeline?: string;
+  @IsUUID() @IsOptional() tag?: string;
+  @IsString() @IsOptional() customFields?: string;
   @IsUUID() @IsOptional() stage?: string;
   @IsUUID() @IsOptional() owner?: string;
   @IsUUID() @IsOptional() company?: string;
@@ -44,6 +50,10 @@ export class LeadListQueryDto extends ListQueryDto {
 }
 
 export class CreateLeadDto {
+  @IsObject() @IsOptional() customFields?: Record<string, unknown>;
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) @IsOptional() tagIds?: string[];
+  @IsUUID() @IsOptional() pipelineId?: string;
+  @IsUUID() @IsOptional() stageId?: string;
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(180) title!: string;
   @Transform(trim) @IsString() @MaxLength(100) @IsOptional() firstName?: string;
   @Transform(trim) @IsString() @MaxLength(100) @IsOptional() lastName?: string;
@@ -74,6 +84,8 @@ export class CreateLeadDto {
 }
 
 export class UpdateLeadDto {
+  @IsObject() @IsOptional() customFields?: Record<string, unknown>;
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) @IsOptional() tagIds?: string[];
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(180) @IsOptional() title?: string;
   @Transform(trim) @IsString() @MaxLength(100) @IsOptional() firstName?: string;
   @Transform(trim) @IsString() @MaxLength(100) @IsOptional() lastName?: string;
@@ -101,6 +113,7 @@ export class UpdateLeadDto {
 }
 
 export class UpdateLeadStageDto {
+  @IsUUID() @IsOptional() pipelineId?: string;
   @IsUUID() stageId!: string;
   @Transform(trim) @IsString() @MaxLength(500) @IsOptional() lostReason?: string;
 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCurrentUser } from '@/components/auth-provider';
+import { SavedViewsBar } from '@/components/configuration/list-configuration';
 import { apiRequest } from '@/lib/api';
 import { onCrmDataChanged } from '@/lib/crm-events';
 import { labelize, personName } from '@/lib/crm-types';
@@ -73,6 +74,24 @@ export function TasksView() {
     return () => window.clearTimeout(timer);
   }, [load]);
   useEffect(() => onCrmDataChanged(['tasks'], () => void load()), [load]);
+  const applySavedView = useCallback(
+    (
+      filters: Record<string, unknown>,
+      savedSort: { field: string; order: 'asc' | 'desc' } | null,
+    ) => {
+      setQuery(typeof filters.search === 'string' ? filters.search : '');
+      setView(typeof filters.view === 'string' ? filters.view : 'all');
+      setStatus(typeof filters.status === 'string' ? filters.status : '');
+      setPriority(typeof filters.priority === 'string' ? filters.priority : '');
+      setProject(typeof filters.project === 'string' ? filters.project : '');
+      setAssignee(typeof filters.assignee === 'string' ? filters.assignee : '');
+      setDueDate(typeof filters.dueDate === 'string' ? filters.dueDate : '');
+      if (savedSort) setSorting(`${savedSort.field}:${savedSort.order}`);
+      setPage(1);
+    },
+    [],
+  );
+  const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
 
   return (
     <div className="crm-page">
@@ -93,6 +112,12 @@ export function TasksView() {
             />
           ) : undefined
         }
+      />
+      <SavedViewsBar
+        entityType="TASK"
+        filters={{ search: query, view, status, priority, project, assignee, dueDate }}
+        sort={{ field: sortField, order: sortOrder }}
+        onApply={applySavedView}
       />
       <div className="crm-view-tabs" role="tablist">
         {views.map(([value, label]) => (

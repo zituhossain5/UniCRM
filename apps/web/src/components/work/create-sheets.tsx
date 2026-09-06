@@ -1,6 +1,11 @@
 'use client';
 
 import { AuthMessage } from '@/components/auth-screen';
+import {
+  AdditionalInformationFields,
+  configurableRecordPayload,
+  useRecordConfiguration,
+} from '@/components/configuration/record-configuration';
 import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
 import { emitCrmDataChanged } from '@/lib/crm-events';
@@ -45,6 +50,7 @@ export function ProjectCreateSheet({
   const [error, setError] = useState('');
   const [formKey, setFormKey] = useState(0);
   const references = useWorkReferenceData();
+  const configuration = useRecordConfiguration('PROJECT');
   useEffect(() => {
     if (open) setFormKey((value) => value + 1);
     else setError('');
@@ -57,7 +63,9 @@ export function ProjectCreateSheet({
     try {
       const result = await apiRequest<{ data: ProjectRecord }>('/projects', {
         method: 'POST',
-        body: JSON.stringify(payload(event.currentTarget)),
+        body: JSON.stringify(
+          configurableRecordPayload(event.currentTarget, configuration.definitions),
+        ),
       });
       emitCrmDataChanged(['projects', 'companies', 'leads']);
       onOpenChange(false);
@@ -164,6 +172,10 @@ export function ProjectCreateSheet({
         {initial?.sourceLeadId ? (
           <input name="sourceLeadId" type="hidden" value={initial.sourceLeadId} />
         ) : null}
+        <AdditionalInformationFields
+          definitions={configuration.definitions}
+          tags={configuration.tags}
+        />
       </form>
     </Sheet>
   );
@@ -299,7 +311,9 @@ export function TaskCreateSheet({
 }
 
 function payload(form: HTMLFormElement) {
-  const entries = [...new FormData(form).entries()].filter(([, value]) => value !== '');
+  const entries = [...new FormData(form).entries()].filter(
+    ([key, value]) => value !== '' && key !== 'tagIds' && !key.startsWith('customField:'),
+  );
   const result = Object.fromEntries(entries) as Record<string, string | number>;
   if (typeof result.estimatedMinutes === 'string')
     result.estimatedMinutes = Number(result.estimatedMinutes);

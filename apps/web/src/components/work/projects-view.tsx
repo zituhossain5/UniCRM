@@ -1,6 +1,7 @@
 'use client';
 
 import { useCurrentUser } from '@/components/auth-provider';
+import { MetadataListControls, SavedViewsBar } from '@/components/configuration/list-configuration';
 import { apiRequest } from '@/lib/api';
 import { onCrmDataChanged } from '@/lib/crm-events';
 import { labelize, personName } from '@/lib/crm-types';
@@ -43,6 +44,8 @@ export function ProjectsView() {
   const [company, setCompany] = useState('');
   const [deadline, setDeadline] = useState('');
   const [sorting, setSorting] = useState('createdAt:desc');
+  const [tag, setTag] = useState('');
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const load = useCallback(async () => {
@@ -55,6 +58,12 @@ export function ProjectsView() {
       if (manager) params.set('manager', manager);
       if (company) params.set('company', company);
       if (deadline) params.set('deadline', deadline);
+      if (tag) params.set('tag', tag);
+      if (
+        Object.keys(customFields).length &&
+        Object.values(customFields).every((value) => value !== '')
+      )
+        params.set('customFields', JSON.stringify(customFields));
       const [sort, order] = sorting.split(':');
       params.set('sort', sort!);
       params.set('order', order!);
@@ -62,12 +71,38 @@ export function ProjectsView() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load projects.');
     }
-  }, [company, deadline, manager, page, priority, query, sorting, status, view]);
+  }, [company, customFields, deadline, manager, page, priority, query, sorting, status, tag, view]);
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
   }, [load]);
   useEffect(() => onCrmDataChanged(['projects'], () => void load()), [load]);
+  const applySavedView = useCallback(
+    (
+      filters: Record<string, unknown>,
+      savedSort: { field: string; order: 'asc' | 'desc' } | null,
+    ) => {
+      setQuery(typeof filters.search === 'string' ? filters.search : '');
+      setView(typeof filters.view === 'string' ? filters.view : 'all');
+      setStatus(typeof filters.status === 'string' ? filters.status : '');
+      setPriority(typeof filters.priority === 'string' ? filters.priority : '');
+      setManager(typeof filters.manager === 'string' ? filters.manager : '');
+      setCompany(typeof filters.company === 'string' ? filters.company : '');
+      setDeadline(typeof filters.deadline === 'string' ? filters.deadline : '');
+      setTag(typeof filters.tag === 'string' ? filters.tag : '');
+      setCustomFields(
+        filters.customFields &&
+          typeof filters.customFields === 'object' &&
+          !Array.isArray(filters.customFields)
+          ? (filters.customFields as Record<string, unknown>)
+          : {},
+      );
+      if (savedSort) setSorting(`${savedSort.field}:${savedSort.order}`);
+      setPage(1);
+    },
+    [],
+  );
+  const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
 
   return (
     <div className="crm-page">
@@ -88,6 +123,22 @@ export function ProjectsView() {
             />
           ) : undefined
         }
+      />
+      <SavedViewsBar
+        entityType="PROJECT"
+        filters={{
+          search: query,
+          view,
+          status,
+          priority,
+          manager,
+          company,
+          deadline,
+          tag,
+          customFields,
+        }}
+        sort={{ field: sortField, order: sortOrder }}
+        onApply={applySavedView}
       />
       <div className="crm-view-tabs" role="tablist">
         {views.map(([value, label]) => (
@@ -195,6 +246,19 @@ export function ProjectsView() {
           ]}
           value={sorting}
         />
+        <MetadataListControls
+          entityType="PROJECT"
+          tag={tag}
+          onTagChange={(value) => {
+            setTag(value);
+            setPage(1);
+          }}
+          customFields={customFields}
+          onCustomFieldsChange={(value) => {
+            setCustomFields(value);
+            setPage(1);
+          }}
+        />
       </div>
       {!result && !error ? <LoadingState label="Loading projects" /> : null}
       {error ? (
@@ -240,6 +304,15 @@ export function ProjectsView() {
                       <Link className="crm-record-link" href={`/app/projects/${project.id}`}>
                         <strong>{project.name}</strong>
                         <span>{labelize(project.priority)} priority</span>
+                        {project.tags?.length ? (
+                          <span className="record-tags">
+                            {project.tags.map((item) => (
+                              <Badge key={item.id} tone="neutral">
+                                {item.name}
+                              </Badge>
+                            ))}
+                          </span>
+                        ) : null}
                       </Link>
                     </td>
                     <td>{project.company.name}</td>

@@ -14,6 +14,8 @@ import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto
 import { PrismaService } from '../database/prisma.service';
 import { LeadPriority, LeadSource } from '../generated/prisma/enums';
 import { PipelinesService } from '../pipelines/pipelines.service';
+import { CustomFieldsService } from '../custom-fields/custom-fields.service';
+import { TagsService } from '../tags/tags.service';
 import type {
   ActivityListQueryDto,
   CreateActivityDto,
@@ -36,11 +38,20 @@ const leadInclude = {
   stage: { select: { id: true, name: true, position: true, isWon: true, isLost: true } },
 } as const;
 
+function intersectIds(first?: string[], second?: string[]) {
+  if (!first) return second;
+  if (!second) return first;
+  const set = new Set(second);
+  return first.filter((id) => set.has(id));
+}
+
 @Injectable()
 export class LeadsService {
   constructor(
+    @Inject(CustomFieldsService) private readonly customFields: CustomFieldsService,
     @Inject(PipelinesService) private readonly pipelines: PipelinesService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(TagsService) private readonly tags: TagsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: LeadListQueryDto) {
@@ -54,6 +65,7 @@ export class LeadsService {
       ['stage', query.stage],
       ['owner', query.owner],
       ['company', query.company],
+      ['pipeline', query.pipeline],
     ] as const) {
       if (value && !isUUID(value)) throw new BadRequestException(`${name} must be a UUID`);
     }
@@ -81,9 +93,19 @@ export class LeadsService {
     const now = new Date();
     const endToday = new Date(now);
     endToday.setHours(23, 59, 59, 999);
+    const recordIds = intersectIds(
+      await this.tags.matchingEntityIds(principal.organizationId, 'LEAD', query.tag),
+      await this.customFields.matchingEntityIds(
+        principal.organizationId,
+        'LEAD',
+        query.customFields,
+      ),
+    );
     const where: Prisma.LeadWhereInput = {
       organizationId: principal.organizationId,
       archivedAt: null,
+      ...(recordIds ? { id: { in: recordIds } } : {}),
+      ...(query.pipeline ? { pipelineId: query.pipeline } : {}),
       ...(query.stage ? { stageId: query.stage } : {}),
       ...(query.owner ? { ownerId: query.owner } : {}),
       ...(query.company ? { companyId: query.company } : {}),
@@ -126,7 +148,10 @@ export class LeadsService {
       }),
       this.prisma.lead.count({ where }),
     ]);
-    return { data, meta: paginationMeta(listQuery.page, listQuery.limit, total) };
+    return {
+      data: await this.decorate(principal.organizationId, data),
+      meta: paginationMeta(listQuery.page, listQuery.limit, total),
+    };
   }
 
   async get(principal: AuthenticatedPrincipal, id: string) {
@@ -169,23 +194,40 @@ export class LeadsService {
           })
         : Promise.resolve([]),
     ]);
-    return { ...lead, project, quotations };
+    return (await this.decorate(principal.organizationId, [{ ...lead, project, quotations }]))[0];
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateLeadDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     if (dto.ownerId && !principal.permissions.includes(PERMISSIONS.leadAssign))
       throw new ForbiddenException('Insufficient permission to assign lead owner');
-    const pipeline = await this.pipelines.ensureDefault(principal.organizationId);
-    const firstStage = pipeline.stages[0];
-    if (!firstStage) throw new ConflictException('The default pipeline has no stages');
+    if ((dto.pipelineId && !dto.stageId) || (!dto.pipelineId && dto.stageId))
+      throw new BadRequestException('pipelineId and stageId must be selected together');
+    const pipeline = dto.pipelineId
+      ? await this.prisma.pipeline.findFirst({
+          where: { id: dto.pipelineId, organizationId: principal.organizationId, archivedAt: null },
+          include: { stages: { orderBy: { position: 'asc' } } },
+        })
+      : await this.pipelines.ensureDefault(principal.organizationId);
+    if (!pipeline) throw new BadRequestException('Pipeline is invalid or unavailable');
+    const firstStage = dto.stageId
+      ? pipeline.stages.find((stage) => stage.id === dto.stageId)
+      : pipeline.stages[0];
+    if (!firstStage) throw new ConflictException('The selected pipeline has no valid stage');
     await this.validateRelationships(
       principal.organizationId,
       dto.companyId,
       dto.contactId,
       dto.ownerId,
     );
-    const { nextFollowUpAt, ...input } = dto;
-    return this.prisma.$transaction(async (tx) => {
+    const { nextFollowUpAt, customFields, tagIds } = dto;
+    const input = { ...dto };
+    delete input.nextFollowUpAt;
+    delete input.customFields;
+    delete input.tagIds;
+    delete input.pipelineId;
+    delete input.stageId;
+    const lead = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const lead = await tx.lead.create({
         data: {
@@ -200,6 +242,15 @@ export class LeadsService {
         },
         include: leadInclude,
       });
+      await this.customFields.saveValues(
+        tx,
+        principal.organizationId,
+        'LEAD',
+        lead.id,
+        customFields,
+        true,
+      );
+      await this.tags.sync(tx, principal.organizationId, 'LEAD', lead.id, tagIds);
       await tx.leadActivity.create({
         data: {
           organizationId: principal.organizationId,
@@ -243,28 +294,40 @@ export class LeadsService {
       });
       return lead;
     });
+    return (await this.decorate(principal.organizationId, [lead]))[0];
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadDto) {
+    this.customFields.rejectGeneratedControlKeys(dto);
     const existing = await this.requireLead(principal, id);
     await this.validateRelationships(
       principal.organizationId,
       dto.companyId !== undefined ? dto.companyId : existing.companyId,
       dto.contactId !== undefined ? dto.contactId : existing.contactId,
     );
-    return this.prisma.$transaction(async (tx) => {
+    const { customFields, tagIds, ...leadInput } = dto;
+    const lead = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const companyChanged = dto.companyId !== undefined && dto.companyId !== existing.companyId;
       const lead = await tx.lead.update({
         where: { id },
         data: {
-          ...dto,
+          ...leadInput,
           estimatedValue: dto.estimatedValue,
           ...(dto.email !== undefined ? { normalizedEmail: dto.email.toLowerCase() } : {}),
           ...(companyChanged ? { lastActivityAt: now } : {}),
         },
         include: leadInclude,
       });
+      await this.customFields.saveValues(
+        tx,
+        principal.organizationId,
+        'LEAD',
+        id,
+        customFields,
+        false,
+      );
+      await this.tags.sync(tx, principal.organizationId, 'LEAD', id, tagIds);
       if (companyChanged) {
         await tx.leadActivity.create({
           data: {
@@ -289,6 +352,7 @@ export class LeadsService {
       });
       return lead;
     });
+    return (await this.decorate(principal.organizationId, [lead]))[0];
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {
@@ -319,15 +383,17 @@ export class LeadsService {
 
   async changeStage(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadStageDto) {
     const lead = await this.requireLead(principal, id);
+    const pipelineId = dto.pipelineId ?? lead.pipelineId;
     const stage = await this.prisma.pipelineStage.findFirst({
       where: {
         id: dto.stageId,
         organizationId: principal.organizationId,
-        pipelineId: lead.pipelineId,
+        pipelineId,
+        pipeline: { archivedAt: null },
       },
     });
     if (!stage) throw new BadRequestException('Pipeline stage is invalid or unavailable');
-    if (stage.id === lead.stageId) return lead;
+    if (stage.id === lead.stageId && pipelineId === lead.pipelineId) return lead;
     if (stage.isLost && !dto.lostReason)
       throw new BadRequestException('A lost reason is required when marking a lead lost');
     return this.prisma.$transaction(async (tx) => {
@@ -335,6 +401,7 @@ export class LeadsService {
       const updated = await tx.lead.update({
         where: { id },
         data: {
+          pipelineId,
           stageId: stage.id,
           lostReason: stage.isLost ? dto.lostReason : null,
           lastActivityAt: now,
@@ -350,7 +417,12 @@ export class LeadsService {
           description: `${lead.stage.name} -> ${stage.name}`,
           occurredAt: now,
           createdById: principal.userId,
-          metadata: { fromStageId: lead.stageId, toStageId: stage.id },
+          metadata: {
+            fromPipelineId: lead.pipelineId,
+            toPipelineId: pipelineId,
+            fromStageId: lead.stageId,
+            toStageId: stage.id,
+          },
         },
       });
       await tx.activityLog.create({
@@ -360,7 +432,12 @@ export class LeadsService {
           entityType: 'LEAD',
           entityId: id,
           action: 'LEAD_STAGE_CHANGED',
-          metadata: { fromStageId: lead.stageId, toStageId: stage.id },
+          metadata: {
+            fromPipelineId: lead.pipelineId,
+            toPipelineId: pipelineId,
+            fromStageId: lead.stageId,
+            toStageId: stage.id,
+          },
         },
       });
       return updated;
@@ -683,6 +760,14 @@ export class LeadsService {
     if (!lead) throw new NotFoundException('Lead not found');
     if (lead.archivedAt) throw new ConflictException('Archived leads cannot be modified');
     return lead;
+  }
+
+  private async decorate<T extends { id: string }>(organizationId: string, records: T[]) {
+    return this.tags.decorate(
+      organizationId,
+      'LEAD',
+      await this.customFields.decorate(organizationId, 'LEAD', records),
+    );
   }
   private async requireFollowUp(principal: AuthenticatedPrincipal, leadId: string, id: string) {
     const followUp = await this.prisma.followUp.findFirst({

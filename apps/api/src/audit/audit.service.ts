@@ -10,11 +10,15 @@ export interface AuditInput {
     | 'ATTACHMENT'
     | 'COMPANY'
     | 'CONTACT'
+    | 'CUSTOM_FIELD'
     | 'FOLLOW_UP'
     | 'LEAD'
     | 'PAYMENT'
     | 'PROJECT'
     | 'QUOTATION'
+    | 'SAVED_VIEW'
+    | 'TAG'
+    | 'PIPELINE'
     | 'TASK';
   metadata?: Prisma.InputJsonValue;
   organizationId: string;

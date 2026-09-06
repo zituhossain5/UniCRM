@@ -8,7 +8,13 @@ export interface CurrentUser {
   lastLoginAt: string | null;
   roles: string[];
   permissions: string[];
-  organization: { id: string; name: string; slug: string; status: string };
+  organization: {
+    id: string;
+    name: string;
+    slug: string;
+    status: string;
+    defaultCurrency: string;
+  };
 }
 
 export interface SessionRecord {

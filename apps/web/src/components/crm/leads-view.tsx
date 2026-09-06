@@ -2,6 +2,7 @@
 import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
 import { LeadCreateSheet } from '@/components/crm/create-sheets';
+import { MetadataListControls, SavedViewsBar } from '@/components/configuration/list-configuration';
 import { apiRequest } from '@/lib/api';
 import { onCrmDataChanged } from '@/lib/crm-events';
 import {
@@ -46,6 +47,9 @@ export function LeadsView() {
   const [view, setView] = useState('all');
   const [search, setSearch] = useState('');
   const [stage, setStage] = useState('');
+  const [pipeline, setPipeline] = useState('');
+  const [tag, setTag] = useState('');
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [owner, setOwner] = useState('');
   const [source, setSource] = useState('');
   const [sort, setSort] = useState('createdAt');
@@ -67,6 +71,13 @@ export function LeadsView() {
       });
       if (search.trim()) p.set('search', search.trim());
       if (stage) p.set('stage', stage);
+      if (pipeline) p.set('pipeline', pipeline);
+      if (tag) p.set('tag', tag);
+      if (
+        Object.keys(customFields).length &&
+        Object.values(customFields).every((value) => value !== '')
+      )
+        p.set('customFields', JSON.stringify(customFields));
       if (owner) p.set('owner', owner);
       if (source) p.set('source', source);
       const result = await apiRequest<{ data: LeadRecord[]; meta: PaginationMeta }>(`/leads?${p}`);
@@ -75,7 +86,7 @@ export function LeadsView() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load leads.');
     }
-  }, [owner, page, search, sort, source, stage, view]);
+  }, [customFields, owner, page, pipeline, search, sort, source, stage, tag, view]);
   useEffect(() => {
     const timer = setTimeout(() => void load(), 250);
     return () => clearTimeout(timer);
@@ -92,7 +103,33 @@ export function LeadsView() {
         .catch(() => undefined);
   }, [current.permissions]);
   useEffect(() => onCrmDataChanged(['leads', 'companies', 'contacts'], () => void load()), [load]);
-  const stages = pipelines.find((p) => p.isDefault)?.stages ?? pipelines[0]?.stages ?? [];
+  const stages = pipeline
+    ? (pipelines.find((item) => item.id === pipeline)?.stages ?? [])
+    : pipelines.flatMap((item) => item.stages);
+  const applySavedView = useCallback(
+    (
+      filters: Record<string, unknown>,
+      savedSort: { field: string; order: 'asc' | 'desc' } | null,
+    ) => {
+      setSearch(typeof filters.search === 'string' ? filters.search : '');
+      setView(typeof filters.view === 'string' ? filters.view : 'all');
+      setPipeline(typeof filters.pipeline === 'string' ? filters.pipeline : '');
+      setStage(typeof filters.stage === 'string' ? filters.stage : '');
+      setOwner(typeof filters.owner === 'string' ? filters.owner : '');
+      setSource(typeof filters.source === 'string' ? filters.source : '');
+      setTag(typeof filters.tag === 'string' ? filters.tag : '');
+      setCustomFields(
+        filters.customFields &&
+          typeof filters.customFields === 'object' &&
+          !Array.isArray(filters.customFields)
+          ? (filters.customFields as Record<string, unknown>)
+          : {},
+      );
+      if (savedSort) setSort(savedSort.field);
+      setPage(1);
+    },
+    [],
+  );
   return (
     <div className="crm-page">
       <PageHeader
@@ -113,6 +150,12 @@ export function LeadsView() {
             />
           ) : undefined
         }
+      />
+      <SavedViewsBar
+        entityType="LEAD"
+        filters={{ search, view, pipeline, stage, owner, source, tag, customFields }}
+        sort={{ field: sort, order: sort === 'title' ? 'asc' : 'desc' }}
+        onApply={applySavedView}
       />
       <div className="crm-view-tabs" role="tablist">
         {views.map((item) => (
@@ -143,6 +186,19 @@ export function LeadsView() {
             }}
           />
         </label>
+        <Select
+          value={pipeline || null}
+          onValueChange={(value) => {
+            setPipeline(value ?? '');
+            setStage('');
+            setPage(1);
+          }}
+          options={[
+            { label: 'All pipelines', value: '' },
+            ...pipelines.map((item) => ({ label: item.name, value: item.id })),
+          ]}
+          placeholder="Pipeline"
+        />
         <Select
           value={stage || null}
           onValueChange={(v) => {
@@ -180,6 +236,19 @@ export function LeadsView() {
             ...leadSources.map((s) => ({ label: labelize(s), value: s })),
           ]}
           placeholder="Source"
+        />
+        <MetadataListControls
+          entityType="LEAD"
+          tag={tag}
+          onTagChange={(value) => {
+            setTag(value);
+            setPage(1);
+          }}
+          customFields={customFields}
+          onCustomFieldsChange={(value) => {
+            setCustomFields(value);
+            setPage(1);
+          }}
         />
         <Select
           value={sort}
@@ -245,6 +314,15 @@ export function LeadsView() {
                       <span>
                         {lead.email || lead.phone || labelize(lead.source ?? 'No source')}
                       </span>
+                      {lead.tags?.length ? (
+                        <span className="record-tags">
+                          {lead.tags.map((item) => (
+                            <Badge key={item.id} tone="neutral">
+                              {item.name}
+                            </Badge>
+                          ))}
+                        </span>
+                      ) : null}
                     </button>
                   </td>
                   <td>{lead.company?.name || '-'}</td>

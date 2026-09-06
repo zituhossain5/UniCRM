@@ -1,8 +1,11 @@
 import { Transform } from 'class-transformer';
 import {
+  ArrayUnique,
+  IsArray,
   IsEmail,
   IsEnum,
   IsIn,
+  IsObject,
   IsOptional,
   IsString,
   IsUrl,
@@ -19,6 +22,8 @@ const email = ({ value }: { value: unknown }) =>
   typeof value === 'string' ? value.trim().toLowerCase() : value;
 
 export class CompanyListQueryDto extends ListQueryDto {
+  @IsUUID() @IsOptional() tag?: string;
+  @IsString() @IsOptional() customFields?: string;
   @IsEnum(CompanyStatus)
   @IsOptional()
   status?: CompanyStatus;
@@ -33,6 +38,8 @@ export class CompanyListQueryDto extends ListQueryDto {
 }
 
 export class CreateCompanyDto {
+  @IsObject() @IsOptional() customFields?: Record<string, unknown>;
+  @IsArray() @ArrayUnique() @IsUUID('4', { each: true }) @IsOptional() tagIds?: string[];
   @Transform(trim)
   @IsString()
   @MinLength(1)

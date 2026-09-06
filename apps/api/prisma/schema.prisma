@@ -144,37 +144,77 @@ enum NotificationType {
   PAYMENT_RECORDED
 }
 
+enum ConfigurableEntityType {
+  LEAD
+  COMPANY
+  CONTACT
+  PROJECT
+}
+
+enum CustomFieldType {
+  TEXT
+  LONG_TEXT
+  NUMBER
+  CURRENCY
+  DATE
+  BOOLEAN
+  SELECT
+  MULTI_SELECT
+  URL
+  EMAIL
+  PHONE
+}
+
+enum SavedViewEntityType {
+  LEAD
+  COMPANY
+  CONTACT
+  PROJECT
+  TASK
+}
+
+enum SavedViewVisibility {
+  PRIVATE
+  ORGANIZATION
+}
+
 model Organization {
-  id               String                  @id @default(uuid()) @db.Uuid
-  name             String
-  slug             String                  @unique
-  status           OrganizationStatus      @default(ACTIVE)
-  timezone         String                  @default("UTC") @db.VarChar(64)
-  createdAt        DateTime                @default(now()) @map("created_at")
-  updatedAt        DateTime                @updatedAt @map("updated_at")
-  users            User[]
-  sessions         AuthSession[]
-  roles            Role[]
-  invitations      UserInvitation[]
-  securityEvents   SecurityEvent[]
-  companies        Company[]
-  contacts         Contact[]
-  pipelines        Pipeline[]
-  leads            Lead[]
-  leadActivities   LeadActivity[]
-  followUps        FollowUp[]
-  activityLogs     ActivityLog[]
-  pipelineStages   PipelineStage[]
-  projects         Project[]
-  projectMembers   ProjectMember[]
-  tasks            Task[]
-  taskComments     TaskComment[]
-  attachments      Attachment[]
-  quotationCounter QuotationNumberCounter?
-  quotations       Quotation[]
-  quotationItems   QuotationItem[]
-  payments         Payment[]
-  notifications    Notification[]
+  id                String                  @id @default(uuid()) @db.Uuid
+  name              String
+  slug              String                  @unique
+  status            OrganizationStatus      @default(ACTIVE)
+  timezone          String                  @default("UTC") @db.VarChar(64)
+  defaultCurrency   String                  @default("BDT") @map("default_currency") @db.VarChar(3)
+  createdAt         DateTime                @default(now()) @map("created_at")
+  updatedAt         DateTime                @updatedAt @map("updated_at")
+  users             User[]
+  sessions          AuthSession[]
+  roles             Role[]
+  invitations       UserInvitation[]
+  securityEvents    SecurityEvent[]
+  companies         Company[]
+  contacts          Contact[]
+  pipelines         Pipeline[]
+  leads             Lead[]
+  leadActivities    LeadActivity[]
+  followUps         FollowUp[]
+  activityLogs      ActivityLog[]
+  pipelineStages    PipelineStage[]
+  projects          Project[]
+  projectMembers    ProjectMember[]
+  tasks             Task[]
+  taskComments      TaskComment[]
+  attachments       Attachment[]
+  quotationCounter  QuotationNumberCounter?
+  quotations        Quotation[]
+  quotationItems    QuotationItem[]
+  payments          Payment[]
+  notifications     Notification[]
+  customFields      CustomFieldDefinition[]
+  customFieldValues CustomFieldValue[]
+  tags              Tag[]
+  entityTags        EntityTag[]
+  savedViews        SavedView[]
 
   @@map("organizations")
 }
@@ -218,6 +258,7 @@ model User {
   quotationsCreated   Quotation[]          @relation("QuotationCreator")
   paymentsRecorded    Payment[]            @relation("PaymentRecorder")
   notifications       Notification[]
+  savedViews          SavedView[]
 
   @@index([organizationId, status])
   @@map("users")
@@ -422,6 +463,7 @@ model Pipeline {
   organizationId String          @map("organization_id") @db.Uuid
   name           String
   isDefault      Boolean         @default(false) @map("is_default")
+  archivedAt     DateTime?       @map("archived_at")
   createdAt      DateTime        @default(now()) @map("created_at")
   updatedAt      DateTime        @updatedAt @map("updated_at")
   organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
@@ -429,7 +471,8 @@ model Pipeline {
   leads          Lead[]
 
   @@unique([organizationId, name])
-  @@index([organizationId, isDefault])
+  @@unique([organizationId], map: "pipelines_one_active_default", where: raw("\"is_default\" = true AND \"archived_at\" IS NULL"))
+  @@index([organizationId, archivedAt, name])
   @@map("pipelines")
 }
 
@@ -818,4 +861,95 @@ model Notification {
   @@unique([organizationId, userId, dedupeKey])
   @@index([organizationId, userId, readAt, createdAt])
   @@map("notifications")
+}
+
+model CustomFieldDefinition {
+  id             String                 @id @default(uuid()) @db.Uuid
+  organizationId String                 @map("organization_id") @db.Uuid
+  entityType     ConfigurableEntityType @map("entity_type")
+  name           String                 @db.VarChar(120)
+  key            String                 @db.VarChar(80)
+  fieldType      CustomFieldType        @map("field_type")
+  required       Boolean                @default(false)
+  position       Int
+  options        Json?
+  active         Boolean                @default(true)
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  values         CustomFieldValue[]
+
+  @@unique([organizationId, entityType, key])
+  @@unique([organizationId, entityType, position])
+  @@index([organizationId, entityType, active, position])
+  @@map("custom_field_definitions")
+}
+
+model CustomFieldValue {
+  id                String                 @id @default(uuid()) @db.Uuid
+  organizationId    String                 @map("organization_id") @db.Uuid
+  fieldDefinitionId String                 @map("field_definition_id") @db.Uuid
+  entityType        ConfigurableEntityType @map("entity_type")
+  entityId          String                 @map("entity_id") @db.Uuid
+  value             Json
+  createdAt         DateTime               @default(now()) @map("created_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
+  organization      Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fieldDefinition   CustomFieldDefinition  @relation(fields: [fieldDefinitionId], references: [id], onDelete: Restrict)
+
+  @@unique([fieldDefinitionId, entityId])
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, fieldDefinitionId])
+  @@map("custom_field_values")
+}
+
+model Tag {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  name           String       @db.VarChar(80)
+  normalizedName String       @map("normalized_name") @db.VarChar(80)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignments    EntityTag[]
+
+  @@unique([organizationId, normalizedName])
+  @@index([organizationId, name])
+  @@map("tags")
+}
+
+model EntityTag {
+  organizationId String                 @map("organization_id") @db.Uuid
+  tagId          String                 @map("tag_id") @db.Uuid
+  entityType     ConfigurableEntityType @map("entity_type")
+  entityId       String                 @map("entity_id") @db.Uuid
+  createdAt      DateTime               @default(now()) @map("created_at")
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  tag            Tag                    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([tagId, entityType, entityId])
+  @@index([organizationId, entityType, entityId])
+  @@index([organizationId, tagId, entityType])
+  @@map("entity_tags")
+}
+
+model SavedView {
+  id             String              @id @default(uuid()) @db.Uuid
+  organizationId String              @map("organization_id") @db.Uuid
+  userId         String?             @map("user_id") @db.Uuid
+  entityType     SavedViewEntityType @map("entity_type")
+  name           String              @db.VarChar(120)
+  filters        Json
+  sort           Json?
+  columns        Json?
+  visibility     SavedViewVisibility @default(PRIVATE)
+  isDefault      Boolean             @default(false) @map("is_default")
+  createdAt      DateTime            @default(now()) @map("created_at")
+  updatedAt      DateTime            @updatedAt @map("updated_at")
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, entityType, visibility])
+  @@index([userId, entityType, isDefault])
+  @@map("saved_views")
 }
