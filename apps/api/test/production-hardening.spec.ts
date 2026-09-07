@@ -19,6 +19,7 @@ const baseProductionEnv = {
   DATABASE_URL: 'postgresql://unicrm:secret@postgres:5432/unicrm',
   EMAIL_DELIVERY_MODE: 'queue',
   EMAIL_TRANSPORT: 'smtp',
+  INTEGRATION_SECRET_ENCRYPTION_KEY: Buffer.alloc(32, 23).toString('base64'),
   LOG_FORMAT: 'json',
   NODE_ENV: 'production',
   REDIS_URL: 'redis://redis:6379',

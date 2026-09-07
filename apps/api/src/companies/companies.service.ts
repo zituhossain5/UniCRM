@@ -15,6 +15,7 @@ import { PrismaService } from '../database/prisma.service';
 import { CompanyStatus } from '../generated/prisma/enums';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { TagsService } from '../tags/tags.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import type { CompanyListQueryDto, CreateCompanyDto, UpdateCompanyDto } from './dto/companies.dto';
 
 const companyListInclude = {
@@ -68,6 +69,7 @@ export class CompaniesService {
     @Inject(CustomFieldsService) private readonly customFields: CustomFieldsService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TagsService) private readonly tags: TagsService,
+    @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: CompanyListQueryDto) {
@@ -210,6 +212,16 @@ export class CompaniesService {
       );
       return company;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'company.created',
+      company.id,
+      {
+        name: company.name,
+        status: company.status,
+        accountOwnerId: company.accountOwnerId,
+      },
+    );
     return (await this.decorate(principal.organizationId, [company]))[0];
   }
 
@@ -247,6 +259,16 @@ export class CompaniesService {
       );
       return company;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'company.updated',
+      company.id,
+      {
+        name: company.name,
+        status: company.status,
+        accountOwnerId: company.accountOwnerId,
+      },
+    );
     return (await this.decorate(principal.organizationId, [company]))[0];
   }
 

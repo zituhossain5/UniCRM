@@ -19,6 +19,7 @@ export function SettingsNav() {
     { label: 'Pipelines', href: '/app/settings/pipelines', permission: 'pipeline.read' },
     { label: 'Tags', href: '/app/settings/tags', permission: 'tag.read' },
     { label: 'Data Management', href: '/app/settings/data-management', permission: 'data.export' },
+    { label: 'Integrations', href: '/app/settings/integrations', permission: 'integration.read' },
     { label: 'Security', href: '/app/settings/security', permission: 'security.sessions.read' },
   ];
   return (

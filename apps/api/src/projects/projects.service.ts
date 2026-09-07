@@ -12,6 +12,7 @@ import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto
 import { PrismaService } from '../database/prisma.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { TagsService } from '../tags/tags.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import type {
   AddProjectMemberDto,
   CreateProjectDto,
@@ -79,6 +80,7 @@ export class ProjectsService {
     @Inject(CustomFieldsService) private readonly customFields: CustomFieldsService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TagsService) private readonly tags: TagsService,
+    @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: ProjectListQueryDto) {
@@ -241,6 +243,16 @@ export class ProjectsService {
         );
         return project;
       });
+      await this.integrations.publishBusinessEvent(
+        principal.organizationId,
+        'project.created',
+        project.id,
+        {
+          name: project.name,
+          status: project.status,
+          companyId: project.companyId,
+        },
+      );
       return (await this.decorate(principal.organizationId, [project]))[0];
     } catch (cause) {
       if (cause instanceof Error && 'code' in cause && cause.code === 'P2002')
@@ -347,6 +359,16 @@ export class ProjectsService {
       );
       return project;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'project.updated',
+      project.id,
+      {
+        name: project.name,
+        status: project.status,
+        companyId: project.companyId,
+      },
+    );
     return (await this.decorate(principal.organizationId, [project]))[0];
   }
 

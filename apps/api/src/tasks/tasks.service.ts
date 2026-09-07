@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import type {
   CreateTaskDto,
   TaskListQueryDto,
@@ -43,6 +44,7 @@ export class TasksService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
+    @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: TaskListQueryDto) {
@@ -105,7 +107,7 @@ export class TasksService {
     await this.validateAssignee(principal, dto.assigneeId);
     this.validateDates(dto.startDate, dto.dueDate);
     const { startDate, dueDate, ...input } = dto;
-    return this.prisma.$transaction(async (tx) => {
+    const task = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.create({
         data: {
           ...input,
@@ -157,6 +159,17 @@ export class TasksService {
       }
       return task;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'task.created',
+      task.id,
+      {
+        title: task.title,
+        status: task.status,
+        projectId: task.projectId,
+      },
+    );
+    return task;
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateTaskDto) {
@@ -174,7 +187,7 @@ export class TasksService {
       throw new BadRequestException('startDate must not be after dueDate');
     const { startDate, dueDate, ...input } = dto;
     const completed = dto.status === 'COMPLETED' && existing.status !== 'COMPLETED';
-    return this.prisma.$transaction(async (tx) => {
+    const task = await this.prisma.$transaction(async (tx) => {
       const task = await tx.task.update({
         where: { id },
         data: {
@@ -247,6 +260,13 @@ export class TasksService {
       }
       return task;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      completed ? 'task.completed' : 'task.updated',
+      task.id,
+      { title: task.title, status: task.status, projectId: task.projectId },
+    );
+    return task;
   }
 
   async archive(principal: AuthenticatedPrincipal, id: string) {

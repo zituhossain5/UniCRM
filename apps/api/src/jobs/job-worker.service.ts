@@ -5,6 +5,12 @@ import { AuthMaintenanceService } from '../auth/auth-maintenance.service';
 import type { EnvironmentVariables } from '../config/environment';
 import { EmailTransportService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { IntegrationsService } from '../integrations/integrations.service';
+import {
+  INTEGRATION_PROCESSING_JOB,
+  INTEGRATION_RECOVERY_JOB,
+  WEBHOOK_DELIVERY_JOB,
+} from '../integrations/integration.constants';
 import { JobsService } from './jobs.service';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 
@@ -19,6 +25,7 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     @Inject(EmailTransportService) private readonly emailTransport: EmailTransportService,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
+    @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -37,6 +44,11 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
         if (job.name === 'notification-sweep') return this.notifications.generateScheduled();
         if (job.name === 'auth-maintenance')
           return this.authMaintenance.cleanupExpiredCredentials();
+        if (job.name === INTEGRATION_PROCESSING_JOB)
+          return this.integrations.processInboundEvent((job.data as { eventId: string }).eventId);
+        if (job.name === WEBHOOK_DELIVERY_JOB)
+          return this.integrations.processDelivery((job.data as { deliveryId: string }).deliveryId);
+        if (job.name === INTEGRATION_RECOVERY_JOB) return this.integrations.recoverPendingWork();
         throw new Error(`Unsupported job: ${job.name}`);
       },
       {

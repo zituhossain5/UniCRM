@@ -20,6 +20,7 @@
     "prisma:deploy": "corepack pnpm --filter @unicrm/api prisma:deploy",
     "prisma:studio": "corepack pnpm --filter @unicrm/api prisma:studio",
     "test": "turbo run test",
+    "test:webhook": "corepack pnpm --filter @unicrm/api exec tsx ../../scripts/test-inbound-webhook.ts",
     "typecheck": "turbo run typecheck"
   },
   "devDependencies": {

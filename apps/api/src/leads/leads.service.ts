@@ -16,6 +16,7 @@ import { LeadPriority, LeadSource } from '../generated/prisma/enums';
 import { PipelinesService } from '../pipelines/pipelines.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { TagsService } from '../tags/tags.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import type {
   ActivityListQueryDto,
   CreateActivityDto,
@@ -52,6 +53,7 @@ export class LeadsService {
     @Inject(PipelinesService) private readonly pipelines: PipelinesService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TagsService) private readonly tags: TagsService,
+    @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: LeadListQueryDto) {
@@ -294,6 +296,16 @@ export class LeadsService {
       });
       return lead;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'lead.created',
+      lead.id,
+      {
+        title: lead.title,
+        stageId: lead.stageId,
+        ownerId: lead.ownerId,
+      },
+    );
     return (await this.decorate(principal.organizationId, [lead]))[0];
   }
 
@@ -352,6 +364,16 @@ export class LeadsService {
       });
       return lead;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'lead.updated',
+      lead.id,
+      {
+        title: lead.title,
+        stageId: lead.stageId,
+        ownerId: lead.ownerId,
+      },
+    );
     return (await this.decorate(principal.organizationId, [lead]))[0];
   }
 
@@ -396,7 +418,7 @@ export class LeadsService {
     if (stage.id === lead.stageId && pipelineId === lead.pipelineId) return lead;
     if (stage.isLost && !dto.lostReason)
       throw new BadRequestException('A lost reason is required when marking a lead lost');
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const updated = await tx.lead.update({
         where: { id },
@@ -442,6 +464,17 @@ export class LeadsService {
       });
       return updated;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'lead.stage_changed',
+      updated.id,
+      {
+        title: updated.title,
+        fromStageId: lead.stageId,
+        toStageId: updated.stageId,
+      },
+    );
+    return updated;
   }
 
   async changeOwner(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadOwnerDto) {

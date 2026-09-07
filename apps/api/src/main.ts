@@ -10,7 +10,7 @@ import { allowedCorsOrigins } from './config/cors';
 import type { EnvironmentVariables } from './config/environment';
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true });
+  const app = await NestFactory.create(AppModule, { bufferLogs: true, rawBody: true });
   const config = app.get(ConfigService<EnvironmentVariables, true>);
   const logger = app.get(StructuredLogger);
   const nodeEnvironment = config.get('NODE_ENV', { infer: true });

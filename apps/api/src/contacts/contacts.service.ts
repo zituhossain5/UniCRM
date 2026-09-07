@@ -12,6 +12,7 @@ import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto
 import { PrismaService } from '../database/prisma.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { TagsService } from '../tags/tags.service';
+import { IntegrationsService } from '../integrations/integrations.service';
 import type { ContactListQueryDto, CreateContactDto, UpdateContactDto } from './dto/contacts.dto';
 
 const contactInclude = {
@@ -31,6 +32,7 @@ export class ContactsService {
     @Inject(CustomFieldsService) private readonly customFields: CustomFieldsService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TagsService) private readonly tags: TagsService,
+    @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: ContactListQueryDto) {
@@ -139,6 +141,16 @@ export class ContactsService {
       });
       return created;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'contact.created',
+      contact.id,
+      {
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        companyId: contact.companyId,
+      },
+    );
     return (await this.decorate(principal.organizationId, [contact]))[0];
   }
 
@@ -188,6 +200,16 @@ export class ContactsService {
       });
       return updated;
     });
+    await this.integrations.publishBusinessEvent(
+      principal.organizationId,
+      'contact.updated',
+      contact.id,
+      {
+        firstName: contact.firstName,
+        lastName: contact.lastName,
+        companyId: contact.companyId,
+      },
+    );
     return (await this.decorate(principal.organizationId, [contact]))[0];
   }
 

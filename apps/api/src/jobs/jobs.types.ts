@@ -5,3 +5,6 @@ export type EmailJob = {
   text: string;
   to: string;
 };
+
+export type IntegrationEventJob = { eventId: string };
+export type WebhookDeliveryJob = { deliveryId: string };

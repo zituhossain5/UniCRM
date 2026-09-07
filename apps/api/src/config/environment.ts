@@ -29,6 +29,21 @@ const environmentSchema = z
       .max(25 * 1024 * 1024)
       .default(10 * 1024 * 1024),
     INVITATION_TTL_SECONDS: z.coerce.number().int().positive().default(172_800),
+    INTEGRATION_SECRET_ENCRYPTION_KEY: z.string().optional(),
+    INTEGRATION_WEBHOOK_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(1024 * 1024)
+      .default(262_144),
+    INTEGRATION_WEBHOOK_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+    INTEGRATION_WEBHOOK_TIMESTAMP_TOLERANCE_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(3600)
+      .default(300),
+    INTEGRATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(10_000),
     JOB_QUEUE_PREFIX: z.string().min(1).default('unicrm'),
     LOG_FORMAT: z.enum(['pretty', 'json']).default('pretty'),
     REQUEST_ID_HEADER: z.string().min(1).default('x-request-id'),
@@ -67,6 +82,27 @@ const environmentSchema = z
         message: 'CORS_ORIGINS cannot contain a wildcard in production',
         path: ['CORS_ORIGINS'],
       });
+    }
+    if (environment.NODE_ENV === 'production' && !environment.INTEGRATION_SECRET_ENCRYPTION_KEY) {
+      context.addIssue({
+        code: 'custom',
+        message: 'INTEGRATION_SECRET_ENCRYPTION_KEY is required in production',
+        path: ['INTEGRATION_SECRET_ENCRYPTION_KEY'],
+      });
+    }
+    if (environment.INTEGRATION_SECRET_ENCRYPTION_KEY) {
+      const decoded = Buffer.from(environment.INTEGRATION_SECRET_ENCRYPTION_KEY, 'base64');
+      if (
+        decoded.length !== 32 ||
+        decoded.toString('base64') !== environment.INTEGRATION_SECRET_ENCRYPTION_KEY
+      ) {
+        context.addIssue({
+          code: 'custom',
+          message:
+            'INTEGRATION_SECRET_ENCRYPTION_KEY must be a canonical base64-encoded 32-byte key',
+          path: ['INTEGRATION_SECRET_ENCRYPTION_KEY'],
+        });
+      }
     }
     if (environment.NODE_ENV === 'production') {
       try {

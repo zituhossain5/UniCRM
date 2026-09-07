@@ -54,6 +54,7 @@ services:
       SESSION_COOKIE_SECURE: 'true'
       TRUSTED_PROXY_HOPS: '0'
       WORKER_ENABLED: 'false'
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ${VALIDATION_INTEGRATION_SECRET_ENCRYPTION_KEY:?Set VALIDATION_INTEGRATION_SECRET_ENCRYPTION_KEY}
     depends_on:
       postgres:
         condition: service_healthy
@@ -86,6 +87,7 @@ services:
       SESSION_COOKIE_SECURE: 'true'
       TRUSTED_PROXY_HOPS: '0'
       WORKER_ENABLED: 'true'
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ${VALIDATION_INTEGRATION_SECRET_ENCRYPTION_KEY:?Set VALIDATION_INTEGRATION_SECRET_ENCRYPTION_KEY}
     depends_on:
       api:
         condition: service_healthy

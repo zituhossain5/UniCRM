@@ -2,6 +2,10 @@ import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import type { EnvironmentVariables } from '../config/environment';
+import {
+  INTEGRATION_PROCESSING_JOB,
+  WEBHOOK_DELIVERY_JOB,
+} from '../integrations/integration.constants';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 
 @Injectable()
@@ -19,6 +23,34 @@ export class JobsService implements OnModuleDestroy {
       removeOnComplete: { age: 86_400, count: 1000 },
       removeOnFail: { age: 604_800, count: 5000 },
     });
+  }
+
+  async enqueueIntegrationEvent(eventId: string): Promise<void> {
+    await this.getQueue().add(
+      INTEGRATION_PROCESSING_JOB,
+      { eventId },
+      {
+        jobId: `integration-event-${eventId}`,
+        attempts: 5,
+        backoff: { delay: 5_000, type: 'exponential' },
+        removeOnComplete: { age: 86_400, count: 1000 },
+        removeOnFail: { age: 604_800, count: 5000 },
+      },
+    );
+  }
+
+  async enqueueWebhookDelivery(deliveryId: string): Promise<void> {
+    await this.getQueue().add(
+      WEBHOOK_DELIVERY_JOB,
+      { deliveryId },
+      {
+        jobId: `webhook-delivery-${deliveryId}-${Date.now()}`,
+        attempts: 5,
+        backoff: { delay: 5_000, type: 'exponential' },
+        removeOnComplete: { age: 86_400, count: 1000 },
+        removeOnFail: { age: 604_800, count: 5000 },
+      },
+    );
   }
 
   async scheduleRecurringMaintenance(): Promise<void> {
@@ -39,6 +71,16 @@ export class JobsService implements OnModuleDestroy {
         {
           jobId: 'auth-maintenance',
           repeat: { every: 60 * 60_000 },
+          removeOnComplete: { age: 86_400, count: 1000 },
+          removeOnFail: { age: 604_800, count: 5000 },
+        },
+      ),
+      this.getQueue().add(
+        'integration-recovery',
+        {},
+        {
+          jobId: 'integration-recovery',
+          repeat: { every: 60_000 },
           removeOnComplete: { age: 86_400, count: 1000 },
           removeOnFail: { age: 604_800, count: 5000 },
         },

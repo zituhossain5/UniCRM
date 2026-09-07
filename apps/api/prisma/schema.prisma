@@ -211,6 +211,54 @@ enum MergeEntityType {
   CONTACT
 }
 
+enum IntegrationProvider {
+  CUSTOM
+  UNICODE_COMMERCE
+  META
+  SHOPIFY
+  WOOCOMMERCE
+}
+
+enum IntegrationConnectionStatus {
+  ACTIVE
+  DISABLED
+  ERROR
+}
+
+enum IntegrationDirection {
+  INBOUND
+  OUTBOUND
+  BOTH
+}
+
+enum IntegrationEventDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum IntegrationEventStatus {
+  RECEIVED
+  PROCESSING
+  PROCESSED
+  FAILED
+  IGNORED
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  PROCESSING
+  DELIVERED
+  FAILED
+}
+
+enum UnicrmIntegrationEntityType {
+  LEAD
+  COMPANY
+  CONTACT
+  PROJECT
+  TASK
+}
+
 model Organization {
   id                String                  @id @default(uuid()) @db.Uuid
   name              String
@@ -251,6 +299,11 @@ model Organization {
   importJobs        DataImportJob[]
   exportJobs        DataExportJob[]
   mergeRecords      DataMergeRecord[]
+  integrationConnections IntegrationConnection[]
+  integrationEvents      IntegrationEvent[]
+  webhookSubscriptions   WebhookSubscription[]
+  webhookDeliveries      WebhookDelivery[]
+  externalEntityMappings ExternalEntityMapping[]
 
   @@map("organizations")
 }
@@ -1052,4 +1105,119 @@ model DataMergeRecord {
   @@index([organizationId, sourceId])
   @@index([organizationId, targetId])
   @@map("data_merge_records")
+}
+
+model IntegrationConnection {
+  id                    String                      @id @default(uuid()) @db.Uuid
+  organizationId        String                      @map("organization_id") @db.Uuid
+  name                  String                      @db.VarChar(120)
+  provider              IntegrationProvider
+  status                IntegrationConnectionStatus @default(ACTIVE)
+  direction             IntegrationDirection       @default(BOTH)
+  configuration         Json?
+  encryptedSecret       String                      @map("encrypted_secret") @db.Text
+  secretLastFour        String                      @map("secret_last_four") @db.VarChar(4)
+  secretRotatedAt       DateTime                    @default(now()) @map("secret_rotated_at")
+  lastActivityAt        DateTime?                   @map("last_activity_at")
+  createdAt             DateTime                    @default(now()) @map("created_at")
+  updatedAt             DateTime                    @updatedAt @map("updated_at")
+  organization          Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events                IntegrationEvent[]
+  subscriptions         WebhookSubscription[]
+  externalMappings      ExternalEntityMapping[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, status, createdAt])
+  @@map("integration_connections")
+}
+
+model IntegrationEvent {
+  id              String                     @id @default(uuid()) @db.Uuid
+  organizationId  String                     @map("organization_id") @db.Uuid
+  connectionId    String?                    @map("connection_id") @db.Uuid
+  direction       IntegrationEventDirection
+  externalEventId String                     @map("external_event_id") @db.VarChar(160)
+  eventType       String                     @map("event_type") @db.VarChar(120)
+  status          IntegrationEventStatus     @default(RECEIVED)
+  attemptCount    Int                        @default(0) @map("attempt_count")
+  retryable       Boolean                    @default(false)
+  payload         Json?
+  metadata        Json?
+  receivedAt      DateTime?                  @map("received_at")
+  processedAt     DateTime?                  @map("processed_at")
+  lastError       String?                    @map("last_error") @db.VarChar(1000)
+  createdAt       DateTime                   @default(now()) @map("created_at")
+  updatedAt       DateTime                   @updatedAt @map("updated_at")
+  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection      IntegrationConnection?     @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, externalEventId])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, direction, createdAt])
+  @@map("integration_events")
+}
+
+model WebhookSubscription {
+  id              String                 @id @default(uuid()) @db.Uuid
+  organizationId  String                 @map("organization_id") @db.Uuid
+  connectionId    String                 @map("connection_id") @db.Uuid
+  name            String                 @db.VarChar(120)
+  targetUrl       String                 @map("target_url") @db.VarChar(2048)
+  encryptedSecret String                 @map("encrypted_secret") @db.Text
+  secretLastFour  String                 @map("secret_last_four") @db.VarChar(4)
+  active          Boolean                @default(true)
+  eventTypes      String[]               @map("event_types")
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection      IntegrationConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  deliveries      WebhookDelivery[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, active, createdAt])
+  @@index([organizationId, connectionId])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookDelivery {
+  id              String                  @id @default(uuid()) @db.Uuid
+  organizationId  String                  @map("organization_id") @db.Uuid
+  subscriptionId  String                  @map("subscription_id") @db.Uuid
+  eventId         String                  @map("event_id") @db.Uuid
+  eventType       String                  @map("event_type") @db.VarChar(120)
+  payload         Json
+  attempt         Int                     @default(0)
+  statusCode      Int?                    @map("status_code")
+  status          WebhookDeliveryStatus   @default(PENDING)
+  retryable       Boolean                 @default(true)
+  lastError       String?                 @map("last_error") @db.VarChar(1000)
+  createdAt       DateTime                @default(now()) @map("created_at")
+  updatedAt       DateTime                @updatedAt @map("updated_at")
+  deliveredAt     DateTime?               @map("delivered_at")
+  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription    WebhookSubscription     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@unique([subscriptionId, eventId])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, subscriptionId, createdAt])
+  @@map("webhook_deliveries")
+}
+
+model ExternalEntityMapping {
+  id                 String                        @id @default(uuid()) @db.Uuid
+  organizationId     String                        @map("organization_id") @db.Uuid
+  connectionId       String                        @map("connection_id") @db.Uuid
+  externalEntityType String                        @map("external_entity_type") @db.VarChar(80)
+  externalEntityId   String                        @map("external_entity_id") @db.VarChar(255)
+  unicrmEntityType   UnicrmIntegrationEntityType   @map("unicrm_entity_type")
+  unicrmEntityId     String                        @map("unicrm_entity_id") @db.Uuid
+  createdAt          DateTime                      @default(now()) @map("created_at")
+  updatedAt          DateTime                      @updatedAt @map("updated_at")
+  organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection         IntegrationConnection         @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+
+  @@unique([connectionId, externalEntityType, externalEntityId])
+  @@index([organizationId, unicrmEntityType, unicrmEntityId])
+  @@index([organizationId, connectionId])
+  @@map("external_entity_mappings")
 }

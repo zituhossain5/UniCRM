@@ -35,6 +35,7 @@ import { CustomFieldsModule } from './custom-fields/custom-fields.module';
 import { TagsModule } from './tags/tags.module';
 import { SavedViewsModule } from './saved-views/saved-views.module';
 import { DataManagementModule } from './data-management/data-management.module';
+import { IntegrationsModule } from './integrations/integrations.module';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { DataManagementModule } from './data-management/data-management.module';
     TagsModule,
     SavedViewsModule,
     DataManagementModule,
+    IntegrationsModule,
     LeadsModule,
     TasksModule,
     ProjectsModule,
