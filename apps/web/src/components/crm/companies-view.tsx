@@ -37,7 +37,7 @@ export function CompaniesView() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
   const [owner, setOwner] = useState('');
-  const [sort, setSort] = useState('name');
+  const [sorting, setSorting] = useState('name:asc');
   const [tag, setTag] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [page, setPage] = useState(1);
@@ -48,12 +48,10 @@ export function CompaniesView() {
   const load = useCallback(async () => {
     try {
       setError('');
-      const params = new URLSearchParams({
-        page: String(page),
-        limit: '25',
-        sort,
-        order: sort === 'name' ? 'asc' : 'desc',
-      });
+      const [sort, order] = sorting.split(':');
+      const params = new URLSearchParams({ page: String(page), limit: '25' });
+      params.set('sort', sort!);
+      params.set('order', order!);
       if (search.trim()) params.set('search', search.trim());
       if (status) params.set('status', status);
       if (owner) params.set('owner', owner);
@@ -71,7 +69,7 @@ export function CompaniesView() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load companies.');
     }
-  }, [customFields, owner, page, search, sort, status, tag]);
+  }, [customFields, owner, page, search, sorting, status, tag]);
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 250);
     return () => window.clearTimeout(timer);
@@ -99,11 +97,12 @@ export function CompaniesView() {
           ? (filters.customFields as Record<string, unknown>)
           : {},
       );
-      if (savedSort) setSort(savedSort.field);
+      if (savedSort) setSorting(`${savedSort.field}:${savedSort.order}`);
       setPage(1);
     },
     [],
   );
+  const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
 
   return (
     <div className="crm-page">
@@ -129,7 +128,7 @@ export function CompaniesView() {
       <SavedViewsBar
         entityType="COMPANY"
         filters={{ search, status, owner, tag, customFields }}
-        sort={{ field: sort, order: sort === 'name' ? 'asc' : 'desc' }}
+        sort={{ field: sortField, order: sortOrder }}
         onApply={applySavedView}
       />
       <div className="crm-toolbar">
@@ -182,12 +181,17 @@ export function CompaniesView() {
           }}
         />
         <Select
-          value={sort}
-          onValueChange={(value) => value && setSort(value)}
+          value={sorting}
+          onValueChange={(value) => {
+            if (!value) return;
+            setSorting(value);
+            setPage(1);
+          }}
           options={[
-            { label: 'Company name', value: 'name' },
-            { label: 'Recently updated', value: 'updatedAt' },
-            { label: 'Newest', value: 'createdAt' },
+            { label: 'Company name', value: 'name:asc' },
+            { label: 'Recently updated', value: 'updatedAt:desc' },
+            { label: 'Newest', value: 'createdAt:desc' },
+            { label: 'Status A-Z', value: 'status:asc' },
           ]}
         />
       </div>

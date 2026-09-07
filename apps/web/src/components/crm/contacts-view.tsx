@@ -28,7 +28,7 @@ export function ContactsView() {
   const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [search, setSearch] = useState('');
   const [company, setCompany] = useState('');
-  const [sort, setSort] = useState('lastName');
+  const [sorting, setSorting] = useState('lastName:asc');
   const [tag, setTag] = useState('');
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [page, setPage] = useState(1);
@@ -38,12 +38,10 @@ export function ContactsView() {
   const load = useCallback(async () => {
     try {
       setError('');
-      const p = new URLSearchParams({
-        page: String(page),
-        limit: '25',
-        sort,
-        order: 'asc',
-      });
+      const [sort, order] = sorting.split(':');
+      const p = new URLSearchParams({ page: String(page), limit: '25' });
+      p.set('sort', sort!);
+      p.set('order', order!);
       if (search.trim()) p.set('search', search.trim());
       if (company) p.set('company', company);
       if (tag) p.set('tag', tag);
@@ -60,7 +58,7 @@ export function ContactsView() {
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load contacts.');
     }
-  }, [company, customFields, page, search, sort, tag]);
+  }, [company, customFields, page, search, sorting, tag]);
   useEffect(() => {
     const timer = setTimeout(() => void load(), 250);
     return () => clearTimeout(timer);
@@ -95,11 +93,12 @@ export function ContactsView() {
           ? (filters.customFields as Record<string, unknown>)
           : {},
       );
-      if (savedSort) setSort(savedSort.field);
+      if (savedSort) setSorting(`${savedSort.field}:${savedSort.order}`);
       setPage(1);
     },
     [],
   );
+  const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
   return (
     <div className="crm-page">
       <PageHeader
@@ -124,7 +123,7 @@ export function ContactsView() {
       <SavedViewsBar
         entityType="CONTACT"
         filters={{ search, company, tag, customFields }}
-        sort={{ field: sort, order: 'asc' }}
+        sort={{ field: sortField, order: sortOrder }}
         onApply={applySavedView}
       />
       <div className="crm-toolbar">
@@ -166,12 +165,17 @@ export function ContactsView() {
           }}
         />
         <Select
-          value={sort}
-          onValueChange={(value) => value && setSort(value)}
+          value={sorting}
+          onValueChange={(value) => {
+            if (!value) return;
+            setSorting(value);
+            setPage(1);
+          }}
           options={[
-            { label: 'Last name', value: 'lastName' },
-            { label: 'First name', value: 'firstName' },
-            { label: 'Newest', value: 'createdAt' },
+            { label: 'Last name A-Z', value: 'lastName:asc' },
+            { label: 'First name A-Z', value: 'firstName:asc' },
+            { label: 'Newest', value: 'createdAt:desc' },
+            { label: 'Recently updated', value: 'updatedAt:desc' },
           ]}
         />
       </div>

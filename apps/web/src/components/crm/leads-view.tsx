@@ -52,7 +52,8 @@ export function LeadsView() {
   const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
   const [owner, setOwner] = useState('');
   const [source, setSource] = useState('');
-  const [sort, setSort] = useState('createdAt');
+  const [priority, setPriority] = useState('');
+  const [sorting, setSorting] = useState('createdAt:desc');
   const [page, setPage] = useState(1);
   const [error, setError] = useState('');
   const [createOpen, setCreateOpen] = useState(false);
@@ -62,13 +63,10 @@ export function LeadsView() {
   const load = useCallback(async () => {
     try {
       setError('');
-      const p = new URLSearchParams({
-        page: String(page),
-        limit: '25',
-        view,
-        sort,
-        order: sort === 'title' ? 'asc' : 'desc',
-      });
+      const [sort, order] = sorting.split(':');
+      const p = new URLSearchParams({ page: String(page), limit: '25', view });
+      p.set('sort', sort!);
+      p.set('order', order!);
       if (search.trim()) p.set('search', search.trim());
       if (stage) p.set('stage', stage);
       if (pipeline) p.set('pipeline', pipeline);
@@ -80,13 +78,14 @@ export function LeadsView() {
         p.set('customFields', JSON.stringify(customFields));
       if (owner) p.set('owner', owner);
       if (source) p.set('source', source);
+      if (priority) p.set('priority', priority);
       const result = await apiRequest<{ data: LeadRecord[]; meta: PaginationMeta }>(`/leads?${p}`);
       setLeads(result.data);
       setMeta(result.meta);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load leads.');
     }
-  }, [customFields, owner, page, pipeline, search, sort, source, stage, tag, view]);
+  }, [customFields, owner, page, pipeline, priority, search, sorting, source, stage, tag, view]);
   useEffect(() => {
     const timer = setTimeout(() => void load(), 250);
     return () => clearTimeout(timer);
@@ -117,6 +116,7 @@ export function LeadsView() {
       setStage(typeof filters.stage === 'string' ? filters.stage : '');
       setOwner(typeof filters.owner === 'string' ? filters.owner : '');
       setSource(typeof filters.source === 'string' ? filters.source : '');
+      setPriority(typeof filters.priority === 'string' ? filters.priority : '');
       setTag(typeof filters.tag === 'string' ? filters.tag : '');
       setCustomFields(
         filters.customFields &&
@@ -125,11 +125,12 @@ export function LeadsView() {
           ? (filters.customFields as Record<string, unknown>)
           : {},
       );
-      if (savedSort) setSort(savedSort.field);
+      if (savedSort) setSorting(`${savedSort.field}:${savedSort.order}`);
       setPage(1);
     },
     [],
   );
+  const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
   return (
     <div className="crm-page">
       <PageHeader
@@ -153,8 +154,8 @@ export function LeadsView() {
       />
       <SavedViewsBar
         entityType="LEAD"
-        filters={{ search, view, pipeline, stage, owner, source, tag, customFields }}
-        sort={{ field: sort, order: sort === 'title' ? 'asc' : 'desc' }}
+        filters={{ search, view, pipeline, stage, owner, source, priority, tag, customFields }}
+        sort={{ field: sortField, order: sortOrder }}
         onApply={applySavedView}
       />
       <div className="crm-view-tabs" role="tablist">
@@ -237,6 +238,21 @@ export function LeadsView() {
           ]}
           placeholder="Source"
         />
+        <Select
+          value={priority || null}
+          onValueChange={(v) => {
+            setPriority(v ?? '');
+            setPage(1);
+          }}
+          options={[
+            { label: 'All priorities', value: '' },
+            ...['LOW', 'MEDIUM', 'HIGH', 'URGENT'].map((value) => ({
+              label: labelize(value),
+              value,
+            })),
+          ]}
+          placeholder="Priority"
+        />
         <MetadataListControls
           entityType="LEAD"
           tag={tag}
@@ -251,14 +267,19 @@ export function LeadsView() {
           }}
         />
         <Select
-          value={sort}
-          onValueChange={(v) => v && setSort(v)}
+          value={sorting}
+          onValueChange={(v) => {
+            if (!v) return;
+            setSorting(v);
+            setPage(1);
+          }}
           options={[
-            { label: 'Newest', value: 'createdAt' },
-            { label: 'Recently active', value: 'lastActivityAt' },
-            { label: 'Follow-up', value: 'nextFollowUpAt' },
-            { label: 'Value', value: 'estimatedValue' },
-            { label: 'Lead name', value: 'title' },
+            { label: 'Newest', value: 'createdAt:desc' },
+            { label: 'Recently active', value: 'lastActivityAt:desc' },
+            { label: 'Follow-up soonest', value: 'nextFollowUpAt:asc' },
+            { label: 'Value high to low', value: 'estimatedValue:desc' },
+            { label: 'Value low to high', value: 'estimatedValue:asc' },
+            { label: 'Lead name A-Z', value: 'title:asc' },
           ]}
         />
       </div>

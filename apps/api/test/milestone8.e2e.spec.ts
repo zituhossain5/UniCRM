@@ -4,6 +4,7 @@ import cookieParser from 'cookie-parser';
 import type { Server } from 'node:http';
 import request from 'supertest';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { PasswordService } from '../src/auth/password.service';
 import { IdentityBootstrapService } from '../src/bootstrap.service';
 import { PrismaService } from '../src/database/prisma.service';
 
@@ -34,6 +35,7 @@ describe('Milestone 8 generic CRM flexibility', () => {
   let slugA: string;
   let slugB: string;
   let orgA: string;
+  let ownerA: string;
   let agentA: ReturnType<typeof request.agent>;
   let agentB: ReturnType<typeof request.agent>;
   let csrfA: string;
@@ -70,7 +72,12 @@ describe('Milestone 8 generic CRM flexibility', () => {
         adminFirstName: 'Owner',
         adminLastName: suffix,
       });
-    orgA = (await prisma.organization.findUniqueOrThrow({ where: { slug: slugA } })).id;
+    const organizationA = await prisma.organization.findUniqueOrThrow({
+      where: { slug: slugA },
+      include: { users: true },
+    });
+    orgA = organizationA.id;
+    ownerA = organizationA.users[0]!.id;
     agentA = request.agent(server);
     agentB = request.agent(server);
     csrfA = csrfFrom(
@@ -375,6 +382,8 @@ describe('Milestone 8 generic CRM flexibility', () => {
   });
 
   it('creates, applies, updates, deletes, validates, and isolates private and organization views', async () => {
+    const staff = await createRoleUser('Staff');
+    const staffSession = await login(staff.email);
     await mutate(agentA, csrfA, 'post', '/api/v1/saved-views')
       .send({
         entityType: 'LEAD',
@@ -383,19 +392,62 @@ describe('Milestone 8 generic CRM flexibility', () => {
         visibility: 'PRIVATE',
       })
       .expect(400);
+    await mutate(agentA, csrfA, 'post', '/api/v1/saved-views')
+      .send({
+        entityType: 'LEAD',
+        name: 'Invalid tag shape',
+        filters: { tag: 'Urgent Follow-up' },
+        visibility: 'PRIVATE',
+      })
+      .expect(400);
+    const urgent = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/tags')
+        .send({ name: 'Urgent Follow-up' })
+        .expect(201),
+    ).data;
+    const lowUrgent = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/leads')
+        .send({
+          title: 'Urgent low priority lead',
+          ownerId: ownerA,
+          priority: 'LOW',
+          estimatedValue: '50',
+          tagIds: [urgent.id],
+        })
+        .expect(201),
+    ).data;
+    const highLowerValue = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/leads')
+        .send({
+          title: 'High value lead B',
+          ownerId: ownerA,
+          priority: 'HIGH',
+          estimatedValue: '100',
+        })
+        .expect(201),
+    ).data;
+    const highHigherValue = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/leads')
+        .send({
+          title: 'High value lead A',
+          ownerId: ownerA,
+          priority: 'HIGH',
+          estimatedValue: '900',
+          tagIds: [urgent.id],
+        })
+        .expect(201),
+    ).data;
     const privateView = body<{ data: { id: string } }>(
       await mutate(agentA, csrfA, 'post', '/api/v1/saved-views')
         .send({
           entityType: 'LEAD',
-          name: 'My partnerships',
+          name: 'My High Value Leads',
           filters: {
-            pipeline: (
-              await prisma.pipeline.findFirstOrThrow({
-                where: { organizationId: orgA, name: 'Partnerships' },
-              })
-            ).id,
+            owner: ownerA,
+            priority: 'HIGH',
+            view: 'all',
           },
-          sort: { field: 'title', order: 'asc' },
+          sort: { field: 'estimatedValue', order: 'desc' },
           columns: ['title', 'stage', 'tags'],
           visibility: 'PRIVATE',
           isDefault: true,
@@ -413,22 +465,100 @@ describe('Milestone 8 generic CRM flexibility', () => {
         })
         .expect(201),
     ).data;
+    const urgentView = body<{ data: { id: string } }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/saved-views')
+        .send({
+          entityType: 'LEAD',
+          name: 'Urgent Follow-ups',
+          filters: { tag: urgent.id, view: 'all' },
+          sort: { field: 'createdAt', order: 'desc' },
+          visibility: 'ORGANIZATION',
+        })
+        .expect(201),
+    ).data;
+    const leadViews = body<{
+      data: Array<{
+        id: string;
+        filters: Record<string, unknown>;
+        sort: { field: string; order: 'asc' | 'desc' };
+      }>;
+    }>(await agentA.get('/api/v1/saved-views?entityType=LEAD').expect(200)).data;
+    expect(leadViews.find(({ id }) => id === privateView.id)).toMatchObject({
+      filters: { owner: ownerA, priority: 'HIGH', view: 'all' },
+      sort: { field: 'estimatedValue', order: 'desc' },
+    });
+    expect(leadViews.find(({ id }) => id === urgentView.id)).toMatchObject({
+      filters: { tag: urgent.id, view: 'all' },
+    });
+    const privateResults = body<{ data: Array<{ id: string }> }>(
+      await agentA
+        .get(`/api/v1/leads?view=all&owner=${ownerA}&priority=HIGH&sort=estimatedValue&order=desc`)
+        .expect(200),
+    ).data.map(({ id }) => id);
+    expect(privateResults).toEqual([highHigherValue.id, highLowerValue.id]);
+    const urgentResults = body<{ data: Array<{ id: string; tags: Array<{ id: string }> }> }>(
+      await agentA.get(`/api/v1/leads?tag=${urgent.id}`).expect(200),
+    ).data;
+    expect(urgentResults.map(({ id }) => id)).toEqual(
+      expect.arrayContaining([highHigherValue.id, lowUrgent.id]),
+    );
+    expect(urgentResults.map(({ id }) => id)).not.toContain(highLowerValue.id);
+    expect(urgentResults.every((lead) => lead.tags.some(({ id }) => id === urgent.id))).toBe(true);
     expect(
       body<{ data: Array<{ id: string }> }>(
         await agentA.get('/api/v1/saved-views?entityType=LEAD').expect(200),
       ).data.map(({ id }) => id),
     ).toContain(privateView.id);
+    const staffLeadViewIds = body<{ data: Array<{ id: string }> }>(
+      await staffSession.agent.get('/api/v1/saved-views?entityType=LEAD').expect(200),
+    ).data.map(({ id }) => id);
+    expect(staffLeadViewIds).toContain(urgentView.id);
+    expect(staffLeadViewIds).not.toContain(privateView.id);
     expect(
       body<{ data: Array<{ id: string }> }>(
         await agentB.get('/api/v1/saved-views?entityType=LEAD').expect(200),
       ).data.map(({ id }) => id),
     ).not.toContain(privateView.id);
+    expect(
+      body<{ data: Array<{ id: string }> }>(
+        await agentB.get('/api/v1/saved-views?entityType=LEAD').expect(200),
+      ).data.map(({ id }) => id),
+    ).not.toContain(urgentView.id);
     await mutate(agentA, csrfA, 'patch', `/api/v1/saved-views/${privateView.id}`)
-      .send({ name: 'Partnership pipeline', filters: { view: 'all' } })
+      .send({ name: 'High value owner view', filters: { owner: ownerA, priority: 'HIGH' } })
       .expect(200);
     await mutate(agentB, csrfB, 'patch', `/api/v1/saved-views/${orgView.id}`)
       .send({ name: 'Cross tenant edit' })
       .expect(404);
     await mutate(agentA, csrfA, 'delete', `/api/v1/saved-views/${privateView.id}`).expect(204);
   });
+
+  async function createRoleUser(roleName: 'Staff') {
+    const role = await prisma.role.findUniqueOrThrow({
+      where: { organizationId_name: { organizationId: orgA, name: roleName } },
+    });
+    const email = `${slugA}-${roleName.toLowerCase()}-${crypto.randomUUID()}@example.test`;
+    const hash = await app.get(PasswordService).hash(password);
+    return prisma.user.create({
+      data: {
+        organizationId: orgA,
+        firstName: roleName,
+        lastName: 'User',
+        email,
+        normalizedEmail: email,
+        passwordHash: hash,
+        status: 'ACTIVE',
+        emailVerifiedAt: new Date(),
+        userRoles: { create: { roleId: role.id } },
+      },
+    });
+  }
+
+  async function login(email: string) {
+    const agent = request.agent(server);
+    const csrf = csrfFrom(
+      await agent.post('/api/v1/auth/login').send({ email, password }).expect(200),
+    );
+    return { agent, csrf };
+  }
 });

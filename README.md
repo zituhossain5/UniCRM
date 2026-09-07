@@ -32,19 +32,22 @@ idempotent: it creates missing permissions, default roles, and the organization'
 pipeline, but it never resets or recreates an existing Owner. Run it after each permission-bearing
 milestone so organizations created earlier receive the new permission catalog.
 
-For the shortest daily startup, run `pnpm dev:local`; it starts PostgreSQL and Redis with Docker,
-then starts the API and web app together. Open `http://localhost:3001/login` and sign in with
+For the shortest daily startup, run `pnpm dev:local`; it starts PostgreSQL, Redis, MinIO, and
+Mailpit with Docker, then starts the API and web app together. Open `http://localhost:3001/login` and sign in with
 `UNICRM_BOOTSTRAP_ADMIN_EMAIL` and `UNICRM_BOOTSTRAP_ADMIN_PASSWORD`.
 
 ## Services
 
-| Service         | URL or port                         |
-| --------------- | ----------------------------------- |
-| Web             | http://localhost:3001               |
-| API             | http://localhost:4000/api/v1        |
-| Health endpoint | http://localhost:4000/api/v1/health |
-| PostgreSQL      | localhost:`POSTGRES_PORT`           |
-| Redis           | localhost:`REDIS_PORT`              |
+| Service         | URL or port                           |
+| --------------- | ------------------------------------- |
+| Web             | http://localhost:3001                 |
+| API             | http://localhost:4000/api/v1          |
+| Health endpoint | http://localhost:4000/api/v1/health   |
+| PostgreSQL      | localhost:`POSTGRES_PORT`             |
+| Redis           | localhost:`REDIS_PORT`                |
+| MinIO           | http://localhost:`MINIO_PORT`         |
+| MinIO console   | http://localhost:`MINIO_CONSOLE_PORT` |
+| Mailpit         | http://localhost:`MAILPIT_HTTP_PORT`  |
 
 ## Commands
 
@@ -64,9 +67,11 @@ pnpm prisma:studio       # Open Prisma Studio
 pnpm bootstrap           # Create the initial organization, roles, and Owner once
 ```
 
-Use `docker compose ps` to inspect infrastructure health and `docker compose down` to stop local
-services. Named volumes retain data. Use `docker compose down -v` only when intentionally deleting
-local development data.
+Use `docker compose ps` to inspect infrastructure health and `docker compose stop` to stop local
+services while preserving data. Named volumes retain data. Use `docker compose down -v` only when
+intentionally deleting persisted local PostgreSQL, Redis, and MinIO data for that Compose project.
+See [Docker infrastructure](infrastructure/docker/README.md) for the separate production-like
+validation workflow.
 
 ## Authentication
 
