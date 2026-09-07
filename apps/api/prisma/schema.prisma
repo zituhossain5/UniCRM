@@ -178,6 +178,39 @@ enum SavedViewVisibility {
   ORGANIZATION
 }
 
+enum DataImportEntityType {
+  COMPANY
+  CONTACT
+  LEAD
+}
+
+enum DataExportEntityType {
+  COMPANY
+  CONTACT
+  LEAD
+  PROJECT
+  TASK
+}
+
+enum DataJobStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED
+}
+
+enum DuplicateEntityType {
+  COMPANY
+  CONTACT
+  LEAD
+}
+
+enum MergeEntityType {
+  COMPANY
+  CONTACT
+}
+
 model Organization {
   id                String                  @id @default(uuid()) @db.Uuid
   name              String
@@ -215,6 +248,9 @@ model Organization {
   tags              Tag[]
   entityTags        EntityTag[]
   savedViews        SavedView[]
+  importJobs        DataImportJob[]
+  exportJobs        DataExportJob[]
+  mergeRecords      DataMergeRecord[]
 
   @@map("organizations")
 }
@@ -259,6 +295,9 @@ model User {
   paymentsRecorded    Payment[]            @relation("PaymentRecorder")
   notifications       Notification[]
   savedViews          SavedView[]
+  importJobsCreated   DataImportJob[]      @relation("ImportJobCreator")
+  exportJobsCreated   DataExportJob[]      @relation("ExportJobCreator")
+  mergeRecordsCreated DataMergeRecord[]    @relation("MergeRecordCreator")
 
   @@index([organizationId, status])
   @@map("users")
@@ -952,4 +991,65 @@ model SavedView {
   @@index([organizationId, entityType, visibility])
   @@index([userId, entityType, isDefault])
   @@map("saved_views")
+}
+
+model DataImportJob {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  entityType     DataImportEntityType @map("entity_type")
+  fileName       String               @map("file_name") @db.VarChar(255)
+  status         DataJobStatus        @default(PENDING)
+  totalRows      Int                  @default(0) @map("total_rows")
+  processedRows  Int                  @default(0) @map("processed_rows")
+  successRows    Int                  @default(0) @map("success_rows")
+  failedRows     Int                  @default(0) @map("failed_rows")
+  errorReportCsv String?              @map("error_report_csv") @db.Text
+  metadata       Json?
+  createdById    String               @map("created_by_id") @db.Uuid
+  createdAt      DateTime             @default(now()) @map("created_at")
+  completedAt    DateTime?            @map("completed_at")
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User                 @relation("ImportJobCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, entityType, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@map("data_import_jobs")
+}
+
+model DataExportJob {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  entityType     DataExportEntityType @map("entity_type")
+  fileName       String               @map("file_name") @db.VarChar(255)
+  status         DataJobStatus        @default(PENDING)
+  rowCount       Int                  @default(0) @map("row_count")
+  sizeBytes      Int                  @default(0) @map("size_bytes")
+  filters        Json?
+  createdById    String               @map("created_by_id") @db.Uuid
+  createdAt      DateTime             @default(now()) @map("created_at")
+  completedAt    DateTime?            @map("completed_at")
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User                 @relation("ExportJobCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, entityType, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@map("data_export_jobs")
+}
+
+model DataMergeRecord {
+  id             String          @id @default(uuid()) @db.Uuid
+  organizationId String          @map("organization_id") @db.Uuid
+  entityType     MergeEntityType @map("entity_type")
+  sourceId       String          @map("source_id") @db.Uuid
+  targetId       String          @map("target_id") @db.Uuid
+  metadata       Json?
+  createdById    String          @map("created_by_id") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at")
+  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User            @relation("MergeRecordCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, entityType, createdAt])
+  @@index([organizationId, sourceId])
+  @@index([organizationId, targetId])
+  @@map("data_merge_records")
 }
