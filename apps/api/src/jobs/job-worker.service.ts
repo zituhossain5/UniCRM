@@ -34,6 +34,9 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
       return;
     }
 
+    this.logger.log(
+      `BullMQ worker starting queue=${UNICRM_QUEUE} prefix=${this.config.get('JOB_QUEUE_PREFIX', { infer: true })} redis=${this.describeRedis()}`,
+    );
     this.worker = new Worker(
       UNICRM_QUEUE,
       async (job: Job) => {
@@ -60,9 +63,20 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
       this.logger.error(`Job failed: ${job?.name ?? 'unknown'} ${error.message}`, error.stack);
     });
     await this.jobs.scheduleRecurringMaintenance();
+    const recovered = await this.integrations.recoverPendingWork();
+    this.logger.log(
+      `Integration recovery queued events=${recovered.events} deliveries=${recovered.deliveries}`,
+    );
   }
 
   async onApplicationShutdown(): Promise<void> {
+    this.logger.log(`BullMQ worker stopping queue=${UNICRM_QUEUE}`);
     await this.worker?.close();
+  }
+
+  private describeRedis(): string {
+    const redisUrl = new URL(this.config.get('REDIS_URL', { infer: true }));
+    const database = redisUrl.pathname.replace('/', '') || '0';
+    return `${redisUrl.hostname}:${redisUrl.port || '6379'}/${database}`;
   }
 }

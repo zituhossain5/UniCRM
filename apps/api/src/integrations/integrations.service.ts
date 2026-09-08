@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
@@ -56,6 +57,7 @@ const subscriptionSelect = {
 
 @Injectable()
 export class IntegrationsService {
+  private readonly logger = new Logger(IntegrationsService.name);
   private readonly maxPayloadBytes: number;
   private readonly timestampToleranceSeconds: number;
   private readonly timeoutMs: number;
@@ -473,7 +475,16 @@ export class IntegrationsService {
         }),
       ),
     );
-    await Promise.allSettled(deliveries.map(({ id }) => this.jobs.enqueueWebhookDelivery(id)));
+    const results = await Promise.allSettled(
+      deliveries.map(({ id }) => this.jobs.enqueueWebhookDelivery(id)),
+    );
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        this.logger.error(
+          `Failed to enqueue webhook delivery deliveryId=${deliveries[index]?.id ?? 'unknown'} eventType=${eventType}: ${this.errorMessage(result.reason)}`,
+        );
+      }
+    });
   }
 
   async recoverPendingWork() {
@@ -492,10 +503,16 @@ export class IntegrationsService {
         take: 100,
       }),
     ]);
-    await Promise.allSettled([
+    const results = await Promise.allSettled([
       ...events.map(({ id }) => this.jobs.enqueueIntegrationEvent(id)),
       ...deliveries.map(({ id }) => this.jobs.enqueueWebhookDelivery(id)),
     ]);
+    const failed = results.filter((result) => result.status === 'rejected').length;
+    if (events.length || deliveries.length || failed) {
+      this.logger.log(
+        `Recovered pending integration work events=${events.length} deliveries=${deliveries.length} enqueueFailures=${failed}`,
+      );
+    }
     return { events: events.length, deliveries: deliveries.length };
   }
 
@@ -567,6 +584,9 @@ export class IntegrationsService {
           lastError: null,
         },
       });
+      this.logger.log(
+        `Webhook delivery delivered deliveryId=${deliveryId} eventType=${delivery.eventType} statusCode=${response.status} attempt=${attempt}`,
+      );
     } catch (error) {
       const current = await this.prisma.webhookDelivery.findUnique({
         where: { id: deliveryId },
@@ -643,6 +663,13 @@ export class IntegrationsService {
       where: { id },
       data: { status: 'FAILED', statusCode, retryable, lastError: message.slice(0, 1000) },
     });
+    this.logger.warn(
+      `Webhook delivery failed deliveryId=${id} statusCode=${statusCode ?? 'none'} retryable=${String(retryable)} error=${message.slice(0, 250)}`,
+    );
+  }
+
+  private errorMessage(error: unknown): string {
+    return error instanceof Error ? error.message : 'Unknown error';
   }
 
   private validateEventTypes(eventTypes: string[]) {

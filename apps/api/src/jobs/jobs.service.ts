@@ -1,4 +1,4 @@
-import { Inject, Injectable, OnModuleDestroy } from '@nestjs/common';
+import { Inject, Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Queue } from 'bullmq';
 import type { EnvironmentVariables } from '../config/environment';
@@ -10,6 +10,7 @@ import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 
 @Injectable()
 export class JobsService implements OnModuleDestroy {
+  private readonly logger = new Logger(JobsService.name);
   private queue?: Queue;
 
   constructor(
@@ -26,7 +27,7 @@ export class JobsService implements OnModuleDestroy {
   }
 
   async enqueueIntegrationEvent(eventId: string): Promise<void> {
-    await this.getQueue().add(
+    const job = await this.getQueue().add(
       INTEGRATION_PROCESSING_JOB,
       { eventId },
       {
@@ -37,10 +38,13 @@ export class JobsService implements OnModuleDestroy {
         removeOnFail: { age: 604_800, count: 5000 },
       },
     );
+    this.logger.debug(
+      `Queued integration event job=${job.id ?? 'unknown'} eventId=${eventId} queue=${UNICRM_QUEUE}`,
+    );
   }
 
   async enqueueWebhookDelivery(deliveryId: string): Promise<void> {
-    await this.getQueue().add(
+    const job = await this.getQueue().add(
       WEBHOOK_DELIVERY_JOB,
       { deliveryId },
       {
@@ -50,6 +54,9 @@ export class JobsService implements OnModuleDestroy {
         removeOnComplete: { age: 86_400, count: 1000 },
         removeOnFail: { age: 604_800, count: 5000 },
       },
+    );
+    this.logger.debug(
+      `Queued webhook delivery job=${job.id ?? 'unknown'} deliveryId=${deliveryId} queue=${UNICRM_QUEUE}`,
     );
   }
 
@@ -86,6 +93,9 @@ export class JobsService implements OnModuleDestroy {
         },
       ),
     ]);
+    this.logger.log(
+      `Scheduled recurring jobs queue=${UNICRM_QUEUE} prefix=${this.config.get('JOB_QUEUE_PREFIX', { infer: true })}`,
+    );
   }
 
   async onModuleDestroy(): Promise<void> {
@@ -93,10 +103,21 @@ export class JobsService implements OnModuleDestroy {
   }
 
   private getQueue(): Queue {
-    this.queue ??= new Queue(UNICRM_QUEUE, {
-      connection: { url: this.config.get('REDIS_URL', { infer: true }) },
-      prefix: this.config.get('JOB_QUEUE_PREFIX', { infer: true }),
-    });
+    if (!this.queue) {
+      this.queue = new Queue(UNICRM_QUEUE, {
+        connection: { url: this.config.get('REDIS_URL', { infer: true }) },
+        prefix: this.config.get('JOB_QUEUE_PREFIX', { infer: true }),
+      });
+      this.logger.log(
+        `BullMQ producer ready queue=${UNICRM_QUEUE} prefix=${this.config.get('JOB_QUEUE_PREFIX', { infer: true })} redis=${this.describeRedis()}`,
+      );
+    }
     return this.queue;
+  }
+
+  private describeRedis(): string {
+    const redisUrl = new URL(this.config.get('REDIS_URL', { infer: true }));
+    const database = redisUrl.pathname.replace('/', '') || '0';
+    return `${redisUrl.hostname}:${redisUrl.port || '6379'}/${database}`;
   }
 }
