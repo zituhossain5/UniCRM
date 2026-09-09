@@ -1,6 +1,7 @@
 'use client';
 
 import { AuthMessage } from '@/components/auth-screen';
+import { AuthPasswordField } from '@/components/auth-password-field';
 import { apiRequest } from '@/lib/api';
 import { Button, Input } from '@unicrm/ui';
 import Link from 'next/link';
@@ -29,21 +30,40 @@ export function LoginForm() {
 
   return (
     <form className="auth-form" onSubmit={(event) => void submit(event)}>
-      <label>
+      <label htmlFor="login-email">
         <span>Email</span>
-        <Input autoComplete="email" name="email" required type="email" />
+        <Input
+          aria-describedby={error ? 'login-error' : undefined}
+          autoComplete="email"
+          id="login-email"
+          invalid={Boolean(error)}
+          name="email"
+          required
+          type="email"
+        />
       </label>
-      <label>
-        <span>Password</span>
-        <Input autoComplete="current-password" name="password" required type="password" />
-      </label>
-      {error ? <AuthMessage>{error}</AuthMessage> : null}
+      <AuthPasswordField
+        aria-describedby={error ? 'login-error' : undefined}
+        autoComplete="current-password"
+        id="login-password"
+        invalid={Boolean(error)}
+        label="Password"
+        name="password"
+        required
+      />
+      <div className="auth-form-meta">
+        <Link className="text-link auth-link" href="/forgot-password">
+          Forgot password?
+        </Link>
+      </div>
+      {error ? (
+        <div id="login-error">
+          <AuthMessage>{error}</AuthMessage>
+        </div>
+      ) : null}
       <Button loading={loading} type="submit">
         Sign in
       </Button>
-      <Link className="text-link auth-link" href="/forgot-password">
-        Forgot password?
-      </Link>
     </form>
   );
 }

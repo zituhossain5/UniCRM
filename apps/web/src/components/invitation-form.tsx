@@ -1,8 +1,9 @@
 'use client';
 
 import { AuthMessage, AuthScreen } from '@/components/auth-screen';
+import { AuthPasswordField } from '@/components/auth-password-field';
 import { apiRequest } from '@/lib/api';
-import { Button, Input, LoadingState } from '@unicrm/ui';
+import { Button, LoadingState } from '@unicrm/ui';
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 
@@ -76,26 +77,22 @@ export function InvitationForm({ token }: { token: string }) {
             </strong>
             <span>{details.email}</span>
           </div>
-          <label>
-            <span>Password</span>
-            <Input
-              autoComplete="new-password"
-              minLength={12}
-              name="password"
-              required
-              type="password"
-            />
-          </label>
-          <label>
-            <span>Confirm password</span>
-            <Input
-              autoComplete="new-password"
-              minLength={12}
-              name="confirmPassword"
-              required
-              type="password"
-            />
-          </label>
+          <AuthPasswordField
+            autoComplete="new-password"
+            id="invitation-password"
+            label="Password"
+            minLength={12}
+            name="password"
+            required
+          />
+          <AuthPasswordField
+            autoComplete="new-password"
+            id="invitation-confirm-password"
+            label="Confirm password"
+            minLength={12}
+            name="confirmPassword"
+            required
+          />
           {error ? <AuthMessage>{error}</AuthMessage> : null}
           <Button loading={loading} type="submit">
             Accept invitation

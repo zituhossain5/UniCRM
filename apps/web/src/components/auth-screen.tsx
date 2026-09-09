@@ -11,20 +11,24 @@ export function AuthScreen({
   description: string;
 }) {
   return (
-    <main className="auth-screen">
-      <section className="auth-panel">
-        <Link className="auth-brand" href="/login">
-          <span className="brand-symbol">U</span>
-          <span>UniCRM</span>
-        </Link>
-        <header>
-          <h1>{title}</h1>
-          <p>{description}</p>
-        </header>
-        {children}
-        <p className="auth-owner">UnicodeIT</p>
-      </section>
-    </main>
+    <div className="auth-screen">
+      <main className="auth-main">
+        <section className="auth-panel">
+          <Link className="auth-brand" href="/login">
+            <span className="brand-symbol">U</span>
+            <span>UniCRM</span>
+          </Link>
+          <header>
+            <h1>{title}</h1>
+            <p>{description}</p>
+          </header>
+          {children}
+        </section>
+      </main>
+      <footer className="auth-footer">
+        Powered by <span>UnicodeIT</span>
+      </footer>
+    </div>
   );
 }
 
@@ -35,5 +39,13 @@ export function AuthMessage({
   children: ReactNode;
   tone?: 'error' | 'success';
 }) {
-  return <p className={`auth-message auth-message--${tone}`}>{children}</p>;
+  return (
+    <p
+      aria-live={tone === 'error' ? 'assertive' : 'polite'}
+      className={`auth-message auth-message--${tone}`}
+      role={tone === 'error' ? 'alert' : 'status'}
+    >
+      {children}
+    </p>
+  );
 }

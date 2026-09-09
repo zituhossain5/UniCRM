@@ -1,8 +1,9 @@
 'use client';
 
 import { AuthMessage, AuthScreen } from '@/components/auth-screen';
+import { AuthPasswordField } from '@/components/auth-password-field';
 import { apiRequest } from '@/lib/api';
-import { Button, Input } from '@unicrm/ui';
+import { Button } from '@unicrm/ui';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 
@@ -45,26 +46,22 @@ export function ResetPasswordForm({ token }: { token: string }) {
         </div>
       ) : token ? (
         <form className="auth-form" onSubmit={(event) => void submit(event)}>
-          <label>
-            <span>New password</span>
-            <Input
-              autoComplete="new-password"
-              minLength={12}
-              name="password"
-              required
-              type="password"
-            />
-          </label>
-          <label>
-            <span>Confirm password</span>
-            <Input
-              autoComplete="new-password"
-              minLength={12}
-              name="confirmPassword"
-              required
-              type="password"
-            />
-          </label>
+          <AuthPasswordField
+            autoComplete="new-password"
+            id="reset-password"
+            label="New password"
+            minLength={12}
+            name="password"
+            required
+          />
+          <AuthPasswordField
+            autoComplete="new-password"
+            id="reset-confirm-password"
+            label="Confirm password"
+            minLength={12}
+            name="confirmPassword"
+            required
+          />
           {error ? <AuthMessage>{error}</AuthMessage> : null}
           <Button loading={loading} type="submit">
             Reset password
