@@ -1,10 +1,11 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
 import type { NotificationType, Prisma } from '../generated/prisma/client';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { addUtcDays, utcToday } from '../common/date-range';
 import { paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import type { NotificationListQueryDto } from './dto/notifications.dto';
+import { AutomationsService } from '../automations/automations.service';
 
 type NotificationInput = {
   organizationId: string;
@@ -19,7 +20,10 @@ type NotificationInput = {
 
 @Injectable()
 export class NotificationsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Optional() @Inject(AutomationsService) private readonly automations?: AutomationsService,
+  ) {}
 
   async create(
     input: NotificationInput,
@@ -92,7 +96,7 @@ export class NotificationsService {
           status: { not: 'COMPLETED' },
           dueDate: { lt: today },
         },
-        select: { id: true, organizationId: true, assigneeId: true, title: true },
+        select: { id: true, organizationId: true, assigneeId: true, title: true, dueDate: true },
       }),
       this.prisma.task.findMany({
         where: {
@@ -133,7 +137,7 @@ export class NotificationsService {
       }),
     ]);
     const work: Promise<unknown>[] = [];
-    for (const task of overdueTasks)
+    for (const task of overdueTasks) {
       work.push(
         this.create({
           organizationId: task.organizationId,
@@ -146,6 +150,17 @@ export class NotificationsService {
           dedupeKey: `task:${task.id}:overdue`,
         }),
       );
+      if (this.automations)
+        work.push(
+          this.automations.publishBusinessEvent(
+            task.organizationId,
+            'task.overdue',
+            task.id,
+            { title: task.title, dueDate: task.dueDate?.toISOString() },
+            { triggerEventId: `task-overdue:${task.id}:${task.dueDate?.toISOString() ?? 'none'}` },
+          ),
+        );
+    }
     for (const task of dueSoonTasks)
       work.push(
         this.create({

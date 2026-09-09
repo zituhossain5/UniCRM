@@ -53,15 +53,22 @@ Supported events:
 lead.created
 lead.updated
 lead.stage_changed
+lead.owner_changed
 company.created
 company.updated
 contact.created
 contact.updated
 project.created
 project.updated
+project.status_changed
 task.created
 task.updated
 task.completed
+task.status_changed
+task.overdue
+quotation.created
+quotation.status_changed
+payment.created
 ```
 
 Deliveries include `eventId`, `eventType`, `occurredAt`, and an organization-safe payload. The exact JSON request body is HMAC-signed. HTTP 408, 429, 5xx, timeouts, and network failures are retryable; permanent 4xx failures are recorded without indefinite retry. Response bodies are not stored.

@@ -36,6 +36,7 @@ import { TagsModule } from './tags/tags.module';
 import { SavedViewsModule } from './saved-views/saved-views.module';
 import { DataManagementModule } from './data-management/data-management.module';
 import { IntegrationsModule } from './integrations/integrations.module';
+import { AutomationsModule } from './automations/automations.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
     SavedViewsModule,
     DataManagementModule,
     IntegrationsModule,
+    AutomationsModule,
     LeadsModule,
     TasksModule,
     ProjectsModule,

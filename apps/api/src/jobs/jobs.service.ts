@@ -6,6 +6,10 @@ import {
   INTEGRATION_PROCESSING_JOB,
   WEBHOOK_DELIVERY_JOB,
 } from '../integrations/integration.constants';
+import {
+  AUTOMATION_EXECUTION_JOB,
+  AUTOMATION_RECOVERY_JOB,
+} from '../automations/automation.constants';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 
 @Injectable()
@@ -60,6 +64,23 @@ export class JobsService implements OnModuleDestroy {
     );
   }
 
+  async enqueueAutomationRun(runId: string): Promise<void> {
+    const job = await this.getQueue().add(
+      AUTOMATION_EXECUTION_JOB,
+      { runId },
+      {
+        jobId: `automation-run-${runId}-${Date.now()}`,
+        attempts: 3,
+        backoff: { delay: 5_000, type: 'exponential' },
+        removeOnComplete: { age: 86_400, count: 1000 },
+        removeOnFail: { age: 604_800, count: 5000 },
+      },
+    );
+    this.logger.debug(
+      `Queued automation run job=${job.id ?? 'unknown'} runId=${runId} queue=${UNICRM_QUEUE}`,
+    );
+  }
+
   async scheduleRecurringMaintenance(): Promise<void> {
     await Promise.all([
       this.getQueue().add(
@@ -87,6 +108,16 @@ export class JobsService implements OnModuleDestroy {
         {},
         {
           jobId: 'integration-recovery',
+          repeat: { every: 60_000 },
+          removeOnComplete: { age: 86_400, count: 1000 },
+          removeOnFail: { age: 604_800, count: 5000 },
+        },
+      ),
+      this.getQueue().add(
+        AUTOMATION_RECOVERY_JOB,
+        {},
+        {
+          jobId: AUTOMATION_RECOVERY_JOB,
           repeat: { every: 60_000 },
           removeOnComplete: { age: 86_400, count: 1000 },
           removeOnFail: { age: 604_800, count: 5000 },

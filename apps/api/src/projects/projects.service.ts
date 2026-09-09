@@ -13,6 +13,7 @@ import { PrismaService } from '../database/prisma.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { TagsService } from '../tags/tags.service';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { AutomationsService } from '../automations/automations.service';
 import type {
   AddProjectMemberDto,
   CreateProjectDto,
@@ -81,6 +82,7 @@ export class ProjectsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TagsService) private readonly tags: TagsService,
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
+    @Inject(AutomationsService) private readonly automations: AutomationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: ProjectListQueryDto) {
@@ -243,7 +245,7 @@ export class ProjectsService {
         );
         return project;
       });
-      await this.integrations.publishBusinessEvent(
+      await this.automations.publishBusinessEvent(
         principal.organizationId,
         'project.created',
         project.id,
@@ -369,6 +371,17 @@ export class ProjectsService {
         companyId: project.companyId,
       },
     );
+    if (project.status !== existing.status)
+      await this.automations.publishBusinessEvent(
+        principal.organizationId,
+        'project.status_changed',
+        project.id,
+        {
+          name: project.name,
+          fromStatus: existing.status,
+          toStatus: project.status,
+        },
+      );
     return (await this.decorate(principal.organizationId, [project]))[0];
   }
 

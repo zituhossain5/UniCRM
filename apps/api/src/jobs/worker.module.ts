@@ -10,6 +10,7 @@ import { RedisModule } from '../redis/redis.module';
 import { JobWorkerService } from './job-worker.service';
 import { JobsModule } from './jobs.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
+import { AutomationsModule } from '../automations/automations.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { IntegrationsModule } from '../integrations/integrations.module';
     AuthModule,
     NotificationsModule,
     IntegrationsModule,
+    AutomationsModule,
   ],
   providers: [JobWorkerService, StructuredLogger],
 })

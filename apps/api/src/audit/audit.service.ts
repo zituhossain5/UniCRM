@@ -7,6 +7,8 @@ export interface AuditInput {
   actorId: string;
   entityId: string;
   entityType:
+    | 'AUTOMATION'
+    | 'AUTOMATION_RUN'
     | 'ATTACHMENT'
     | 'COMPANY'
     | 'CONTACT'

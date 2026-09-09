@@ -19,6 +19,7 @@ import type {
   UpdateQuotationDto,
 } from './dto/quotations.dto';
 import { QuotationPdfService } from './quotation-pdf.service';
+import { AutomationsService } from '../automations/automations.service';
 
 const summaryInclude = {
   company: { select: { id: true, name: true } },
@@ -55,6 +56,7 @@ export class QuotationsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(QuotationPdfService) private readonly pdf: QuotationPdfService,
+    @Inject(AutomationsService) private readonly automations: AutomationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: QuotationListQueryDto) {
@@ -183,7 +185,7 @@ export class QuotationsService {
     );
     this.validateDates(dto.issueDate, dto.expiryDate);
     const calculated = this.calculate(dto.items, dto.discountType, dto.discountValue, dto.taxRate);
-    return this.prisma.$transaction(async (tx) => {
+    const quotation = await this.prisma.$transaction(async (tx) => {
       const counter = await tx.quotationNumberCounter.upsert({
         where: { organizationId: principal.organizationId },
         create: { organizationId: principal.organizationId, nextNumber: 2 },
@@ -239,6 +241,17 @@ export class QuotationsService {
       );
       return publicQuotation(quotation);
     });
+    await this.automations.publishBusinessEvent(
+      principal.organizationId,
+      'quotation.created',
+      quotation.id,
+      {
+        quotationNumber: quotation.quotationNumber,
+        status: quotation.status,
+        total: quotation.total.toString(),
+      },
+    );
+    return quotation;
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateQuotationDto) {
@@ -357,7 +370,7 @@ export class QuotationsService {
       await this.storage.put(snapshotKey, await this.pdf.generate(quotation));
     }
     try {
-      return await this.prisma.$transaction(async (tx) => {
+      const updated = await this.prisma.$transaction(async (tx) => {
         const changed = await tx.quotation.updateMany({
           where: {
             id,
@@ -413,6 +426,17 @@ export class QuotationsService {
           await tx.quotation.findUniqueOrThrow({ where: { id }, include: detailInclude }),
         );
       });
+      await this.automations.publishBusinessEvent(
+        principal.organizationId,
+        'quotation.status_changed',
+        updated.id,
+        {
+          quotationNumber: updated.quotationNumber,
+          fromStatus: quotation.status,
+          toStatus: updated.status,
+        },
+      );
+      return updated;
     } catch (error) {
       if (snapshotKey) await this.storage.delete(snapshotKey);
       throw error;
@@ -541,15 +565,41 @@ export class QuotationsService {
     return quotation;
   }
 
-  private expireDue(organizationId: string) {
-    return this.prisma.quotation.updateMany({
+  private async expireDue(organizationId: string) {
+    const expiryDate = dateOnly(new Date().toISOString())!;
+    const due = await this.prisma.quotation.findMany({
       where: {
         organizationId,
         status: 'SENT',
-        expiryDate: { lt: dateOnly(new Date().toISOString()) },
+        expiryDate: { lt: expiryDate },
       },
-      data: { status: 'EXPIRED' },
+      select: { id: true, quotationNumber: true, expiryDate: true },
     });
+    if (!due.length) return { count: 0 };
+    const changed = await Promise.all(
+      due.map(async (quotation) => {
+        const result = await this.prisma.quotation.updateMany({
+          where: { id: quotation.id, organizationId, status: 'SENT' },
+          data: { status: 'EXPIRED' },
+        });
+        if (result.count)
+          await this.automations.publishBusinessEvent(
+            organizationId,
+            'quotation.status_changed',
+            quotation.id,
+            {
+              quotationNumber: quotation.quotationNumber,
+              fromStatus: 'SENT',
+              toStatus: 'EXPIRED',
+            },
+            {
+              triggerEventId: `quotation-expired:${quotation.id}:${quotation.expiryDate?.toISOString() ?? 'none'}`,
+            },
+          );
+        return result.count;
+      }),
+    );
+    return { count: changed.reduce((total, count) => total + count, 0) };
   }
 
   private async relatedActivity(

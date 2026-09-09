@@ -195,6 +195,7 @@ docs/           Product and architecture blueprint
 
 ## Milestone boundary
 
-Milestone 5 stops at quotations, quotation PDF snapshots, payments, and project commercial
-balances. Invoices, accounting ledgers, payment gateways, business-metric dashboards, advanced
-reports, notifications, automation, AI, and SaaS billing remain out of scope.
+Milestone 11 includes the controlled CRM automation engine documented in
+`docs/MILESTONE_11_CRM_AUTOMATION_V1.md`. Ecommerce workflows, arbitrary code or HTTP actions,
+visual workflow graphs, AI, email/calendar synchronization, accounting ledgers, and SaaS billing
+remain out of scope.

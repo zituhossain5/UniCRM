@@ -17,6 +17,7 @@ import { PipelinesService } from '../pipelines/pipelines.service';
 import { CustomFieldsService } from '../custom-fields/custom-fields.service';
 import { TagsService } from '../tags/tags.service';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { AutomationsService } from '../automations/automations.service';
 import type {
   ActivityListQueryDto,
   CreateActivityDto,
@@ -54,6 +55,7 @@ export class LeadsService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(TagsService) private readonly tags: TagsService,
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
+    @Inject(AutomationsService) private readonly automations: AutomationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: LeadListQueryDto) {
@@ -296,16 +298,11 @@ export class LeadsService {
       });
       return lead;
     });
-    await this.integrations.publishBusinessEvent(
-      principal.organizationId,
-      'lead.created',
-      lead.id,
-      {
-        title: lead.title,
-        stageId: lead.stageId,
-        ownerId: lead.ownerId,
-      },
-    );
+    await this.automations.publishBusinessEvent(principal.organizationId, 'lead.created', lead.id, {
+      title: lead.title,
+      stageId: lead.stageId,
+      ownerId: lead.ownerId,
+    });
     return (await this.decorate(principal.organizationId, [lead]))[0];
   }
 
@@ -464,7 +461,7 @@ export class LeadsService {
       });
       return updated;
     });
-    await this.integrations.publishBusinessEvent(
+    await this.automations.publishBusinessEvent(
       principal.organizationId,
       'lead.stage_changed',
       updated.id,
@@ -484,7 +481,7 @@ export class LeadsService {
     const owner = dto.ownerId
       ? await this.prisma.user.findUnique({ where: { id: dto.ownerId }, select: userSelect })
       : null;
-    return this.prisma.$transaction(async (tx) => {
+    const updated = await this.prisma.$transaction(async (tx) => {
       const now = new Date();
       const updated = await tx.lead.update({
         where: { id },
@@ -515,6 +512,17 @@ export class LeadsService {
       });
       return updated;
     });
+    await this.automations.publishBusinessEvent(
+      principal.organizationId,
+      'lead.owner_changed',
+      updated.id,
+      {
+        title: updated.title,
+        fromOwnerId: lead.ownerId,
+        toOwnerId: updated.ownerId,
+      },
+    );
+    return updated;
   }
 
   async activities(principal: AuthenticatedPrincipal, leadId: string, query: ActivityListQueryDto) {

@@ -135,6 +135,7 @@ enum PaymentMethod {
 }
 
 enum NotificationType {
+  AUTOMATION
   TASK_ASSIGNED
   TASK_DUE_SOON
   TASK_OVERDUE
@@ -259,6 +260,36 @@ enum UnicrmIntegrationEntityType {
   TASK
 }
 
+enum AutomationEntityType {
+  LEAD
+  PROJECT
+  TASK
+  QUOTATION
+  PAYMENT
+}
+
+enum AutomationTriggerType {
+  LEAD_CREATED
+  LEAD_STAGE_CHANGED
+  LEAD_OWNER_CHANGED
+  PROJECT_CREATED
+  PROJECT_STATUS_CHANGED
+  TASK_CREATED
+  TASK_STATUS_CHANGED
+  TASK_OVERDUE
+  QUOTATION_CREATED
+  QUOTATION_STATUS_CHANGED
+  PAYMENT_CREATED
+}
+
+enum AutomationRunStatus {
+  PENDING
+  PROCESSING
+  SUCCEEDED
+  SKIPPED
+  FAILED
+}
+
 model Organization {
   id                String                  @id @default(uuid()) @db.Uuid
   name              String
@@ -304,6 +335,8 @@ model Organization {
   webhookSubscriptions   WebhookSubscription[]
   webhookDeliveries      WebhookDelivery[]
   externalEntityMappings ExternalEntityMapping[]
+  automationRules         AutomationRule[]
+  automationRuns          AutomationRun[]
 
   @@map("organizations")
 }
@@ -351,6 +384,7 @@ model User {
   importJobsCreated   DataImportJob[]      @relation("ImportJobCreator")
   exportJobsCreated   DataExportJob[]      @relation("ExportJobCreator")
   mergeRecordsCreated DataMergeRecord[]    @relation("MergeRecordCreator")
+  automationRulesCreated AutomationRule[]   @relation("AutomationRuleCreator")
 
   @@index([organizationId, status])
   @@map("users")
@@ -1220,4 +1254,53 @@ model ExternalEntityMapping {
   @@index([organizationId, unicrmEntityType, unicrmEntityId])
   @@index([organizationId, connectionId])
   @@map("external_entity_mappings")
+}
+
+model AutomationRule {
+  id             String                    @id @default(uuid()) @db.Uuid
+  organizationId String                    @map("organization_id") @db.Uuid
+  name           String                    @db.VarChar(160)
+  entityType     AutomationEntityType      @map("entity_type")
+  triggerType    AutomationTriggerType     @map("trigger_type")
+  triggerConfig  Json?                     @map("trigger_config")
+  conditions     Json
+  actions        Json
+  active         Boolean                   @default(true)
+  createdById    String                    @map("created_by_id") @db.Uuid
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  updatedAt      DateTime                  @updatedAt @map("updated_at")
+  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User                      @relation("AutomationRuleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  runs           AutomationRun[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, entityType, triggerType, active])
+  @@map("automation_rules")
+}
+
+model AutomationRun {
+  id               String                 @id @default(uuid()) @db.Uuid
+  organizationId   String                 @map("organization_id") @db.Uuid
+  automationRuleId String                 @map("automation_rule_id") @db.Uuid
+  triggerEventId   String                 @map("trigger_event_id") @db.VarChar(220)
+  entityType       AutomationEntityType   @map("entity_type")
+  entityId         String                 @map("entity_id") @db.Uuid
+  status           AutomationRunStatus    @default(PENDING)
+  attemptCount     Int                    @default(0) @map("attempt_count")
+  depth            Int                    @default(0)
+  retryable        Boolean                @default(true)
+  triggerPayload   Json                   @map("trigger_payload")
+  actionResults    Json?                  @map("action_results")
+  startedAt        DateTime?              @map("started_at")
+  completedAt      DateTime?              @map("completed_at")
+  errorSummary     String?                @map("error_summary") @db.VarChar(1000)
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  automationRule   AutomationRule         @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+
+  @@unique([automationRuleId, triggerEventId])
+  @@index([organizationId, status, createdAt])
+  @@index([organizationId, entityType, entityId, createdAt])
+  @@map("automation_runs")
 }

@@ -6,6 +6,11 @@ import type { EnvironmentVariables } from '../config/environment';
 import { EmailTransportService } from '../email/email.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { AutomationsService } from '../automations/automations.service';
+import {
+  AUTOMATION_EXECUTION_JOB,
+  AUTOMATION_RECOVERY_JOB,
+} from '../automations/automation.constants';
 import {
   INTEGRATION_PROCESSING_JOB,
   INTEGRATION_RECOVERY_JOB,
@@ -26,6 +31,7 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
+    @Inject(AutomationsService) private readonly automations: AutomationsService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -52,6 +58,9 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
         if (job.name === WEBHOOK_DELIVERY_JOB)
           return this.integrations.processDelivery((job.data as { deliveryId: string }).deliveryId);
         if (job.name === INTEGRATION_RECOVERY_JOB) return this.integrations.recoverPendingWork();
+        if (job.name === AUTOMATION_EXECUTION_JOB)
+          return this.automations.processRun((job.data as { runId: string }).runId);
+        if (job.name === AUTOMATION_RECOVERY_JOB) return this.automations.recoverPendingRuns();
         throw new Error(`Unsupported job: ${job.name}`);
       },
       {
@@ -67,6 +76,8 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     this.logger.log(
       `Integration recovery queued events=${recovered.events} deliveries=${recovered.deliveries}`,
     );
+    const recoveredAutomations = await this.automations.recoverPendingRuns();
+    this.logger.log(`Automation recovery queued runs=${recoveredAutomations.runs}`);
   }
 
   async onApplicationShutdown(): Promise<void> {

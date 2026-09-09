@@ -14,6 +14,7 @@ import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { IntegrationsService } from '../integrations/integrations.service';
+import { AutomationsService } from '../automations/automations.service';
 import type {
   CreateTaskDto,
   TaskListQueryDto,
@@ -45,6 +46,7 @@ export class TasksService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
+    @Inject(AutomationsService) private readonly automations: AutomationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: TaskListQueryDto) {
@@ -159,16 +161,11 @@ export class TasksService {
       }
       return task;
     });
-    await this.integrations.publishBusinessEvent(
-      principal.organizationId,
-      'task.created',
-      task.id,
-      {
-        title: task.title,
-        status: task.status,
-        projectId: task.projectId,
-      },
-    );
+    await this.automations.publishBusinessEvent(principal.organizationId, 'task.created', task.id, {
+      title: task.title,
+      status: task.status,
+      projectId: task.projectId,
+    });
     return task;
   }
 
@@ -266,6 +263,18 @@ export class TasksService {
       task.id,
       { title: task.title, status: task.status, projectId: task.projectId },
     );
+    if (task.status !== existing.status)
+      await this.automations.publishBusinessEvent(
+        principal.organizationId,
+        'task.status_changed',
+        task.id,
+        {
+          title: task.title,
+          projectId: task.projectId,
+          fromStatus: existing.status,
+          toStatus: task.status,
+        },
+      );
     return task;
   }
 

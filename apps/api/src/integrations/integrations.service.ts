@@ -439,8 +439,9 @@ export class IntegrationsService {
     eventType: string,
     entityId: string,
     data: Record<string, unknown>,
+    externalEventId: string = randomUUID(),
   ) {
-    if (!SUPPORTED_WEBHOOK_EVENTS.has(eventType)) return;
+    if (!SUPPORTED_WEBHOOK_EVENTS.has(eventType)) return null;
     const subscriptions = await this.prisma.webhookSubscription.findMany({
       where: {
         organizationId,
@@ -449,13 +450,13 @@ export class IntegrationsService {
         connection: { status: 'ACTIVE', direction: { in: ['OUTBOUND', 'BOTH'] } },
       },
     });
-    if (!subscriptions.length) return;
+    if (!subscriptions.length) return null;
     const safePayload = { entityId, ...this.redactPayload(data) };
     const event = await this.prisma.integrationEvent.create({
       data: {
         organizationId,
         direction: 'OUTBOUND',
-        externalEventId: randomUUID(),
+        externalEventId,
         eventType,
         status: 'PROCESSED',
         processedAt: new Date(),
@@ -485,6 +486,63 @@ export class IntegrationsService {
         );
       }
     });
+    return event;
+  }
+
+  async triggerConfiguredWebhook(input: {
+    organizationId: string;
+    subscriptionId: string;
+    eventType: string;
+    entityId: string;
+    payload: Record<string, unknown>;
+    idempotencyKey: string;
+  }) {
+    const subscription = await this.prisma.webhookSubscription.findFirst({
+      where: {
+        id: input.subscriptionId,
+        organizationId: input.organizationId,
+        active: true,
+        connection: {
+          status: 'ACTIVE',
+          direction: { in: ['OUTBOUND', 'BOTH'] },
+        },
+      },
+    });
+    if (!subscription) throw new BadRequestException('Outbound webhook is invalid or inactive');
+    const safePayload = { entityId: input.entityId, ...this.redactPayload(input.payload) };
+    const event = await this.prisma.integrationEvent.upsert({
+      where: {
+        connectionId_externalEventId: {
+          connectionId: subscription.connectionId,
+          externalEventId: input.idempotencyKey,
+        },
+      },
+      create: {
+        organizationId: input.organizationId,
+        connectionId: subscription.connectionId,
+        direction: 'OUTBOUND',
+        externalEventId: input.idempotencyKey,
+        eventType: input.eventType,
+        status: 'PROCESSED',
+        processedAt: new Date(),
+        payload: safePayload,
+        metadata: { source: 'AUTOMATION' },
+      },
+      update: {},
+    });
+    const delivery = await this.prisma.webhookDelivery.upsert({
+      where: { subscriptionId_eventId: { subscriptionId: subscription.id, eventId: event.id } },
+      create: {
+        organizationId: input.organizationId,
+        subscriptionId: subscription.id,
+        eventId: event.id,
+        eventType: input.eventType,
+        payload: safePayload,
+      },
+      update: {},
+    });
+    if (delivery.status === 'PENDING') await this.jobs.enqueueWebhookDelivery(delivery.id);
+    return delivery;
   }
 
   async recoverPendingWork() {

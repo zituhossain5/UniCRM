@@ -8,3 +8,4 @@ export type EmailJob = {
 
 export type IntegrationEventJob = { eventId: string };
 export type WebhookDeliveryJob = { deliveryId: string };
+export type AutomationRunJob = { runId: string };

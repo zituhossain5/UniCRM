@@ -12,6 +12,7 @@ import { normalizeListQuery, paginationMeta } from '../common/dto/list-query.dto
 import { PrismaService } from '../database/prisma.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import type { CreatePaymentDto, PaymentListQueryDto, UpdatePaymentDto } from './dto/payments.dto';
+import { AutomationsService } from '../automations/automations.service';
 
 const include = {
   company: { select: { id: true, name: true } },
@@ -28,6 +29,7 @@ export class PaymentsService {
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
+    @Inject(AutomationsService) private readonly automations: AutomationsService,
   ) {}
 
   async list(principal: AuthenticatedPrincipal, query: PaymentListQueryDto) {
@@ -119,7 +121,7 @@ export class PaymentsService {
       dto.projectId,
       dto.quotationId,
     );
-    return this.prisma.$transaction(async (tx) => {
+    const payment = await this.prisma.$transaction(async (tx) => {
       const payment = await tx.payment.create({
         data: {
           ...dto,
@@ -176,6 +178,17 @@ export class PaymentsService {
       }
       return payment;
     });
+    await this.automations.publishBusinessEvent(
+      principal.organizationId,
+      'payment.created',
+      payment.id,
+      {
+        amount: payment.amount.toString(),
+        currency: payment.currency,
+        projectId: payment.projectId,
+      },
+    );
+    return payment;
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdatePaymentDto) {
