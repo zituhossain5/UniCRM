@@ -1265,6 +1265,7 @@ model AutomationRule {
   triggerConfig  Json?                     @map("trigger_config")
   conditions     Json
   actions        Json
+  graphMetadata  Json?                     @map("graph_metadata")
   active         Boolean                   @default(true)
   createdById    String                    @map("created_by_id") @db.Uuid
   createdAt      DateTime                  @default(now()) @map("created_at")

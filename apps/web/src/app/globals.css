@@ -3114,6 +3114,17 @@ kbd {
 .settings-content {
   padding-top: 28px;
 }
+.page-container--automation-editor {
+  height: calc(100dvh - var(--topbar-height));
+  max-width: none;
+  padding: 14px 16px 18px;
+  overflow: hidden;
+}
+.settings-editor-route {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
 .settings-section {
   display: grid;
   width: min(100%, 720px);
@@ -3267,6 +3278,135 @@ kbd {
 }
 
 /* Milestone 11 automation editor */
+.automation-management-list {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.automation-management-row {
+  display: grid;
+  min-height: 76px;
+  grid-template-columns: minmax(220px, 1.5fr) minmax(90px, 0.45fr) minmax(190px, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.automation-management-row:last-child {
+  border-bottom: 0;
+}
+.automation-management-summary {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.automation-management-summary strong,
+.automation-management-summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.automation-management-summary strong {
+  font-size: 13px;
+}
+.automation-management-summary small,
+.automation-list-muted,
+.automation-list-last-run time {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.automation-management-summary:hover strong {
+  color: var(--primary-text);
+}
+.automation-management-summary:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.automation-list-last-run {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.automation-management-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 7px;
+}
+.automation-management-empty {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+  padding: 48px 20px;
+  text-align: center;
+}
+.automation-management-empty p {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.automation-editor-page {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+.automation-workspace-header {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 11px;
+  border-bottom: 1px solid var(--border);
+}
+.automation-back-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+.automation-back-link:hover {
+  color: var(--foreground);
+}
+.automation-back-link:focus-visible {
+  border-radius: var(--radius-sm);
+  outline: 2px solid var(--focus);
+  outline-offset: 3px;
+}
+.automation-workspace-title {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  margin-top: 5px;
+}
+.automation-workspace-title h1 {
+  max-width: min(55vw, 680px);
+  margin: 0;
+  overflow: hidden;
+  font-size: 18px;
+  font-weight: 680;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.automation-workspace-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
 .automation-editor {
   display: grid;
   width: min(100%, 860px);
@@ -3275,6 +3415,24 @@ kbd {
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   background: var(--surface);
+}
+.automation-editor-page .automation-editor {
+  min-height: 0;
+  overflow-y: auto;
+}
+.automation-editor--visual {
+  display: flex;
+  width: 100%;
+  flex: 1;
+  flex-direction: column;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.automation-editor--visual .automation-name-field {
+  width: min(100%, 520px);
 }
 .automation-editor-header,
 .automation-builder-heading,
@@ -3457,9 +3615,201 @@ kbd {
 .automation-editor-actions .ui-button {
   min-width: 148px;
 }
+.automation-mode-switch {
+  display: inline-flex;
+  width: fit-content;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface-subtle);
+}
+.automation-mode-switch button {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+.automation-mode-switch button[aria-selected='true'] {
+  background: var(--surface);
+  color: var(--foreground);
+  box-shadow: var(--shadow-sm);
+}
+.automation-mode-switch button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.automation-visual-builder {
+  display: grid;
+  gap: 12px;
+}
+.automation-editor--visual .automation-visual-builder {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+.automation-visual-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.automation-visual-workspace {
+  display: grid;
+  height: calc(100dvh - 245px);
+  min-height: 460px;
+  grid-template-columns: minmax(0, 1fr) 350px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.automation-canvas {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  background:
+    radial-gradient(
+      circle at top left,
+      color-mix(in srgb, var(--primary), transparent 88%),
+      transparent 36%
+    ),
+    var(--surface-subtle);
+}
+.automation-canvas .react-flow__controls,
+.automation-canvas .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.automation-canvas .react-flow__controls-button {
+  border-bottom-color: var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+  fill: currentColor;
+}
+.automation-canvas .react-flow__controls-button:hover {
+  background: var(--surface-subtle);
+}
+.automation-canvas .react-flow__minimap {
+  background: var(--surface);
+}
+.automation-flow-node {
+  display: grid;
+  width: 210px;
+  gap: 3px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+.automation-flow-node.is-selected {
+  border-color: var(--ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring), transparent 76%);
+}
+.automation-flow-node > span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.automation-flow-node > strong {
+  color: var(--foreground);
+  font-size: 13px;
+}
+.automation-flow-node > small {
+  overflow: hidden;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.automation-flow-node--primary {
+  border-left: 3px solid var(--primary);
+}
+.automation-flow-node--warning {
+  border-left: 3px solid var(--warning);
+}
+.automation-flow-node--success {
+  border-left: 3px solid var(--success);
+}
+.automation-flow-node-false {
+  opacity: 0.45;
+}
+.automation-node-panel {
+  display: flex;
+  min-height: 0;
+  align-content: start;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  overflow-y: auto;
+  border-left: 1px solid var(--border);
+  background: var(--surface);
+}
+.automation-node-panel > header {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.automation-node-panel h4,
+.automation-node-panel p {
+  margin: 0;
+}
+.automation-node-panel h4 {
+  font-size: 14px;
+}
+.automation-node-panel p,
+.automation-branch-note {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.automation-node-fields {
+  display: grid;
+  gap: 10px;
+}
+.automation-node-panel .automation-condition-row,
+.automation-node-panel .automation-action-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+.automation-node-panel .automation-condition-value,
+.automation-node-panel .automation-condition-row > .ui-icon-button,
+.automation-node-panel .automation-action-row > .ui-icon-button {
+  grid-column: 1;
+  grid-row: auto;
+}
+.automation-node-panel .automation-condition-row > .ui-icon-button,
+.automation-node-panel .automation-action-row > .ui-icon-button {
+  justify-self: end;
+}
 .automation-run-row {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
+}
+.automation-run-history {
+  width: min(100%, 1120px);
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.automation-run-history > h3,
+.automation-run-history > p {
+  margin: 0;
+  padding: 14px;
+}
+.automation-run-history > h3 {
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
 }
 .automation-run-row:last-child {
   border-bottom: 0;
@@ -3510,6 +3860,39 @@ kbd {
   padding: 0 14px 14px 36px;
   color: var(--foreground);
 }
+.automation-run-graph {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.automation-run-graph-node {
+  display: grid;
+  min-width: 132px;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-subtle);
+}
+.automation-run-graph-node small,
+.automation-run-graph-node em {
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-style: normal;
+}
+.automation-run-graph-node strong {
+  color: var(--foreground);
+  font-size: 12px;
+}
+.automation-run-graph-node.is-completed {
+  border-color: color-mix(in srgb, var(--success), transparent 54%);
+}
+.automation-run-graph-node.is-failed {
+  border-color: color-mix(in srgb, var(--danger), transparent 42%);
+}
+.automation-run-graph-node.is-skipped {
+  border-color: color-mix(in srgb, var(--warning), transparent 45%);
+}
 .automation-run-details > div {
   display: grid;
   gap: 5px;
@@ -3551,7 +3934,57 @@ kbd {
   color: var(--danger);
   font-size: 13px;
 }
+@media (max-width: 1100px) {
+  .automation-visual-workspace {
+    grid-template-columns: minmax(0, 1fr) 320px;
+  }
+  .automation-management-row {
+    grid-template-columns: minmax(200px, 1.35fr) 90px minmax(160px, 0.9fr) auto;
+    gap: 12px;
+  }
+}
+@media (max-height: 700px) and (min-width: 901px) {
+  .page-container--automation-editor {
+    height: auto;
+    min-height: calc(100dvh - var(--topbar-height));
+    overflow-y: auto;
+  }
+  .settings-editor-route,
+  .automation-editor-page {
+    height: auto;
+    min-height: 100%;
+  }
+  .automation-editor--visual {
+    overflow: visible;
+  }
+}
 @media (max-width: 900px) {
+  .page-container--automation-editor {
+    height: auto;
+    min-height: calc(100dvh - var(--topbar-height));
+    overflow-y: auto;
+  }
+  .settings-editor-route,
+  .automation-editor-page {
+    height: auto;
+    min-height: 100%;
+  }
+  .automation-editor--visual {
+    overflow: visible;
+  }
+  .automation-management-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .automation-management-state,
+  .automation-list-last-run,
+  .automation-list-muted {
+    grid-column: 1;
+  }
+  .automation-management-actions {
+    grid-column: 2;
+    grid-row: 1 / span 3;
+    flex-direction: column;
+  }
   .automation-run-main {
     grid-template-columns: 100px minmax(0, 1fr);
   }
@@ -3566,6 +3999,21 @@ kbd {
   }
   .automation-run-details {
     padding-left: 28px;
+  }
+  .automation-visual-workspace {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+    min-height: 0;
+    overflow: visible;
+  }
+  .automation-canvas {
+    height: 520px;
+    min-height: 520px;
+  }
+  .automation-node-panel {
+    max-height: 420px;
+    border-top: 1px solid var(--border);
+    border-left: 0;
   }
   .automation-condition-row,
   .automation-action-row {
@@ -3594,6 +4042,7 @@ kbd {
     padding-bottom: 16px;
   }
   .settings-section-header,
+  .automation-workspace-header,
   .role-row,
   .session-row {
     align-items: stretch;
@@ -3612,6 +4061,40 @@ kbd {
   .automation-editor {
     gap: 14px;
     padding: 14px;
+  }
+  .page-container--automation-editor {
+    padding: 12px;
+  }
+  .automation-workspace-header {
+    gap: 12px;
+  }
+  .automation-workspace-title {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .automation-workspace-title h1 {
+    max-width: calc(100vw - 24px);
+  }
+  .automation-workspace-actions {
+    width: 100%;
+  }
+  .automation-workspace-actions .ui-button {
+    flex: 1;
+  }
+  .automation-management-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+  .automation-management-actions,
+  .automation-management-state,
+  .automation-list-last-run,
+  .automation-list-muted {
+    grid-column: 1;
+    grid-row: auto;
+  }
+  .automation-management-actions {
+    flex-direction: row;
+    justify-content: flex-start;
   }
   .automation-editor-header {
     align-items: flex-start;
@@ -3640,6 +4123,25 @@ kbd {
   .automation-add-button,
   .automation-editor-actions .ui-button {
     width: 100%;
+  }
+  .automation-mode-switch,
+  .automation-mode-switch button,
+  .automation-visual-toolbar .ui-button {
+    width: 100%;
+  }
+  .automation-mode-switch {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+  .automation-visual-workspace,
+  .automation-canvas {
+    min-height: 400px;
+  }
+  .automation-canvas {
+    height: 400px;
+  }
+  .automation-node-panel {
+    max-height: none;
   }
   .automation-run-row > summary {
     align-items: stretch;

@@ -127,6 +127,10 @@ export class CreateAutomationRuleDto {
   @IsBoolean()
   @IsOptional()
   active?: boolean;
+
+  @IsObject()
+  @IsOptional()
+  graphMetadata?: Record<string, unknown>;
 }
 
 export class UpdateAutomationRuleDto {
@@ -168,4 +172,8 @@ export class UpdateAutomationRuleDto {
   @IsBoolean()
   @IsOptional()
   active?: boolean;
+
+  @IsObject()
+  @IsOptional()
+  graphMetadata?: Record<string, unknown>;
 }

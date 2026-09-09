@@ -40,6 +40,27 @@ import type {
 } from './dto/automations.dto';
 
 type Snapshot = Record<string, unknown> & { id: string };
+type AutomationGraphNode = {
+  id: string;
+  type: 'trigger' | 'condition' | 'action';
+  position?: { x?: number; y?: number };
+  data?: Record<string, unknown>;
+};
+type AutomationGraphEdge = {
+  id?: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+};
+type AutomationGraphMetadata = {
+  version?: number;
+  nodes?: AutomationGraphNode[];
+  edges?: AutomationGraphEdge[];
+  viewport?: Record<string, unknown>;
+};
+type CompiledAutomationDefinition = CreateAutomationRuleDto & {
+  graphMetadata: AutomationGraphMetadata;
+};
 type ActionResult = {
   index: number;
   type: string;
@@ -57,6 +78,7 @@ type RunWithRule = AutomationRun & {
     triggerConfig: Prisma.JsonValue | null;
     conditions: Prisma.JsonValue;
     actions: Prisma.JsonValue;
+    graphMetadata: Prisma.JsonValue | null;
   };
 };
 
@@ -136,20 +158,21 @@ export class AutomationsService {
   }
 
   async createRule(principal: AuthenticatedPrincipal, dto: CreateAutomationRuleDto) {
-    await this.validateDefinition(principal.organizationId, dto);
+    const definition = await this.compileDefinition(principal.organizationId, dto);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const rule = await tx.automationRule.create({
           data: {
             organizationId: principal.organizationId,
             createdById: principal.userId,
-            name: dto.name.trim(),
-            entityType: dto.entityType,
-            triggerType: dto.triggerType,
-            triggerConfig: this.jsonOrNull(dto.triggerConfig),
-            conditions: this.jsonRequired(dto.conditions),
-            actions: this.jsonRequired(dto.actions),
-            active: dto.active ?? true,
+            name: definition.name.trim(),
+            entityType: definition.entityType,
+            triggerType: definition.triggerType,
+            triggerConfig: this.jsonOrNull(definition.triggerConfig),
+            conditions: this.jsonRequired(definition.conditions),
+            actions: this.jsonRequired(definition.actions),
+            graphMetadata: this.jsonRequired(definition.graphMetadata),
+            active: definition.active ?? true,
           },
         });
         await this.audit.create(
@@ -173,7 +196,7 @@ export class AutomationsService {
 
   async updateRule(principal: AuthenticatedPrincipal, id: string, dto: UpdateAutomationRuleDto) {
     const existing = await this.getRule(principal, id);
-    const definition: CreateAutomationRuleDto = {
+    const baseDefinition: CreateAutomationRuleDto = {
       name: dto.name ?? existing.name,
       entityType: dto.entityType ?? existing.entityType,
       triggerType: dto.triggerType ?? existing.triggerType,
@@ -182,8 +205,16 @@ export class AutomationsService {
       conditions: dto.conditions ?? (existing.conditions as unknown as AutomationConditionDto[]),
       actions: dto.actions ?? (existing.actions as unknown as AutomationActionDto[]),
       active: dto.active ?? existing.active,
+      graphMetadata:
+        dto.graphMetadata ??
+        (existing.graphMetadata as Record<string, unknown> | null | undefined) ??
+        undefined,
     };
-    await this.validateDefinition(principal.organizationId, definition);
+    const definition = await this.compileDefinition(
+      principal.organizationId,
+      baseDefinition,
+      dto.graphMetadata === undefined,
+    );
     try {
       return await this.prisma.$transaction(async (tx) => {
         const rule = await tx.automationRule.update({
@@ -195,6 +226,7 @@ export class AutomationsService {
             triggerConfig: this.jsonOptional(definition.triggerConfig),
             conditions: this.jsonRequired(definition.conditions),
             actions: this.jsonRequired(definition.actions),
+            graphMetadata: this.jsonRequired(definition.graphMetadata),
             active: definition.active,
           },
         });
@@ -571,6 +603,217 @@ export class AutomationsService {
       idempotencyKey: `automation:${run.id}:${index}`,
     });
     return this.result(index, action.type, `Queued webhook delivery ${delivery.id}`, completedAt);
+  }
+
+  private async compileDefinition(
+    organizationId: string,
+    definition: CreateAutomationRuleDto,
+    preferFormDefinition = false,
+  ): Promise<CompiledAutomationDefinition> {
+    const graph =
+      definition.graphMetadata && !preferFormDefinition
+        ? this.compileGraph(definition.graphMetadata)
+        : {
+            entityType: definition.entityType,
+            triggerType: definition.triggerType,
+            triggerConfig: definition.triggerConfig,
+            conditions: definition.conditions,
+            actions: definition.actions,
+            graphMetadata: this.graphFromDefinition(definition),
+          };
+    const compiled: CompiledAutomationDefinition = {
+      name: definition.name,
+      entityType: graph.entityType,
+      triggerType: graph.triggerType,
+      triggerConfig: graph.triggerConfig,
+      conditions: graph.conditions,
+      actions: graph.actions,
+      active: definition.active,
+      graphMetadata: graph.graphMetadata,
+    };
+    await this.validateDefinition(organizationId, compiled);
+    return compiled;
+  }
+
+  private compileGraph(value: Record<string, unknown>) {
+    const graph = value as AutomationGraphMetadata;
+    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.edges))
+      throw new BadRequestException('Automation graph must include nodes and edges');
+    if (graph.nodes.length < 2 || graph.nodes.length > 30)
+      throw new BadRequestException('Automation graph must include 2 to 30 nodes');
+    if (graph.edges.length > 40)
+      throw new BadRequestException('Automation graph has too many edges');
+
+    const ids = new Set<string>();
+    for (const node of graph.nodes) {
+      if (
+        !node ||
+        typeof node.id !== 'string' ||
+        !/^[a-zA-Z0-9:_-]{1,80}$/.test(node.id) ||
+        !['trigger', 'condition', 'action'].includes(node.type)
+      )
+        throw new BadRequestException('Automation graph contains an invalid node');
+      if (ids.has(node.id))
+        throw new BadRequestException('Automation graph contains duplicate nodes');
+      ids.add(node.id);
+    }
+    const triggerNodes = graph.nodes.filter(({ type }) => type === 'trigger');
+    if (triggerNodes.length !== 1)
+      throw new BadRequestException('Automation graph must contain exactly one trigger');
+    const actionNodes = graph.nodes.filter(({ type }) => type === 'action');
+    if (!actionNodes.length)
+      throw new BadRequestException('Automation graph must contain an action');
+
+    const outgoing = new Map<string, AutomationGraphEdge[]>();
+    const incoming = new Map<string, number>();
+    for (const edge of graph.edges) {
+      if (!edge || typeof edge.source !== 'string' || typeof edge.target !== 'string')
+        throw new BadRequestException('Automation graph contains an invalid connection');
+      if (!ids.has(edge.source) || !ids.has(edge.target))
+        throw new BadRequestException('Automation graph connection references an unknown node');
+      if (edge.source === edge.target)
+        throw new BadRequestException('Automation graph cycles are not supported');
+      if (edge.sourceHandle === 'false')
+        throw new BadRequestException('False condition branches must end without required actions');
+      outgoing.set(edge.source, [...(outgoing.get(edge.source) ?? []), edge]);
+      incoming.set(edge.target, (incoming.get(edge.target) ?? 0) + 1);
+    }
+    if (incoming.has(triggerNodes[0]!.id))
+      throw new BadRequestException('Automation graph trigger must be the root node');
+    for (const node of graph.nodes) {
+      if (node.type !== 'trigger' && !incoming.has(node.id))
+        throw new BadRequestException('Automation graph contains disconnected nodes');
+      if ((outgoing.get(node.id) ?? []).length > 1)
+        throw new BadRequestException('Automation graph must use one controlled path');
+    }
+
+    const ordered = this.orderedGraphNodes(triggerNodes[0]!.id, graph.nodes, outgoing);
+    if (ordered.length !== graph.nodes.length)
+      throw new BadRequestException('Automation graph contains disconnected nodes');
+    const firstAction = ordered.findIndex(({ type }) => type === 'action');
+    if (firstAction < 0) throw new BadRequestException('Automation graph must contain an action');
+    if (ordered.slice(firstAction).some(({ type }) => type === 'condition'))
+      throw new BadRequestException('Automation graph conditions must come before actions');
+
+    const triggerData = this.objectData(triggerNodes[0]!);
+    const entityType = triggerData.entityType as AutomationEntityType;
+    const triggerType = triggerData.triggerType as AutomationTriggerType;
+    const triggerConfig = this.optionalObject(triggerData.triggerConfig) as
+      AutomationTriggerConfigDto | undefined;
+    const conditions = ordered
+      .filter(({ type }) => type === 'condition')
+      .map((node) => this.objectData(node).condition as AutomationConditionDto);
+    const actions = ordered
+      .filter(({ type }) => type === 'action')
+      .map((node) => this.objectData(node).action as AutomationActionDto);
+    return {
+      entityType,
+      triggerType,
+      triggerConfig,
+      conditions,
+      actions,
+      graphMetadata: this.normalizedGraph(graph),
+    };
+  }
+
+  private orderedGraphNodes(
+    triggerId: string,
+    nodes: AutomationGraphNode[],
+    outgoing: Map<string, AutomationGraphEdge[]>,
+  ) {
+    const byId = new Map(nodes.map((node) => [node.id, node]));
+    const ordered: AutomationGraphNode[] = [];
+    const seen = new Set<string>();
+    let currentId: string | undefined = triggerId;
+    while (currentId) {
+      if (seen.has(currentId))
+        throw new BadRequestException('Automation graph cycles are not supported');
+      const node = byId.get(currentId);
+      if (!node) throw new BadRequestException('Automation graph contains an invalid connection');
+      seen.add(currentId);
+      ordered.push(node);
+      const next: string | undefined = outgoing.get(currentId)?.[0]?.target;
+      currentId = next;
+    }
+    return ordered;
+  }
+
+  private objectData(node: AutomationGraphNode) {
+    if (!node.data || typeof node.data !== 'object' || Array.isArray(node.data))
+      throw new BadRequestException('Automation graph node configuration is invalid');
+    return node.data;
+  }
+
+  private optionalObject(value: unknown) {
+    if (value === undefined || value === null) return undefined;
+    if (typeof value !== 'object' || Array.isArray(value))
+      throw new BadRequestException('Automation graph trigger configuration is invalid');
+    return value;
+  }
+
+  private normalizedGraph(graph: AutomationGraphMetadata): AutomationGraphMetadata {
+    return {
+      version: 1,
+      nodes: graph.nodes!.map((node) => ({
+        id: node.id,
+        type: node.type,
+        position: {
+          x: typeof node.position?.x === 'number' ? node.position.x : 0,
+          y: typeof node.position?.y === 'number' ? node.position.y : 0,
+        },
+        data: node.data,
+      })),
+      edges: graph.edges!.map((edge, index) => ({
+        id: typeof edge.id === 'string' ? edge.id : `edge-${index}`,
+        source: edge.source,
+        target: edge.target,
+        sourceHandle: edge.sourceHandle ?? null,
+      })),
+      viewport:
+        graph.viewport && typeof graph.viewport === 'object' && !Array.isArray(graph.viewport)
+          ? graph.viewport
+          : undefined,
+    };
+  }
+
+  private graphFromDefinition(definition: CreateAutomationRuleDto): AutomationGraphMetadata {
+    const nodes: AutomationGraphNode[] = [
+      {
+        id: 'trigger',
+        type: 'trigger',
+        position: { x: 80, y: 80 },
+        data: {
+          entityType: definition.entityType,
+          triggerType: definition.triggerType,
+          triggerConfig: definition.triggerConfig,
+        },
+      },
+    ];
+    const edges: AutomationGraphEdge[] = [];
+    let previous = 'trigger';
+    definition.conditions.forEach((condition, index) => {
+      const id = `condition-${index + 1}`;
+      nodes.push({
+        id,
+        type: 'condition',
+        position: { x: 80, y: 220 + index * 140 },
+        data: { condition },
+      });
+      edges.push({ id: `${previous}-${id}`, source: previous, target: id, sourceHandle: 'true' });
+      previous = id;
+    });
+    definition.actions.forEach((action, index) => {
+      const id = `action-${index + 1}`;
+      nodes.push({
+        id,
+        type: 'action',
+        position: { x: 80, y: 220 + (definition.conditions.length + index) * 140 },
+        data: { action },
+      });
+      edges.push({ id: `${previous}-${id}`, source: previous, target: id, sourceHandle: 'true' });
+      previous = id;
+    });
+    return { version: 1, nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } };
   }
 
   private async validateDefinition(organizationId: string, definition: CreateAutomationRuleDto) {

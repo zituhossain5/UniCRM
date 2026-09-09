@@ -31,6 +31,63 @@ function mutate(
 ) {
   return agent[method](path).set('origin', origin).set('x-csrf-token', csrf);
 }
+function visualGraph({
+  actions,
+  conditions = [],
+  entityType = 'LEAD',
+  triggerConfig = {},
+  triggerType = 'LEAD_CREATED',
+}: {
+  actions: unknown[];
+  conditions?: unknown[];
+  entityType?: string;
+  triggerConfig?: Record<string, unknown>;
+  triggerType?: string;
+}) {
+  const nodes: Array<{
+    id: string;
+    type: string;
+    position: { x: number; y: number };
+    data: Record<string, unknown>;
+  }> = [
+    {
+      id: 'trigger',
+      type: 'trigger',
+      position: { x: 80, y: 80 },
+      data: { entityType, triggerType, triggerConfig },
+    },
+  ];
+  const edges: Array<{
+    id: string;
+    source: string;
+    target: string;
+    sourceHandle: string;
+  }> = [];
+  let previous = 'trigger';
+  conditions.forEach((condition, index) => {
+    const id = `condition-${index + 1}`;
+    nodes.push({
+      id,
+      type: 'condition',
+      position: { x: 80, y: 220 + index * 140 },
+      data: { condition },
+    });
+    edges.push({ id: `${previous}-${id}`, source: previous, target: id, sourceHandle: 'true' });
+    previous = id;
+  });
+  actions.forEach((action, index) => {
+    const id = `action-${index + 1}`;
+    nodes.push({
+      id,
+      type: 'action',
+      position: { x: 80, y: 220 + (conditions.length + index) * 140 },
+      data: { action },
+    });
+    edges.push({ id: `${previous}-${id}`, source: previous, target: id, sourceHandle: 'true' });
+    previous = id;
+  });
+  return { version: 1, nodes, edges, viewport: { x: 0, y: 0, zoom: 1 } };
+}
 
 class TestJobsService {
   automationRuns: string[] = [];
@@ -286,6 +343,213 @@ describe('Milestone 11 CRM automation V1', () => {
       { triggerEventId: eventId },
     );
     expect(await prisma.automationRun.count({ where: { automationRuleId: rule.id } })).toBe(1);
+  });
+
+  it('compiles visual graphs into existing automation rules and executes through V1', async () => {
+    const visualTag = await prisma.tag.create({
+      data: {
+        organizationId: orgA,
+        name: `Visual High Value ${crypto.randomUUID()}`,
+        normalizedName: `visual high value ${crypto.randomUUID()}`,
+      },
+    });
+    const pipeline = await prisma.pipeline.findFirstOrThrow({
+      where: { organizationId: orgA },
+      include: { stages: true },
+    });
+    const skippedLead = await prisma.lead.create({
+      data: {
+        organizationId: orgA,
+        title: 'Visual Low Priority Lead',
+        pipelineId: pipeline.id,
+        stageId: qualifiedStageId,
+        ownerId: ownerA,
+        priority: 'LOW',
+        createdById: ownerA,
+      },
+    });
+    const graphMetadata = visualGraph({
+      triggerType: 'LEAD_CREATED',
+      conditions: [{ field: 'priority', operator: 'EQUALS', value: 'HIGH' }],
+      actions: [{ type: 'ADD_TAG', tagId: visualTag.id }],
+    });
+    const rule = body<{
+      data: {
+        id: string;
+        entityType: string;
+        triggerType: string;
+        conditions: unknown[];
+        actions: unknown[];
+        graphMetadata: { nodes: unknown[]; edges: unknown[] };
+      };
+    }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/automations')
+        .send({
+          name: `Visual graph high value ${crypto.randomUUID()}`,
+          entityType: 'PAYMENT',
+          triggerType: 'PAYMENT_CREATED',
+          conditions: [],
+          actions: [{ type: 'CREATE_NOTIFICATION' }],
+          graphMetadata,
+        })
+        .expect(201),
+    ).data;
+    expect(rule).toMatchObject({
+      entityType: 'LEAD',
+      triggerType: 'LEAD_CREATED',
+      conditions: [{ field: 'priority', operator: 'EQUALS', value: 'HIGH' }],
+      actions: [{ type: 'ADD_TAG', tagId: visualTag.id }],
+    });
+    expect(rule.graphMetadata.nodes).toHaveLength(3);
+    expect(rule.graphMetadata.edges).toHaveLength(2);
+
+    await automations.publishBusinessEvent(
+      orgA,
+      'lead.created',
+      skippedLead.id,
+      { title: skippedLead.title },
+      { triggerEventId: `visual-skip-${crypto.randomUUID()}` },
+    );
+    const skippedRun = await prisma.automationRun.findFirstOrThrow({
+      where: { automationRuleId: rule.id, entityId: skippedLead.id },
+    });
+    await automations.processRun(skippedRun.id);
+    await expect(
+      prisma.automationRun.findUniqueOrThrow({ where: { id: skippedRun.id } }),
+    ).resolves.toMatchObject({ status: 'SKIPPED', attemptCount: 1 });
+    expect(await prisma.entityTag.count({ where: { tagId: visualTag.id } })).toBe(0);
+
+    await automations.publishBusinessEvent(
+      orgA,
+      'lead.created',
+      leadId,
+      { title: 'Visual graph trigger' },
+      { triggerEventId: `visual-run-${crypto.randomUUID()}` },
+    );
+    const run = await prisma.automationRun.findFirstOrThrow({
+      where: { automationRuleId: rule.id, entityId: leadId },
+    });
+    expect(jobs.automationRuns).toContain(run.id);
+    await automations.processRun(run.id);
+    await expect(
+      prisma.automationRun.findUniqueOrThrow({ where: { id: run.id } }),
+    ).resolves.toMatchObject({ status: 'SUCCEEDED', attemptCount: 1 });
+    expect(await prisma.entityTag.count({ where: { entityId: leadId, tagId: visualTag.id } })).toBe(
+      1,
+    );
+  });
+
+  it('stores graph metadata for form-created rules so existing rules can load visually', async () => {
+    const rule = body<{
+      data: {
+        id: string;
+        graphMetadata: {
+          nodes: Array<{ type: string }>;
+          edges: unknown[];
+        };
+      };
+    }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/automations')
+        .send({
+          name: `Form graph compatibility ${crypto.randomUUID()}`,
+          entityType: 'LEAD',
+          triggerType: 'LEAD_CREATED',
+          conditions: [{ field: 'priority', operator: 'EQUALS', value: 'HIGH' }],
+          actions: [{ type: 'CREATE_NOTIFICATION', title: 'Form-compatible visual run' }],
+        })
+        .expect(201),
+    ).data;
+    expect(rule.graphMetadata.nodes.map(({ type }) => type)).toEqual([
+      'trigger',
+      'condition',
+      'action',
+    ]);
+    expect(rule.graphMetadata.edges).toHaveLength(2);
+    const loaded = body<{
+      data: Array<{ id: string; graphMetadata: { nodes: unknown[] } | null }>;
+    }>(await agentA.get('/api/v1/automations').expect(200)).data.find(({ id }) => id === rule.id);
+    expect(loaded?.graphMetadata?.nodes).toHaveLength(3);
+  });
+
+  it('rejects unsafe visual graph shapes before execution', async () => {
+    const base = {
+      name: `Invalid graph ${crypto.randomUUID()}`,
+      entityType: 'LEAD',
+      triggerType: 'LEAD_CREATED',
+      conditions: [],
+      actions: [{ type: 'CREATE_NOTIFICATION' }],
+    };
+    await mutate(agentA, csrfA, 'post', '/api/v1/automations')
+      .send({
+        ...base,
+        graphMetadata: {
+          ...visualGraph({ actions: [{ type: 'CREATE_NOTIFICATION' }] }),
+          nodes: [
+            ...visualGraph({ actions: [{ type: 'CREATE_NOTIFICATION' }] }).nodes,
+            {
+              id: 'disconnected',
+              type: 'action',
+              position: { x: 300, y: 300 },
+              data: { action: { type: 'CREATE_NOTIFICATION' } },
+            },
+          ],
+        },
+      })
+      .expect(400);
+    await mutate(agentA, csrfA, 'post', '/api/v1/automations')
+      .send({
+        ...base,
+        name: `Cyclic graph ${crypto.randomUUID()}`,
+        graphMetadata: {
+          ...visualGraph({ actions: [{ type: 'CREATE_NOTIFICATION' }] }),
+          edges: [
+            { id: 'trigger-action', source: 'trigger', target: 'action-1', sourceHandle: 'true' },
+            { id: 'action-trigger', source: 'action-1', target: 'trigger', sourceHandle: 'true' },
+          ],
+        },
+      })
+      .expect(400);
+    await mutate(agentA, csrfA, 'post', '/api/v1/automations')
+      .send({
+        ...base,
+        name: `Missing trigger graph ${crypto.randomUUID()}`,
+        graphMetadata: {
+          version: 1,
+          nodes: [
+            {
+              id: 'action-1',
+              type: 'action',
+              position: { x: 80, y: 80 },
+              data: { action: { type: 'CREATE_NOTIFICATION' } },
+            },
+          ],
+          edges: [],
+        },
+      })
+      .expect(400);
+  });
+
+  it('validates tenant-scoped graph references authoritatively on the backend', async () => {
+    const foreignTag = await prisma.tag.create({
+      data: {
+        organizationId: (await prisma.organization.findUniqueOrThrow({ where: { slug: slugB } }))
+          .id,
+        name: `Foreign graph tag ${crypto.randomUUID()}`,
+        normalizedName: `foreign graph tag ${crypto.randomUUID()}`,
+      },
+    });
+    await mutate(agentA, csrfA, 'post', '/api/v1/automations')
+      .send({
+        name: `Cross tenant graph ${crypto.randomUUID()}`,
+        entityType: 'LEAD',
+        triggerType: 'LEAD_CREATED',
+        conditions: [],
+        actions: [{ type: 'CREATE_NOTIFICATION' }],
+        graphMetadata: visualGraph({
+          actions: [{ type: 'ADD_TAG', tagId: foreignTag.id }],
+        }),
+      })
+      .expect(400);
   });
 
   it('fails notification actions when entity-owner recipients cannot be resolved', async () => {

@@ -113,6 +113,7 @@ type GlobalCreateTarget = 'lead' | 'company' | 'contact' | 'project' | 'task';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const isAutomationEditor = pathname.startsWith('/app/settings/automations/');
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
   const user = useCurrentUser();
@@ -349,7 +350,9 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="app-main">
-        <PageContainer>{children}</PageContainer>
+        <PageContainer className={isAutomationEditor ? 'page-container--automation-editor' : ''}>
+          {children}
+        </PageContainer>
       </main>
 
       {user.permissions.includes('lead.create') ? (

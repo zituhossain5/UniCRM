@@ -41,8 +41,36 @@ export type AutomationRule = {
   triggerConfig: { from?: string; to?: string } | null;
   conditions: AutomationCondition[];
   actions: AutomationAction[];
+  graphMetadata?: AutomationGraphMetadata | null;
   active: boolean;
   createdAt: string;
+};
+
+export type AutomationGraphNode = {
+  id: string;
+  type: 'trigger' | 'condition' | 'action';
+  position: { x: number; y: number };
+  data: {
+    entityType?: AutomationEntityType;
+    triggerType?: AutomationTriggerType;
+    triggerConfig?: { from?: string; to?: string };
+    condition?: AutomationCondition;
+    action?: AutomationAction;
+  };
+};
+
+export type AutomationGraphEdge = {
+  id: string;
+  source: string;
+  target: string;
+  sourceHandle?: string | null;
+};
+
+export type AutomationGraphMetadata = {
+  version: 1;
+  nodes: AutomationGraphNode[];
+  edges: AutomationGraphEdge[];
+  viewport?: { x?: number; y?: number; zoom?: number };
 };
 
 export type AutomationRun = {
