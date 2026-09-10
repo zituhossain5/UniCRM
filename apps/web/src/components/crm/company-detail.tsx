@@ -30,6 +30,7 @@ import {
 import { Archive, ArrowLeft, ExternalLink, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { RecordEmail } from './record-email';
 
 const EDIT_COMPANY_FORM_ID = 'edit-company-form';
 
@@ -104,8 +105,15 @@ export function CompanyDetail({ id }: { id: string }) {
           (current.permissions.includes('company.update') ||
             current.permissions.includes('company.delete') ||
             current.permissions.includes('quotation.create') ||
-            current.permissions.includes('payment.create')) ? (
+            current.permissions.includes('payment.create') ||
+            current.permissions.includes('email.read') ||
+            current.permissions.includes('email.send')) ? (
             <div className="record-actions">
+              <RecordEmail
+                entityId={company.id}
+                entityType="COMPANY"
+                onDeliveryStatusChange={() => void load()}
+              />
               {current.permissions.includes('quotation.create') ? (
                 <Link
                   className="ui-button ui-button--secondary"

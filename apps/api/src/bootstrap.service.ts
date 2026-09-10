@@ -3,6 +3,7 @@ import { DEFAULT_ROLES, DEFAULT_ROLE_PERMISSIONS, PERMISSION_CATALOG } from './a
 import { PasswordService } from './auth/password.service';
 import { PrismaService } from './database/prisma.service';
 import { DEFAULT_STAGES } from './pipelines/pipelines.service';
+import type { Prisma } from './generated/prisma/client';
 
 @Injectable()
 export class IdentityBootstrapService {
@@ -94,7 +95,10 @@ export class IdentityBootstrapService {
         }
       }
 
-      if (existingOwner) return { organizationCreated: !existingOrganization, ownerCreated: false };
+      if (existingOwner) {
+        await this.ensureDefaultEmailTemplate(tx, organization.id, existingOwner.id);
+        return { organizationCreated: !existingOrganization, ownerCreated: false };
+      }
       const ownerRole = await tx.role.findUniqueOrThrow({
         where: { organizationId_name: { organizationId: organization.id, name: 'Owner' } },
       });
@@ -111,7 +115,26 @@ export class IdentityBootstrapService {
         },
       });
       await tx.userRole.create({ data: { roleId: ownerRole.id, userId: owner.id } });
+      await this.ensureDefaultEmailTemplate(tx, organization.id, owner.id);
       return { organizationCreated: !existingOrganization, ownerCreated: true };
+    });
+  }
+
+  private async ensureDefaultEmailTemplate(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    createdById: string,
+  ) {
+    await tx.emailTemplate.upsert({
+      where: { organizationId_name: { organizationId, name: 'Qualified Lead Follow-up' } },
+      create: {
+        organizationId,
+        createdById,
+        name: 'Qualified Lead Follow-up',
+        subject: 'Next steps for {{lead.title}}',
+        body: 'Hi {{contact.firstName}},\n\nThank you for discussing {{lead.title}} with us.\n\nWe would like to move forward with the next steps.\n\nRegards,\n{{user.firstName}}',
+      },
+      update: {},
     });
   }
 }

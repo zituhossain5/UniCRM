@@ -28,6 +28,8 @@ export type AutomationAction = {
   tagId?: string;
   ownerId?: string;
   webhookSubscriptionId?: string;
+  emailTemplateId?: string;
+  recipientSource?: 'LEAD_EMAIL' | 'CONTACT_EMAIL' | 'PRIMARY_CONTACT';
   priority?: string;
   followUpType?: string;
   dueInDays?: number;

@@ -43,6 +43,7 @@ type AutomationReferences = {
   pipelines: Array<ReferenceItem & { stages: ReferenceItem[] }>;
   customFields: CustomFieldReference[];
   webhookSubscriptions: ReferenceItem[];
+  emailTemplates: ReferenceItem[];
 };
 type AutomationBuilderMode = 'visual' | 'form' | 'history';
 type FlowNodeData = AutomationGraphNode['data'] & {
@@ -73,6 +74,7 @@ const actionTypes = [
   'CHANGE_PRIORITY',
   'CREATE_NOTIFICATION',
   'TRIGGER_WEBHOOK',
+  'SEND_EMAIL',
 ];
 const priorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 const emptyReferences: AutomationReferences = {
@@ -81,6 +83,7 @@ const emptyReferences: AutomationReferences = {
   pipelines: [],
   customFields: [],
   webhookSubscriptions: [],
+  emailTemplates: [],
 };
 
 function label(value: string) {
@@ -652,6 +655,27 @@ function ActionConfiguration({
         placeholder="Select outbound webhook"
         value={action.webhookSubscriptionId ?? null}
       />
+    );
+  if (action.type === 'SEND_EMAIL')
+    return (
+      <div className="automation-action-config automation-action-config--two">
+        <AutomationSelect
+          label={`Action ${index + 1} template`}
+          onValueChange={(emailTemplateId) => update({ emailTemplateId })}
+          options={referenceOptions(references.emailTemplates)}
+          placeholder="Select email template"
+          value={action.emailTemplateId ?? null}
+        />
+        <AutomationSelect
+          label={`Action ${index + 1} recipient source`}
+          onValueChange={(recipientSource) =>
+            update({ recipientSource: recipientSource as AutomationAction['recipientSource'] })
+          }
+          options={options(['LEAD_EMAIL', 'PRIMARY_CONTACT'])}
+          placeholder="Select recipient"
+          value={action.recipientSource ?? null}
+        />
+      </div>
     );
   if (action.type === 'CREATE_FOLLOW_UP')
     return (

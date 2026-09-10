@@ -18,6 +18,7 @@ import {
 } from 'class-validator';
 import { AutomationEntityType, AutomationTriggerType } from '../../generated/prisma/enums';
 import { ACTION_TYPES, CONDITION_FIELDS, CONDITION_OPERATORS } from '../automation.constants';
+import { EMAIL_RECIPIENT_SOURCES, type EmailRecipientSource } from '../../email/email.constants';
 
 export class AutomationTriggerConfigDto {
   @IsString()
@@ -77,6 +78,14 @@ export class AutomationActionDto {
   @IsUUID()
   @IsOptional()
   webhookSubscriptionId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  emailTemplateId?: string;
+
+  @IsIn(EMAIL_RECIPIENT_SOURCES)
+  @IsOptional()
+  recipientSource?: EmailRecipientSource;
 
   @IsIn(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
   @IsOptional()

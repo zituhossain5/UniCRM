@@ -4,6 +4,8 @@ import { Job, Worker } from 'bullmq';
 import { AuthMaintenanceService } from '../auth/auth-maintenance.service';
 import type { EnvironmentVariables } from '../config/environment';
 import { EmailTransportService } from '../email/email.service';
+import { CrmEmailService } from '../email/crm-email.service';
+import { CRM_EMAIL_DELIVERY_JOB, CRM_EMAIL_RECOVERY_JOB } from '../email/email.constants';
 import { NotificationsService } from '../notifications/notifications.service';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { AutomationsService } from '../automations/automations.service';
@@ -28,6 +30,7 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     @Inject(AuthMaintenanceService) private readonly authMaintenance: AuthMaintenanceService,
     @Inject(ConfigService) private readonly config: ConfigService<EnvironmentVariables, true>,
     @Inject(EmailTransportService) private readonly emailTransport: EmailTransportService,
+    @Inject(CrmEmailService) private readonly crmEmail: CrmEmailService,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
@@ -50,6 +53,13 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
           await this.emailTransport.deliver(job.data as EmailJob);
           return;
         }
+        if (job.name === CRM_EMAIL_DELIVERY_JOB)
+          return this.crmEmail.processDelivery(
+            (job.data as { messageId: string }).messageId,
+            job.attemptsMade,
+            job.opts.attempts ?? 1,
+          );
+        if (job.name === CRM_EMAIL_RECOVERY_JOB) return this.crmEmail.recoverQueued();
         if (job.name === 'notification-sweep') return this.notifications.generateScheduled();
         if (job.name === 'auth-maintenance')
           return this.authMaintenance.cleanupExpiredCredentials();
@@ -78,6 +88,8 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     );
     const recoveredAutomations = await this.automations.recoverPendingRuns();
     this.logger.log(`Automation recovery queued runs=${recoveredAutomations.runs}`);
+    const recoveredEmails = await this.crmEmail.recoverQueued();
+    this.logger.log(`CRM email recovery queued messages=${recoveredEmails.messages}`);
   }
 
   async onApplicationShutdown(): Promise<void> {

@@ -25,6 +25,7 @@ import {
 } from '../generated/prisma/client';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { JobsService } from '../jobs/jobs.service';
+import { CrmEmailService } from '../email/crm-email.service';
 import {
   AUTOMATION_EVENT_MAP,
   AUTOMATION_MAX_ATTEMPTS,
@@ -91,6 +92,7 @@ export class AutomationsService {
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(CrmEmailService) private readonly crmEmail: CrmEmailService,
   ) {}
 
   listRules(principal: AuthenticatedPrincipal) {
@@ -104,48 +106,54 @@ export class AutomationsService {
 
   async referenceData(principal: AuthenticatedPrincipal, entityType: AutomationEntityType) {
     const organizationId = principal.organizationId;
-    const [users, tags, pipelines, customFields, webhookSubscriptions] = await Promise.all([
-      this.prisma.user.findMany({
-        where: { organizationId, status: 'ACTIVE' },
-        select: { id: true, firstName: true, lastName: true },
-        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
-      }),
-      entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.PROJECT
-        ? this.prisma.tag.findMany({
-            where: { organizationId },
-            select: { id: true, name: true },
-            orderBy: { name: 'asc' },
-          })
-        : [],
-      entityType === AutomationEntityType.LEAD
-        ? this.prisma.pipeline.findMany({
-            where: { organizationId, archivedAt: null },
-            select: {
-              id: true,
-              name: true,
-              stages: { select: { id: true, name: true }, orderBy: { position: 'asc' } },
-            },
-            orderBy: { name: 'asc' },
-          })
-        : [],
-      entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.PROJECT
-        ? this.prisma.customFieldDefinition.findMany({
-            where: { organizationId, entityType, active: true },
-            select: { id: true, name: true, fieldType: true, options: true },
-            orderBy: { position: 'asc' },
-          })
-        : [],
-      this.prisma.webhookSubscription.findMany({
-        where: {
-          organizationId,
-          active: true,
-          connection: { status: 'ACTIVE', direction: { in: ['OUTBOUND', 'BOTH'] } },
-        },
-        select: { id: true, name: true },
-        orderBy: { name: 'asc' },
-      }),
-    ]);
-    return { users, tags, pipelines, customFields, webhookSubscriptions };
+    const [users, tags, pipelines, customFields, webhookSubscriptions, emailTemplates] =
+      await Promise.all([
+        this.prisma.user.findMany({
+          where: { organizationId, status: 'ACTIVE' },
+          select: { id: true, firstName: true, lastName: true },
+          orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+        }),
+        entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.PROJECT
+          ? this.prisma.tag.findMany({
+              where: { organizationId },
+              select: { id: true, name: true },
+              orderBy: { name: 'asc' },
+            })
+          : [],
+        entityType === AutomationEntityType.LEAD
+          ? this.prisma.pipeline.findMany({
+              where: { organizationId, archivedAt: null },
+              select: {
+                id: true,
+                name: true,
+                stages: { select: { id: true, name: true }, orderBy: { position: 'asc' } },
+              },
+              orderBy: { name: 'asc' },
+            })
+          : [],
+        entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.PROJECT
+          ? this.prisma.customFieldDefinition.findMany({
+              where: { organizationId, entityType, active: true },
+              select: { id: true, name: true, fieldType: true, options: true },
+              orderBy: { position: 'asc' },
+            })
+          : [],
+        this.prisma.webhookSubscription.findMany({
+          where: {
+            organizationId,
+            active: true,
+            connection: { status: 'ACTIVE', direction: { in: ['OUTBOUND', 'BOTH'] } },
+          },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        }),
+        this.prisma.emailTemplate.findMany({
+          where: { organizationId, active: true },
+          select: { id: true, name: true },
+          orderBy: { name: 'asc' },
+        }),
+      ]);
+    return { users, tags, pipelines, customFields, webhookSubscriptions, emailTemplates };
   }
 
   async getRule(principal: AuthenticatedPrincipal, id: string) {
@@ -594,6 +602,18 @@ export class AutomationsService {
         completedAt,
       );
     }
+    if (action.type === 'SEND_EMAIL') {
+      const message = await this.crmEmail.sendAutomation({
+        organizationId: run.organizationId,
+        senderUserId: run.automationRule.createdById,
+        entityType: run.entityType,
+        entityId: run.entityId,
+        templateId: action.emailTemplateId!,
+        recipientSource: action.recipientSource!,
+        idempotencyKey: `automation:${run.id}:${index}`,
+      });
+      return this.result(index, action.type, `Queued email ${message.id}`, completedAt);
+    }
     const delivery = await this.integrations.triggerConfiguredWebhook({
       organizationId: run.organizationId,
       subscriptionId: action.webhookSubscriptionId!,
@@ -1004,6 +1024,7 @@ export class AutomationsService {
       CHANGE_PRIORITY: ['type', 'priority'],
       CREATE_NOTIFICATION: ['type', 'title', 'message', 'ownerId'],
       TRIGGER_WEBHOOK: ['type', 'webhookSubscriptionId'],
+      SEND_EMAIL: ['type', 'emailTemplateId', 'recipientSource'],
     };
     const unexpected = Object.entries(action).find(
       ([key, value]) => value !== undefined && !allowed[action.type]!.includes(key),
@@ -1050,6 +1071,19 @@ export class AutomationsService {
         },
       });
       if (!subscription) throw new BadRequestException('Outbound webhook subscription is invalid');
+    }
+    if (action.type === 'SEND_EMAIL') {
+      if (entityType !== AutomationEntityType.LEAD)
+        throw new BadRequestException('Send email is currently supported for lead automations');
+      if (!action.emailTemplateId || !action.recipientSource)
+        throw new BadRequestException('Email template and recipient source are required');
+      if (!['LEAD_EMAIL', 'PRIMARY_CONTACT'].includes(action.recipientSource))
+        throw new BadRequestException('Recipient source is invalid for a lead');
+      const template = await this.prisma.emailTemplate.findFirst({
+        where: { id: action.emailTemplateId, organizationId, active: true },
+        select: { id: true },
+      });
+      if (!template) throw new BadRequestException('Email template is invalid');
     }
   }
 
@@ -1321,6 +1355,15 @@ export class AutomationsService {
       return `Create task - ${action.title?.trim() || 'Automation task'}`;
     if (action.type === 'CREATE_NOTIFICATION')
       return `Create notification - ${action.title?.trim() || 'Automation notification'} - ${action.ownerId ? await this.userValueLabel(organizationId, action.ownerId) : 'Entity owner'}`;
+    if (action.type === 'SEND_EMAIL') {
+      const template = action.emailTemplateId
+        ? await this.prisma.emailTemplate.findFirst({
+            where: { id: action.emailTemplateId, organizationId },
+            select: { name: true },
+          })
+        : null;
+      return `Send email - ${template?.name ?? 'Unknown template'} - ${this.valueLabel(action.recipientSource)}`;
+    }
     return `Trigger webhook - ${action.webhookSubscriptionId ? 'Configured subscription' : 'No subscription'}`;
   }
 

@@ -50,6 +50,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ProjectCreateSheet } from '@/components/work/create-sheets';
+import { RecordEmail } from './record-email';
 
 const EDIT_LEAD_FORM_ID = 'edit-lead-form';
 
@@ -188,6 +189,11 @@ export function LeadDetail({ id }: { id: string }) {
         actions={
           !lead.archivedAt ? (
             <div className="record-actions">
+              <RecordEmail
+                entityId={lead.id}
+                entityType="LEAD"
+                onDeliveryStatusChange={() => void load()}
+              />
               {lead.companyId && current.permissions.includes('quotation.create') ? (
                 <Link
                   className="ui-button ui-button--secondary"

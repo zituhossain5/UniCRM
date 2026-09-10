@@ -75,6 +75,20 @@ enum LeadActivityType {
   SYSTEM
 }
 
+enum EmailRelatedEntityType {
+  LEAD
+  CONTACT
+  COMPANY
+}
+
+enum EmailMessageStatus {
+  DRAFT
+  QUEUED
+  SENDING
+  SENT
+  FAILED
+}
+
 enum FollowUpStatus {
   PENDING
   COMPLETED
@@ -297,6 +311,9 @@ model Organization {
   status            OrganizationStatus      @default(ACTIVE)
   timezone          String                  @default("UTC") @db.VarChar(64)
   defaultCurrency   String                  @default("BDT") @map("default_currency") @db.VarChar(3)
+  emailFromName     String?                 @map("email_from_name") @db.VarChar(160)
+  emailFromAddress  String?                 @map("email_from_address") @db.VarChar(320)
+  emailReplyTo      String?                 @map("email_reply_to") @db.VarChar(320)
   createdAt         DateTime                @default(now()) @map("created_at")
   updatedAt         DateTime                @updatedAt @map("updated_at")
   users             User[]
@@ -337,6 +354,8 @@ model Organization {
   externalEntityMappings ExternalEntityMapping[]
   automationRules         AutomationRule[]
   automationRuns          AutomationRun[]
+  emailTemplates          EmailTemplate[]
+  emailMessages           EmailMessage[]
 
   @@map("organizations")
 }
@@ -385,6 +404,8 @@ model User {
   exportJobsCreated   DataExportJob[]      @relation("ExportJobCreator")
   mergeRecordsCreated DataMergeRecord[]    @relation("MergeRecordCreator")
   automationRulesCreated AutomationRule[]   @relation("AutomationRuleCreator")
+  emailTemplatesCreated  EmailTemplate[]     @relation("EmailTemplateCreator")
+  emailMessagesSent      EmailMessage[]      @relation("EmailMessageSender")
 
   @@index([organizationId, status])
   @@map("users")
@@ -733,6 +754,57 @@ model ActivityLog {
   @@index([organizationId, entityType, entityId, createdAt])
   @@index([organizationId, action, createdAt])
   @@map("activity_logs")
+}
+
+model EmailTemplate {
+  id             String         @id @default(uuid()) @db.Uuid
+  organizationId String         @map("organization_id") @db.Uuid
+  name           String         @db.VarChar(160)
+  subject        String         @db.VarChar(300)
+  body           String         @db.Text
+  active         Boolean        @default(true)
+  createdById    String         @map("created_by_id") @db.Uuid
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+  organization   Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User           @relation("EmailTemplateCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  messages       EmailMessage[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, active, updatedAt])
+  @@map("email_templates")
+}
+
+model EmailMessage {
+  id               String                 @id @default(uuid()) @db.Uuid
+  organizationId   String                 @map("organization_id") @db.Uuid
+  senderUserId     String                 @map("sender_user_id") @db.Uuid
+  templateId       String?                @map("template_id") @db.Uuid
+  relatedEntityType EmailRelatedEntityType @map("related_entity_type")
+  relatedEntityId  String                 @map("related_entity_id") @db.Uuid
+  fromName         String                 @map("from_name") @db.VarChar(160)
+  fromAddress      String                 @map("from_address") @db.VarChar(320)
+  replyTo          String?                @map("reply_to") @db.VarChar(320)
+  toAddresses      String[]               @map("to_addresses")
+  ccAddresses      String[]               @map("cc_addresses")
+  subject          String                 @db.VarChar(300)
+  body             String                 @db.Text
+  status           EmailMessageStatus     @default(DRAFT)
+  queuedAt         DateTime?              @map("queued_at")
+  sentAt           DateTime?              @map("sent_at")
+  failedAt         DateTime?              @map("failed_at")
+  safeErrorSummary String?                @map("safe_error_summary") @db.VarChar(1000)
+  idempotencyKey   String?                @map("idempotency_key") @db.VarChar(300)
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sender           User                   @relation("EmailMessageSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+  template         EmailTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@unique([organizationId, idempotencyKey])
+  @@index([organizationId, relatedEntityType, relatedEntityId, createdAt])
+  @@index([organizationId, status, createdAt])
+  @@map("email_messages")
 }
 
 model Project {

@@ -21,6 +21,12 @@ export function SettingsNav() {
     { label: 'Data Management', href: '/app/settings/data-management', permission: 'data.export' },
     { label: 'Integrations', href: '/app/settings/integrations', permission: 'integration.read' },
     { label: 'Automations', href: '/app/settings/automations', permission: 'automation.read' },
+    { label: 'Email', href: '/app/settings/email', permission: 'email_template.read' },
+    {
+      label: 'Email Templates',
+      href: '/app/settings/email-templates',
+      permission: 'email_template.read',
+    },
     { label: 'Security', href: '/app/settings/security', permission: 'security.sessions.read' },
   ];
   return (

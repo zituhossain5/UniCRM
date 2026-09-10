@@ -11,6 +11,7 @@ import {
   AUTOMATION_RECOVERY_JOB,
 } from '../automations/automation.constants';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
+import { CRM_EMAIL_DELIVERY_JOB, CRM_EMAIL_RECOVERY_JOB } from '../email/email.constants';
 
 @Injectable()
 export class JobsService implements OnModuleDestroy {
@@ -28,6 +29,20 @@ export class JobsService implements OnModuleDestroy {
       removeOnComplete: { age: 86_400, count: 1000 },
       removeOnFail: { age: 604_800, count: 5000 },
     });
+  }
+
+  async enqueueCrmEmail(messageId: string): Promise<void> {
+    await this.getQueue().add(
+      CRM_EMAIL_DELIVERY_JOB,
+      { messageId },
+      {
+        jobId: `crm-email-${messageId}-${Date.now()}`,
+        attempts: 5,
+        backoff: { delay: 10_000, type: 'exponential' },
+        removeOnComplete: { age: 86_400, count: 1000 },
+        removeOnFail: { age: 604_800, count: 5000 },
+      },
+    );
   }
 
   async enqueueIntegrationEvent(eventId: string): Promise<void> {
@@ -118,6 +133,16 @@ export class JobsService implements OnModuleDestroy {
         {},
         {
           jobId: AUTOMATION_RECOVERY_JOB,
+          repeat: { every: 60_000 },
+          removeOnComplete: { age: 86_400, count: 1000 },
+          removeOnFail: { age: 604_800, count: 5000 },
+        },
+      ),
+      this.getQueue().add(
+        CRM_EMAIL_RECOVERY_JOB,
+        {},
+        {
+          jobId: CRM_EMAIL_RECOVERY_JOB,
           repeat: { every: 60_000 },
           removeOnComplete: { age: 86_400, count: 1000 },
           removeOnFail: { age: 604_800, count: 5000 },

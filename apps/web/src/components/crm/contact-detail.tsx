@@ -24,6 +24,7 @@ import {
 import { Archive, ArrowLeft, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { RecordEmail } from './record-email';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 
 const EDIT_CONTACT_FORM_ID = 'edit-contact-form';
@@ -105,8 +106,11 @@ export function ContactDetail({ id }: { id: string }) {
         actions={
           !contact.archivedAt &&
           (current.permissions.includes('contact.update') ||
-            current.permissions.includes('contact.delete')) ? (
+            current.permissions.includes('contact.delete') ||
+            current.permissions.includes('email.read') ||
+            current.permissions.includes('email.send')) ? (
             <div className="record-actions">
+              <RecordEmail entityId={contact.id} entityType="CONTACT" />
               {current.permissions.includes('contact.update') ? (
                 <Sheet
                   open={open}

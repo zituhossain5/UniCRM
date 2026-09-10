@@ -53,4 +53,5 @@ export const ACTION_TYPES = [
   'CHANGE_PRIORITY',
   'CREATE_NOTIFICATION',
   'TRIGGER_WEBHOOK',
+  'SEND_EMAIL',
 ] as const;

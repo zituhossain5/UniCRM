@@ -9,6 +9,8 @@ export interface AuditInput {
   entityType:
     | 'AUTOMATION'
     | 'AUTOMATION_RUN'
+    | 'EMAIL'
+    | 'EMAIL_TEMPLATE'
     | 'ATTACHMENT'
     | 'COMPANY'
     | 'CONTACT'

@@ -9,6 +9,10 @@ export interface EmailMessage {
   to: string;
   subject: string;
   text: string;
+  cc?: string[];
+  fromName?: string;
+  fromAddress?: string;
+  replyTo?: string;
   createdAt: string;
 }
 
@@ -39,10 +43,15 @@ export class EmailTransportService {
   async deliver(input: Omit<EmailMessage, 'id' | 'createdAt'>): Promise<void> {
     if (this.transporter) {
       await this.transporter.sendMail({
-        from:
-          this.config.get('SMTP_FROM', { infer: true }) ??
-          this.config.get('EMAIL_FROM', { infer: true }),
-        ...input,
+        to: input.to,
+        cc: input.cc,
+        subject: input.subject,
+        text: input.text,
+        from: input.fromAddress
+          ? { name: input.fromName ?? '', address: input.fromAddress }
+          : (this.config.get('SMTP_FROM', { infer: true }) ??
+            this.config.get('EMAIL_FROM', { infer: true })),
+        replyTo: input.replyTo,
       });
       return;
     }
