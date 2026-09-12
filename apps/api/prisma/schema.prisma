@@ -89,6 +89,22 @@ enum EmailMessageStatus {
   FAILED
 }
 
+enum EmailDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum MailboxConnectionStatus {
+  CONNECTED
+  SYNCING
+  ERROR
+  DISABLED
+}
+
+enum MailboxIncomingProtocol {
+  IMAP
+}
+
 enum FollowUpStatus {
   PENDING
   COMPLETED
@@ -356,6 +372,9 @@ model Organization {
   automationRuns          AutomationRun[]
   emailTemplates          EmailTemplate[]
   emailMessages           EmailMessage[]
+  mailboxConnections      MailboxConnection[]
+  emailThreads            EmailThread[]
+  emailAttachments        EmailAttachment[]
 
   @@map("organizations")
 }
@@ -778,10 +797,13 @@ model EmailTemplate {
 model EmailMessage {
   id               String                 @id @default(uuid()) @db.Uuid
   organizationId   String                 @map("organization_id") @db.Uuid
-  senderUserId     String                 @map("sender_user_id") @db.Uuid
+  senderUserId     String?                @map("sender_user_id") @db.Uuid
   templateId       String?                @map("template_id") @db.Uuid
-  relatedEntityType EmailRelatedEntityType @map("related_entity_type")
-  relatedEntityId  String                 @map("related_entity_id") @db.Uuid
+  mailboxConnectionId String?              @map("mailbox_connection_id") @db.Uuid
+  threadId         String?                 @map("thread_id") @db.Uuid
+  direction        EmailDirection         @default(OUTBOUND)
+  relatedEntityType EmailRelatedEntityType? @map("related_entity_type")
+  relatedEntityId  String?                @map("related_entity_id") @db.Uuid
   fromName         String                 @map("from_name") @db.VarChar(160)
   fromAddress      String                 @map("from_address") @db.VarChar(320)
   replyTo          String?                @map("reply_to") @db.VarChar(320)
@@ -789,22 +811,101 @@ model EmailMessage {
   ccAddresses      String[]               @map("cc_addresses")
   subject          String                 @db.VarChar(300)
   body             String                 @db.Text
+  externalMessageId String?               @map("external_message_id") @db.VarChar(998)
+  inReplyTo        String?                @map("in_reply_to") @db.VarChar(998)
+  references       String[]               @default([])
+  providerUid      String?                @map("provider_uid") @db.VarChar(128)
+  folder           String?                @db.VarChar(64)
   status           EmailMessageStatus     @default(DRAFT)
   queuedAt         DateTime?              @map("queued_at")
   sentAt           DateTime?              @map("sent_at")
   failedAt         DateTime?              @map("failed_at")
+  receivedAt       DateTime?              @map("received_at")
   safeErrorSummary String?                @map("safe_error_summary") @db.VarChar(1000)
   idempotencyKey   String?                @map("idempotency_key") @db.VarChar(300)
   createdAt        DateTime               @default(now()) @map("created_at")
   updatedAt        DateTime               @updatedAt @map("updated_at")
   organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sender           User                   @relation("EmailMessageSender", fields: [senderUserId], references: [id], onDelete: Restrict)
+  sender           User?                  @relation("EmailMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
   template         EmailTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  mailboxConnection MailboxConnection?    @relation(fields: [mailboxConnectionId], references: [id], onDelete: SetNull)
+  thread           EmailThread?           @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  attachments      EmailAttachment[]
 
   @@unique([organizationId, idempotencyKey])
+  @@unique([mailboxConnectionId, externalMessageId])
+  @@unique([mailboxConnectionId, folder, providerUid])
   @@index([organizationId, relatedEntityType, relatedEntityId, createdAt])
   @@index([organizationId, status, createdAt])
+  @@index([organizationId, mailboxConnectionId, direction, createdAt])
+  @@index([organizationId, threadId, createdAt])
   @@map("email_messages")
+}
+
+model MailboxConnection {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  organizationId      String                  @map("organization_id") @db.Uuid
+  name                String                  @db.VarChar(160)
+  emailAddress        String                  @map("email_address") @db.VarChar(320)
+  displayName         String?                 @map("display_name") @db.VarChar(160)
+  status              MailboxConnectionStatus @default(CONNECTED)
+  incomingProtocol    MailboxIncomingProtocol @default(IMAP) @map("incoming_protocol")
+  imapHost            String                  @map("imap_host") @db.VarChar(255)
+  imapPort            Int                     @map("imap_port")
+  imapSecure          Boolean                 @default(true) @map("imap_secure")
+  smtpHost            String                  @map("smtp_host") @db.VarChar(255)
+  smtpPort            Int                     @map("smtp_port")
+  smtpSecure          Boolean                 @default(true) @map("smtp_secure")
+  username            String                  @db.VarChar(320)
+  encryptedCredential String                  @map("encrypted_credential") @db.Text
+  lastSyncedAt        DateTime?               @map("last_synced_at")
+  syncState           Json?                   @map("sync_state")
+  safeErrorSummary    String?                 @map("safe_error_summary") @db.VarChar(500)
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  messages            EmailMessage[]
+  threads             EmailThread[]
+
+  @@unique([organizationId, emailAddress])
+  @@index([organizationId, status, updatedAt])
+  @@map("mailbox_connections")
+}
+
+model EmailThread {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  organizationId      String                  @map("organization_id") @db.Uuid
+  mailboxConnectionId String?                 @map("mailbox_connection_id") @db.Uuid
+  relatedEntityType   EmailRelatedEntityType? @map("related_entity_type")
+  relatedEntityId     String?                 @map("related_entity_id") @db.Uuid
+  subject             String                  @db.VarChar(300)
+  lastMessageAt       DateTime                @map("last_message_at")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  mailboxConnection   MailboxConnection?      @relation(fields: [mailboxConnectionId], references: [id], onDelete: SetNull)
+  messages            EmailMessage[]
+
+  @@index([organizationId, mailboxConnectionId, lastMessageAt])
+  @@index([organizationId, relatedEntityType, relatedEntityId, lastMessageAt])
+  @@map("email_threads")
+}
+
+model EmailAttachment {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  emailMessageId String       @map("email_message_id") @db.Uuid
+  fileName       String       @map("file_name") @db.VarChar(255)
+  mimeType       String       @map("mime_type") @db.VarChar(255)
+  size           Int
+  storageKey     String       @unique @map("storage_key")
+  contentId      String?      @map("content_id") @db.VarChar(998)
+  createdAt      DateTime     @default(now()) @map("created_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  emailMessage   EmailMessage @relation(fields: [emailMessageId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, emailMessageId])
+  @@map("email_attachments")
 }
 
 model Project {

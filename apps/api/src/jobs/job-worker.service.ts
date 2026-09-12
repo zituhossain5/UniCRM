@@ -20,6 +20,9 @@ import {
 } from '../integrations/integration.constants';
 import { JobsService } from './jobs.service';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
+import { MailboxesService } from '../mailboxes/mailboxes.service';
+import { MAILBOX_RECOVERY_JOB, MAILBOX_SYNC_JOB } from '../mailboxes/mailbox.constants';
+import { safeMailboxError } from '../mailboxes/mailbox.helpers';
 
 @Injectable()
 export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
@@ -35,6 +38,7 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
     @Inject(AutomationsService) private readonly automations: AutomationsService,
+    @Inject(MailboxesService) private readonly mailboxes: MailboxesService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -60,6 +64,9 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
             job.opts.attempts ?? 1,
           );
         if (job.name === CRM_EMAIL_RECOVERY_JOB) return this.crmEmail.recoverQueued();
+        if (job.name === MAILBOX_SYNC_JOB)
+          return this.mailboxes.syncMailbox((job.data as { mailboxId: string }).mailboxId);
+        if (job.name === MAILBOX_RECOVERY_JOB) return this.mailboxes.recoverMailboxes();
         if (job.name === 'notification-sweep') return this.notifications.generateScheduled();
         if (job.name === 'auth-maintenance')
           return this.authMaintenance.cleanupExpiredCredentials();
@@ -79,6 +86,10 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
       },
     );
     this.worker.on('failed', (job, error) => {
+      if (job?.name === MAILBOX_SYNC_JOB || job?.name === MAILBOX_RECOVERY_JOB) {
+        this.logger.error(`Job failed: ${job.name} ${safeMailboxError(error)}`);
+        return;
+      }
       this.logger.error(`Job failed: ${job?.name ?? 'unknown'} ${error.message}`, error.stack);
     });
     await this.jobs.scheduleRecurringMaintenance();
@@ -90,6 +101,8 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     this.logger.log(`Automation recovery queued runs=${recoveredAutomations.runs}`);
     const recoveredEmails = await this.crmEmail.recoverQueued();
     this.logger.log(`CRM email recovery queued messages=${recoveredEmails.messages}`);
+    const recoveredMailboxes = await this.mailboxes.recoverMailboxes();
+    this.logger.log(`Mailbox recovery queued mailboxes=${recoveredMailboxes.mailboxes}`);
   }
 
   async onApplicationShutdown(): Promise<void> {

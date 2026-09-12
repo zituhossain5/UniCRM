@@ -12,6 +12,6 @@ import { WebhookUrlService } from './webhook-url.service';
   imports: [AuditModule, AuthModule, JobsModule],
   controllers: [IntegrationsController],
   providers: [IntegrationSecretService, IntegrationsService, WebhookUrlService],
-  exports: [IntegrationsService],
+  exports: [IntegrationSecretService, IntegrationsService],
 })
 export class IntegrationsModule {}

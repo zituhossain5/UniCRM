@@ -13,11 +13,13 @@ import { Badge, Button, Input, Select, Sheet, Textarea } from '@unicrm/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { LoaderCircle, Mail } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { EmailThreadSheet } from '../mail/email-thread-sheet';
 
 type EntityType = 'LEAD' | 'CONTACT' | 'COMPANY';
 type Template = { id: string; name: string; subject: string; body: string };
 type Message = {
   id: string;
+  threadId?: string | null;
   subject: string;
   toAddresses: string[];
   fromName: string;
@@ -26,11 +28,20 @@ type Message = {
   failedAt?: string;
   createdAt: string;
   safeErrorSummary?: string;
+  direction?: 'INBOUND' | 'OUTBOUND';
+  receivedAt?: string;
 };
 type Context = {
   recipient?: string;
   settings: { fromName?: string; fromAddress?: string; replyTo?: string };
   templates: Template[];
+  mailboxes: Array<{
+    id: string;
+    name: string;
+    emailAddress: string;
+    displayName?: string;
+    status: string;
+  }>;
 };
 
 export function RecordEmail({
@@ -45,7 +56,9 @@ export function RecordEmail({
   const user = useCurrentUser();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
+  const [threadId, setThreadId] = useState<string | null>(null);
   const [templateId, setTemplateId] = useState<string | null>(null);
+  const [mailboxId, setMailboxId] = useState('organization');
   const [to, setTo] = useState('');
   const [cc, setCc] = useState('');
   const [subject, setSubject] = useState('');
@@ -54,6 +67,7 @@ export function RecordEmail({
   const previousMessages = useRef<Message[]>([]);
   const canRead = user.permissions.includes('email.read');
   const canSend = user.permissions.includes('email.send');
+  const canReadThreads = user.permissions.includes('mail.read');
   const contextKey = ['emails', 'compose-context', entityType, entityId] as const;
   const historyKey = ['emails', 'history', entityType, entityId] as const;
 
@@ -83,6 +97,11 @@ export function RecordEmail({
   }, [context?.recipient]);
 
   useEffect(() => {
+    if (!context || context.settings.fromAddress || !context.mailboxes[0]) return;
+    setMailboxId((current) => (current === 'organization' ? context.mailboxes[0]!.id : current));
+  }, [context]);
+
+  useEffect(() => {
     const previous = previousMessages.current;
     if (open && shouldRefreshRelatedCrmActivity(previous, messages)) onDeliveryStatusChange?.();
     previousMessages.current = messages;
@@ -100,6 +119,7 @@ export function RecordEmail({
         body: JSON.stringify({
           relatedEntityType: entityType,
           relatedEntityId: entityId,
+          ...(mailboxId !== 'organization' ? { mailboxConnectionId: mailboxId } : {}),
           ...(templateId ? { templateId } : {}),
           to: split(to),
           cc: split(cc),
@@ -164,13 +184,24 @@ export function RecordEmail({
         <form className="dialog-form" onSubmit={submit}>
           <label>
             <span>From</span>
-            <Input
-              disabled
-              value={
-                context?.settings.fromAddress
-                  ? `${context.settings.fromName} <${context.settings.fromAddress}>`
-                  : 'Configure Settings -> Email first'
-              }
+            <Select
+              value={mailboxId}
+              onValueChange={(value) => setMailboxId(value ?? 'organization')}
+              options={[
+                ...(context?.settings.fromAddress
+                  ? [
+                      {
+                        label: `${context.settings.fromName} <${context.settings.fromAddress}>`,
+                        value: 'organization',
+                      },
+                    ]
+                  : []),
+                ...(context?.mailboxes ?? []).map((mailbox) => ({
+                  label: `${mailbox.displayName ?? mailbox.name} <${mailbox.emailAddress}>`,
+                  value: mailbox.id,
+                })),
+              ]}
+              placeholder="Configure Settings -> Email first"
             />
           </label>
           <label>
@@ -216,7 +247,9 @@ export function RecordEmail({
             />
           </label>
           <Button
-            disabled={!context?.settings.fromAddress || queueEmail.isPending}
+            disabled={
+              !(context?.settings.fromAddress || context?.mailboxes.length) || queueEmail.isPending
+            }
             loading={queueEmail.isPending}
             type="submit"
           >
@@ -228,13 +261,27 @@ export function RecordEmail({
         <h3>Email history</h3>
         {messages.length ? (
           messages.map((message) => (
-            <article key={message.id}>
+            <button
+              aria-label={
+                message.threadId
+                  ? `Open email conversation: ${message.subject}`
+                  : `Email without a synchronized conversation: ${message.subject}`
+              }
+              className="record-email-history-item"
+              disabled={!message.threadId || !canReadThreads}
+              key={message.id}
+              onClick={() => message.threadId && setThreadId(message.threadId)}
+              type="button"
+            >
               <div>
                 <strong>{message.subject}</strong>
                 <p>
-                  {message.toAddresses.join(', ')} ·{' '}
+                  {message.direction === 'INBOUND'
+                    ? `From ${message.fromName}`
+                    : message.toAddresses.join(', ')}{' '}
+                  ·{' '}
                   {new Date(
-                    message.sentAt ?? message.failedAt ?? message.createdAt,
+                    message.receivedAt ?? message.sentAt ?? message.failedAt ?? message.createdAt,
                   ).toLocaleString()}
                 </p>
                 {message.safeErrorSummary ? <p>{message.safeErrorSummary}</p> : null}
@@ -251,14 +298,19 @@ export function RecordEmail({
                 {message.status === 'QUEUED' || message.status === 'SENDING' ? (
                   <LoaderCircle aria-hidden="true" className="ui-spin" size={12} />
                 ) : null}
-                {message.status}
+                {message.direction === 'INBOUND' ? 'INCOMING' : message.status}
               </Badge>
-            </article>
+            </button>
           ))
         ) : (
           <p>No email has been sent from this record.</p>
         )}
       </section>
+      <EmailThreadSheet
+        threadId={threadId}
+        onClose={() => setThreadId(null)}
+        onDeliveryStatusChange={onDeliveryStatusChange}
+      />
     </Sheet>
   );
 }

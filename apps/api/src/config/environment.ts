@@ -46,6 +46,14 @@ const environmentSchema = z
     INTEGRATION_WEBHOOK_TIMEOUT_MS: z.coerce.number().int().positive().max(60_000).default(10_000),
     JOB_QUEUE_PREFIX: z.string().min(1).default('unicrm'),
     LOG_FORMAT: z.enum(['pretty', 'json']).default('pretty'),
+    MAILBOX_CONNECTION_TIMEOUT_MS: z.coerce.number().int().min(1000).max(60_000).default(10_000),
+    MAILBOX_MESSAGE_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(25 * 1024 * 1024)
+      .default(10 * 1024 * 1024),
+    MAILBOX_SYNC_BATCH_SIZE: z.coerce.number().int().min(1).max(250).default(100),
     REQUEST_ID_HEADER: z.string().min(1).default('x-request-id'),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PASSWORD_RESET_TTL_SECONDS: z.coerce.number().int().positive().default(3600),

@@ -8,6 +8,8 @@ import {
 } from './crm-email.controller';
 import { CrmEmailService } from './crm-email.service';
 import { EmailService, EmailTransportService } from './email.service';
+import { MailboxTransportService } from './mailbox-transport.service';
+import { IntegrationsModule } from '../integrations/integrations.module';
 
 @Global()
 @Module({
@@ -17,8 +19,8 @@ import { EmailService, EmailTransportService } from './email.service';
     EmailSettingsController,
     CrmEmailsController,
   ],
-  exports: [EmailService, EmailTransportService, CrmEmailService],
-  imports: [JobsModule],
-  providers: [EmailService, EmailTransportService, CrmEmailService],
+  exports: [EmailService, EmailTransportService, MailboxTransportService, CrmEmailService],
+  imports: [JobsModule, IntegrationsModule],
+  providers: [EmailService, EmailTransportService, MailboxTransportService, CrmEmailService],
 })
 export class EmailModule {}

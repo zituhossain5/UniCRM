@@ -11,6 +11,7 @@ import { JobWorkerService } from './job-worker.service';
 import { JobsModule } from './jobs.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { AutomationsModule } from '../automations/automations.module';
+import { MailboxesModule } from '../mailboxes/mailboxes.module';
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { AutomationsModule } from '../automations/automations.module';
     NotificationsModule,
     IntegrationsModule,
     AutomationsModule,
+    MailboxesModule,
   ],
   providers: [JobWorkerService, StructuredLogger],
 })

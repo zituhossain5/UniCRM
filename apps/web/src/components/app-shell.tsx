@@ -32,6 +32,7 @@ import {
   LayoutDashboard,
   ListChecks,
   Menu,
+  Mail,
   Moon,
   Plus,
   Search,
@@ -77,6 +78,7 @@ const navSections: readonly NavSection[] = [
       { href: '/app/leads', icon: UsersRound, label: 'Leads' },
       { href: '/app/companies', icon: Building2, label: 'Companies' },
       { href: '/app/contacts', icon: ContactRound, label: 'Contacts' },
+      { href: '/app/email', icon: Mail, label: 'Email', permission: 'mail.read' },
     ],
   },
   {

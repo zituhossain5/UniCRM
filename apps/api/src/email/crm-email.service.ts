@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   HttpException,
   HttpStatus,
   Inject,
@@ -12,7 +13,14 @@ import { UnrecoverableError } from 'bullmq';
 import { isEmail } from 'class-validator';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { PrismaService } from '../database/prisma.service';
-import { EmailMessageStatus, EmailRelatedEntityType } from '../generated/prisma/enums';
+import {
+  EmailDirection,
+  EmailMessageStatus,
+  EmailRelatedEntityType,
+  MailboxConnectionStatus,
+} from '../generated/prisma/enums';
+import { IntegrationSecretService } from '../integrations/integration-secret.service';
+import { PERMISSIONS } from '../auth/auth.constants';
 import { JobsService } from '../jobs/jobs.service';
 import { RedisService } from '../redis/redis.service';
 import type {
@@ -24,6 +32,8 @@ import type {
 } from './dto/crm-email.dto';
 import type { EmailRecipientSource } from './email.constants';
 import { EmailService, EmailTransportService } from './email.service';
+import { MailboxTransportService } from './mailbox-transport.service';
+import { safeMailboxError } from '../mailboxes/mailbox.helpers';
 import { renderTemplate, validateTemplate } from './template-renderer';
 
 type Context = {
@@ -39,6 +49,8 @@ export class CrmEmailService {
     @Inject(EmailService) private readonly email: EmailService,
     @Inject(EmailTransportService) private readonly transport: EmailTransportService,
     @Inject(RedisService) private readonly redis: RedisService,
+    @Inject(MailboxTransportService) private readonly mailboxTransport: MailboxTransportService,
+    @Inject(IntegrationSecretService) private readonly secrets: IntegrationSecretService,
   ) {}
 
   listTemplates(principal: AuthenticatedPrincipal, active?: boolean) {
@@ -182,15 +194,25 @@ export class CrmEmailService {
     entityType: EmailRelatedEntityType,
     entityId: string,
   ) {
-    const [context, settings, templates] = await Promise.all([
+    const [context, settings, templates, mailboxes] = await Promise.all([
       this.context(principal.organizationId, principal.userId, entityType, entityId),
       this.getSettings(principal),
       this.listTemplates(principal, true),
+      this.prisma.mailboxConnection.findMany({
+        where: {
+          organizationId: principal.organizationId,
+          status: { not: MailboxConnectionStatus.DISABLED },
+        },
+        select: { id: true, name: true, emailAddress: true, displayName: true, status: true },
+        orderBy: { emailAddress: 'asc' },
+      }),
     ]);
-    return { recipient: context.recipient, settings, templates };
+    return { recipient: context.recipient, settings, templates, mailboxes };
   }
 
   async send(principal: AuthenticatedPrincipal, dto: SendCrmEmailDto) {
+    if (dto.mailboxConnectionId && !principal.permissions.includes(PERMISSIONS.mailSend))
+      throw new ForbiddenException('Mailbox sending permission is required');
     await this.consumeRateLimit(principal.organizationId, principal.userId);
     await this.context(
       principal.organizationId,
@@ -209,6 +231,7 @@ export class CrmEmailService {
       cc: dto.cc ?? [],
       subject: dto.subject,
       body: dto.body,
+      mailboxConnectionId: dto.mailboxConnectionId,
     });
   }
 
@@ -262,12 +285,15 @@ export class CrmEmailService {
         where,
         select: {
           id: true,
+          direction: true,
+          threadId: true,
           subject: true,
           toAddresses: true,
           fromName: true,
           fromAddress: true,
           status: true,
           sentAt: true,
+          receivedAt: true,
           failedAt: true,
           createdAt: true,
           safeErrorSummary: true,
@@ -298,43 +324,72 @@ export class CrmEmailService {
   }
 
   async processDelivery(messageId: string, attemptsMade: number, maxAttempts: number) {
-    const message = await this.prisma.emailMessage.findUnique({ where: { id: messageId } });
+    const message = await this.prisma.emailMessage.findUnique({
+      where: { id: messageId },
+      include: { mailboxConnection: true },
+    });
     if (!message || message.status === EmailMessageStatus.SENT) return;
     await this.prisma.emailMessage.update({
       where: { id: message.id },
       data: { status: EmailMessageStatus.SENDING, safeErrorSummary: null },
     });
     try {
-      await this.transport.deliver({
-        to: message.toAddresses.join(', '),
-        cc: message.ccAddresses,
-        subject: message.subject,
-        text: message.body,
-        fromName: message.fromName,
-        fromAddress: message.fromAddress,
-        replyTo: message.replyTo ?? undefined,
-      });
+      let deliveredMessageId: string | undefined;
+      if (message.mailboxConnection) {
+        deliveredMessageId = (
+          await this.mailboxTransport.send(
+            message.mailboxConnection,
+            this.secrets.decrypt(message.mailboxConnection.encryptedCredential),
+            {
+              to: message.toAddresses,
+              cc: message.ccAddresses,
+              subject: message.subject,
+              text: message.body,
+              messageId: message.externalMessageId ?? this.createMessageId(message.fromAddress),
+              inReplyTo: message.inReplyTo ?? undefined,
+              references: message.references,
+            },
+          )
+        ).messageId;
+      } else {
+        await this.transport.deliver({
+          to: message.toAddresses.join(', '),
+          cc: message.ccAddresses,
+          subject: message.subject,
+          text: message.body,
+          fromName: message.fromName,
+          fromAddress: message.fromAddress,
+          replyTo: message.replyTo ?? undefined,
+        });
+      }
       await this.prisma.$transaction(async (tx) => {
         const sentAt = new Date();
         await tx.emailMessage.update({
           where: { id: message.id },
-          data: { status: EmailMessageStatus.SENT, sentAt, failedAt: null, safeErrorSummary: null },
-        });
-        await tx.activityLog.create({
           data: {
-            organizationId: message.organizationId,
-            actorId: message.senderUserId,
-            entityType: message.relatedEntityType,
-            entityId: message.relatedEntityId,
-            action: 'EMAIL_SENT',
-            metadata: {
-              emailMessageId: message.id,
-              subject: message.subject,
-              recipients: message.toAddresses,
-            },
+            status: EmailMessageStatus.SENT,
+            sentAt,
+            failedAt: null,
+            safeErrorSummary: null,
+            ...(deliveredMessageId ? { externalMessageId: deliveredMessageId } : {}),
           },
         });
-        if (message.relatedEntityType === EmailRelatedEntityType.LEAD)
+        if (message.relatedEntityType && message.relatedEntityId)
+          await tx.activityLog.create({
+            data: {
+              organizationId: message.organizationId,
+              actorId: message.senderUserId,
+              entityType: message.relatedEntityType,
+              entityId: message.relatedEntityId,
+              action: 'EMAIL_SENT',
+              metadata: {
+                emailMessageId: message.id,
+                subject: message.subject,
+                recipients: message.toAddresses,
+              },
+            },
+          });
+        if (message.relatedEntityType === EmailRelatedEntityType.LEAD && message.relatedEntityId)
           await tx.leadActivity.create({
             data: {
               organizationId: message.organizationId,
@@ -351,15 +406,18 @@ export class CrmEmailService {
     } catch (error) {
       const permanent = this.permanentFailure(error);
       const finalAttempt = permanent || attemptsMade + 1 >= maxAttempts;
+      const errorSummary = message.mailboxConnection
+        ? safeMailboxError(error)
+        : this.safeError(error);
       await this.prisma.emailMessage.update({
         where: { id: message.id },
         data: {
           status: finalAttempt ? EmailMessageStatus.FAILED : EmailMessageStatus.QUEUED,
           failedAt: finalAttempt ? new Date() : null,
-          safeErrorSummary: this.safeError(error),
+          safeErrorSummary: errorSummary,
         },
       });
-      if (permanent) throw new UnrecoverableError(this.safeError(error));
+      if (permanent) throw new UnrecoverableError(errorSummary);
       throw error;
     }
   }
@@ -387,6 +445,7 @@ export class CrmEmailService {
     cc: string[];
     subject: string;
     body: string;
+    mailboxConnectionId?: string;
     idempotencyKey?: string;
   }) {
     const to = this.cleanAddresses(input.to);
@@ -399,11 +458,22 @@ export class CrmEmailService {
       where: { id: input.organizationId },
       select: { emailFromName: true, emailFromAddress: true, emailReplyTo: true },
     });
-    if (!organization.emailFromName || !organization.emailFromAddress)
+    const mailbox = input.mailboxConnectionId
+      ? await this.prisma.mailboxConnection.findFirst({
+          where: {
+            id: input.mailboxConnectionId,
+            organizationId: input.organizationId,
+            status: { not: MailboxConnectionStatus.DISABLED },
+          },
+        })
+      : null;
+    if (input.mailboxConnectionId && !mailbox)
+      throw new BadRequestException('Selected mailbox is unavailable');
+    if (!mailbox && (!organization.emailFromName || !organization.emailFromAddress))
       throw new BadRequestException('Organization email identity is not configured');
     this.rejectHeaderInjection(
-      organization.emailFromName,
-      organization.emailFromAddress,
+      mailbox?.displayName ?? organization.emailFromName ?? undefined,
+      mailbox?.emailAddress ?? organization.emailFromAddress ?? undefined,
       organization.emailReplyTo ?? undefined,
     );
     if (input.idempotencyKey) {
@@ -417,24 +487,43 @@ export class CrmEmailService {
       });
       if (existing) return existing;
     }
-    const message = await this.prisma.emailMessage.create({
-      data: {
-        organizationId: input.organizationId,
-        senderUserId: input.senderUserId,
-        templateId: input.templateId,
-        relatedEntityType: input.relatedEntityType,
-        relatedEntityId: input.relatedEntityId,
-        fromName: organization.emailFromName,
-        fromAddress: organization.emailFromAddress,
-        replyTo: organization.emailReplyTo,
-        toAddresses: to,
-        ccAddresses: cc,
-        subject: input.subject.trim(),
-        body: input.body,
-        status: EmailMessageStatus.QUEUED,
-        queuedAt: new Date(),
-        idempotencyKey: input.idempotencyKey,
-      },
+    const message = await this.prisma.$transaction(async (tx) => {
+      const externalMessageId = mailbox ? this.createMessageId(mailbox.emailAddress) : undefined;
+      const thread = mailbox
+        ? await tx.emailThread.create({
+            data: {
+              organizationId: input.organizationId,
+              mailboxConnectionId: mailbox.id,
+              relatedEntityType: input.relatedEntityType,
+              relatedEntityId: input.relatedEntityId,
+              subject: input.subject.trim(),
+              lastMessageAt: new Date(),
+            },
+          })
+        : null;
+      return tx.emailMessage.create({
+        data: {
+          organizationId: input.organizationId,
+          senderUserId: input.senderUserId,
+          templateId: input.templateId,
+          mailboxConnectionId: mailbox?.id,
+          threadId: thread?.id,
+          direction: EmailDirection.OUTBOUND,
+          relatedEntityType: input.relatedEntityType,
+          relatedEntityId: input.relatedEntityId,
+          fromName: mailbox?.displayName ?? mailbox?.name ?? organization.emailFromName!,
+          fromAddress: mailbox?.emailAddress ?? organization.emailFromAddress!,
+          replyTo: mailbox?.emailAddress ?? organization.emailReplyTo,
+          toAddresses: to,
+          ccAddresses: cc,
+          subject: input.subject.trim(),
+          body: input.body,
+          status: EmailMessageStatus.QUEUED,
+          queuedAt: new Date(),
+          idempotencyKey: input.idempotencyKey,
+          externalMessageId,
+        },
+      });
     });
     try {
       await this.jobs.enqueueCrmEmail(message.id);
@@ -596,5 +685,10 @@ export class CrmEmailService {
     );
     if (count > 20)
       throw new HttpException('Email send rate limit exceeded', HttpStatus.TOO_MANY_REQUESTS);
+  }
+
+  private createMessageId(emailAddress: string) {
+    const domain = emailAddress.split('@')[1]?.replace(/[^a-z0-9.-]/gi, '') || 'unicrm.local';
+    return `<${crypto.randomUUID()}@${domain}>`;
   }
 }

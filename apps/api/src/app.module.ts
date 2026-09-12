@@ -37,6 +37,7 @@ import { SavedViewsModule } from './saved-views/saved-views.module';
 import { DataManagementModule } from './data-management/data-management.module';
 import { IntegrationsModule } from './integrations/integrations.module';
 import { AutomationsModule } from './automations/automations.module';
+import { MailboxesModule } from './mailboxes/mailboxes.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { AutomationsModule } from './automations/automations.module';
     RedisModule,
     JobsModule,
     EmailModule,
+    MailboxesModule,
     AuthModule,
     NotificationsModule,
     UsersModule,

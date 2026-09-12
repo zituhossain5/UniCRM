@@ -12,6 +12,7 @@ import {
 } from '../automations/automation.constants';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 import { CRM_EMAIL_DELIVERY_JOB, CRM_EMAIL_RECOVERY_JOB } from '../email/email.constants';
+import { MAILBOX_RECOVERY_JOB, MAILBOX_SYNC_JOB } from '../mailboxes/mailbox.constants';
 
 @Injectable()
 export class JobsService implements OnModuleDestroy {
@@ -38,6 +39,20 @@ export class JobsService implements OnModuleDestroy {
       {
         jobId: `crm-email-${messageId}-${Date.now()}`,
         attempts: 5,
+        backoff: { delay: 10_000, type: 'exponential' },
+        removeOnComplete: { age: 86_400, count: 1000 },
+        removeOnFail: { age: 604_800, count: 5000 },
+      },
+    );
+  }
+
+  async enqueueMailboxSync(mailboxId: string): Promise<void> {
+    await this.getQueue().add(
+      MAILBOX_SYNC_JOB,
+      { mailboxId },
+      {
+        jobId: `mailbox-sync-${mailboxId}-${Date.now()}`,
+        attempts: 3,
         backoff: { delay: 10_000, type: 'exponential' },
         removeOnComplete: { age: 86_400, count: 1000 },
         removeOnFail: { age: 604_800, count: 5000 },
@@ -144,6 +159,16 @@ export class JobsService implements OnModuleDestroy {
         {
           jobId: CRM_EMAIL_RECOVERY_JOB,
           repeat: { every: 60_000 },
+          removeOnComplete: { age: 86_400, count: 1000 },
+          removeOnFail: { age: 604_800, count: 5000 },
+        },
+      ),
+      this.getQueue().add(
+        MAILBOX_RECOVERY_JOB,
+        {},
+        {
+          jobId: MAILBOX_RECOVERY_JOB,
+          repeat: { every: 5 * 60_000 },
           removeOnComplete: { age: 86_400, count: 1000 },
           removeOnFail: { age: 604_800, count: 5000 },
         },

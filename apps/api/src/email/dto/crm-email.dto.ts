@@ -47,6 +47,7 @@ export class SendCrmEmailDto {
   @IsIn(Object.values(EmailRelatedEntityType)) relatedEntityType!: EmailRelatedEntityType;
   @IsUUID() relatedEntityId!: string;
   @IsUUID() @IsOptional() templateId?: string;
+  @IsUUID() @IsOptional() mailboxConnectionId?: string;
   @IsArray() @ArrayMaxSize(10) @IsEmail({}, { each: true }) to!: string[];
   @IsArray() @ArrayMaxSize(10) @IsEmail({}, { each: true }) @IsOptional() cc?: string[];
   @IsString() @MinLength(1) @MaxLength(300) subject!: string;
