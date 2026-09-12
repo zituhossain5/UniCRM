@@ -498,6 +498,9 @@ export class CrmEmailService {
               relatedEntityId: input.relatedEntityId,
               subject: input.subject.trim(),
               lastMessageAt: new Date(),
+              assignedUserId: input.senderUserId,
+              inboxStatus: 'OPEN',
+              isUnread: false,
             },
           })
         : null;

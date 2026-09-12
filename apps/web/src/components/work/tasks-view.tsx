@@ -277,7 +277,7 @@ export function TasksView() {
                         <span>{task._count.comments} comments</span>
                       </button>
                     </td>
-                    <td>{task.project.name}</td>
+                    <td>{task.project?.name ?? 'No project'}</td>
                     <td>
                       <Badge
                         tone={

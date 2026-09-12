@@ -15,6 +15,7 @@ import { ATTACHMENT_STORAGE, type AttachmentStorage } from '../attachments/stora
 import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../database/prisma.service';
 import {
+  ConversationEventType,
   EmailDirection,
   EmailMessageStatus,
   EmailRelatedEntityType,
@@ -387,10 +388,29 @@ export class MailboxesService {
     const thread = await this.prisma.emailThread.findFirst({
       where: { id, organizationId: principal.organizationId },
       include: {
+        assignedUser: {
+          select: { id: true, firstName: true, lastName: true, email: true, status: true },
+        },
         mailboxConnection: { select: { id: true, name: true, emailAddress: true, status: true } },
         messages: {
           include: { attachments: true },
           orderBy: [{ receivedAt: 'asc' }, { createdAt: 'asc' }],
+        },
+        notes: {
+          include: {
+            author: {
+              select: { id: true, firstName: true, lastName: true, email: true, status: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
+        },
+        events: {
+          include: {
+            actor: {
+              select: { id: true, firstName: true, lastName: true, email: true, status: true },
+            },
+          },
+          orderBy: { createdAt: 'asc' },
         },
       },
     });
@@ -434,6 +454,18 @@ export class MailboxesService {
         },
         tx,
       );
+      await tx.conversationEvent.create({
+        data: {
+          organizationId: principal.organizationId,
+          threadId: thread.id,
+          actorUserId: principal.userId,
+          type: ConversationEventType.CRM_LINKED,
+          metadata: {
+            relatedEntityType: dto.relatedEntityType,
+            relatedEntityId: dto.relatedEntityId,
+          },
+        },
+      });
       if (latestInbound) {
         await tx.activityLog.create({
           data: {
@@ -632,6 +664,7 @@ export class MailboxesService {
               relatedEntityId: association.relatedEntityId,
               subject: (parsed.subject?.trim() || '(no subject)').slice(0, 300),
               lastMessageAt: occurredAt,
+              isUnread: direction === EmailDirection.INBOUND,
             },
           }));
         const message = await tx.emailMessage.create({
@@ -662,7 +695,10 @@ export class MailboxesService {
         });
         await tx.emailThread.update({
           where: { id: activeThread.id },
-          data: { lastMessageAt: occurredAt },
+          data: {
+            lastMessageAt: occurredAt,
+            ...(direction === EmailDirection.INBOUND ? { isUnread: true } : {}),
+          },
         });
         if (direction === EmailDirection.INBOUND && activeThread.relatedEntityId) {
           await tx.activityLog.create({

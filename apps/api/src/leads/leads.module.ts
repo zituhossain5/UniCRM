@@ -9,5 +9,6 @@ import { LeadsService } from './leads.service';
   imports: [PipelinesModule, CustomFieldsModule, TagsModule],
   controllers: [LeadsController, FollowUpsController],
   providers: [LeadsService],
+  exports: [LeadsService],
 })
 export class LeadsModule {}

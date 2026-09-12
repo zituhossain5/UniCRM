@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
   IsBoolean,
+  IsDateString,
+  IsEnum,
   IsEmail,
   IsIn,
   IsInt,
@@ -11,9 +13,13 @@ import {
   MaxLength,
   Min,
   MinLength,
+  ValidateIf,
 } from 'class-validator';
 import { EmailRelatedEntityType } from '../../generated/prisma/enums';
+import { InboxPriority, InboxThreadStatus } from '../../generated/prisma/enums';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
+import { CreateLeadDto } from '../../leads/dto/leads.dto';
+import { CreateTaskDto } from '../../tasks/dto/tasks.dto';
 
 export class CreateMailboxDto {
   @IsString() @MinLength(1) @MaxLength(160) name!: string;
@@ -62,3 +68,45 @@ export class ReplyThreadDto {
   @IsString() @MinLength(1) @MaxLength(300) subject!: string;
   @IsString() @MinLength(1) @MaxLength(50_000) body!: string;
 }
+
+export class SharedInboxQueryDto extends ListQueryDto {
+  @IsIn(['INBOX', 'UNASSIGNED', 'MINE', 'OPEN', 'WAITING', 'RESOLVED', 'UNMATCHED', 'SENT'])
+  @IsOptional()
+  view: 'INBOX' | 'UNASSIGNED' | 'MINE' | 'OPEN' | 'WAITING' | 'RESOLVED' | 'UNMATCHED' | 'SENT' =
+    'INBOX';
+  @IsUUID() @IsOptional() mailboxId?: string;
+  @IsUUID() @IsOptional() assigneeId?: string;
+  @IsEnum(InboxThreadStatus) @IsOptional() status?: InboxThreadStatus;
+  @IsEnum(InboxPriority) @IsOptional() priority?: InboxPriority;
+  @IsIn(['true', 'false']) @IsOptional() unread?: 'true' | 'false';
+  @IsIn(['soon', 'overdue']) @IsOptional() due?: 'soon' | 'overdue';
+}
+
+export class AssignConversationDto {
+  @ValidateIf((_object, value) => value !== null)
+  @IsUUID()
+  assignedUserId!: string | null;
+}
+
+export class UpdateConversationStatusDto {
+  @IsEnum(InboxThreadStatus) @IsOptional() status?: InboxThreadStatus;
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @IsDateString()
+  dueAt?: string | null;
+}
+
+export class UpdateConversationPriorityDto {
+  @IsEnum(InboxPriority) priority!: InboxPriority;
+}
+
+export class SetConversationReadDto {
+  @IsBoolean() unread!: boolean;
+}
+
+export class AddConversationNoteDto {
+  @IsString() @MinLength(1) @MaxLength(10_000) content!: string;
+}
+
+export class CreateLeadFromThreadDto extends CreateLeadDto {}
+
+export class CreateTaskFromThreadDto extends CreateTaskDto {}

@@ -49,8 +49,9 @@ export class TaskListQueryDto extends ListQueryDto {
 }
 
 export class CreateTaskDto {
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
   @IsUUID()
-  projectId!: string;
+  projectId?: string | null;
 
   @Transform(trim)
   @IsString()
@@ -94,7 +95,7 @@ export class CreateTaskDto {
 
 export class UpdateTaskDto extends CreateTaskDto {
   @IsOptional()
-  declare projectId: string;
+  declare projectId?: string | null;
 
   @IsOptional()
   declare title: string;

@@ -63,7 +63,21 @@ export class TasksService {
     const where: Prisma.TaskWhereInput = {
       organizationId: principal.organizationId,
       archivedAt: null,
-      project: { archivedAt: null },
+      AND: [
+        { OR: [{ projectId: null }, { project: { archivedAt: null } }] },
+        ...(listQuery.search
+          ? [
+              {
+                OR: [
+                  { title: { contains: listQuery.search, mode: 'insensitive' as const } },
+                  {
+                    project: { name: { contains: listQuery.search, mode: 'insensitive' as const } },
+                  },
+                ],
+              },
+            ]
+          : []),
+      ],
       ...(query.project ? { projectId: query.project } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
@@ -72,14 +86,6 @@ export class TasksService {
       ...(query.view === 'mine' ? { assigneeId: principal.userId } : {}),
       ...(query.view === 'dueToday' ? { dueDate: { gte: today, lt: tomorrow } } : {}),
       ...(query.view === 'overdue' ? { dueDate: { lt: today }, status: { not: 'COMPLETED' } } : {}),
-      ...(listQuery.search
-        ? {
-            OR: [
-              { title: { contains: listQuery.search, mode: 'insensitive' } },
-              { project: { name: { contains: listQuery.search, mode: 'insensitive' } } },
-            ],
-          }
-        : {}),
     };
     const orderBy = { [listQuery.sort]: listQuery.order } as Prisma.TaskOrderByWithRelationInput;
     const [data, total] = await this.prisma.$transaction([
@@ -105,7 +111,9 @@ export class TasksService {
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateTaskDto) {
-    const project = await this.validateProject(principal.organizationId, dto.projectId);
+    const project = dto.projectId
+      ? await this.validateProject(principal.organizationId, dto.projectId)
+      : null;
     await this.validateAssignee(principal, dto.assigneeId);
     this.validateDates(dto.startDate, dto.dueDate);
     const { startDate, dueDate, ...input } = dto;
@@ -129,21 +137,22 @@ export class TasksService {
           entityId: task.id,
           entityType: 'TASK',
           organizationId: principal.organizationId,
-          metadata: { projectId: project.id },
+          metadata: { projectId: project?.id ?? null },
         },
         tx,
       );
-      await this.audit.create(
-        {
-          action: 'PROJECT_TASK_CREATED',
-          actorId: principal.userId,
-          entityId: project.id,
-          entityType: 'PROJECT',
-          organizationId: principal.organizationId,
-          metadata: { taskId: task.id, title: task.title },
-        },
-        tx,
-      );
+      if (project)
+        await this.audit.create(
+          {
+            action: 'PROJECT_TASK_CREATED',
+            actorId: principal.userId,
+            entityId: project.id,
+            entityType: 'PROJECT',
+            organizationId: principal.organizationId,
+            metadata: { taskId: task.id, title: task.title },
+          },
+          tx,
+        );
       if (task.assigneeId && task.assigneeId !== principal.userId) {
         await this.notifications.create(
           {
@@ -171,7 +180,11 @@ export class TasksService {
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateTaskDto) {
     const existing = await this.requireActive(principal.organizationId, id);
-    if (dto.projectId && dto.projectId !== existing.projectId)
+    if (
+      dto.projectId !== undefined &&
+      dto.projectId !== null &&
+      dto.projectId !== existing.projectId
+    )
       await this.validateProject(principal.organizationId, dto.projectId);
     if (dto.assigneeId !== undefined && dto.assigneeId !== existing.assigneeId)
       await this.validateAssignee(principal, dto.assigneeId);
@@ -223,7 +236,7 @@ export class TasksService {
         },
         tx,
       );
-      if (completed) {
+      if (completed && task.projectId) {
         await this.audit.create(
           {
             action: 'PROJECT_TASK_COMPLETED',

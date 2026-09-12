@@ -1,4 +1,14 @@
 export type MailboxStatus = 'CONNECTED' | 'SYNCING' | 'ERROR' | 'DISABLED';
+export type InboxThreadStatus = 'UNASSIGNED' | 'OPEN' | 'WAITING' | 'RESOLVED' | 'CLOSED';
+export type InboxPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+
+export interface InboxUser {
+  id: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  status: string;
+}
 
 export interface MailboxConnection {
   id: string;
@@ -46,6 +56,14 @@ export interface MailMessageSummary {
 export interface EmailThread {
   id: string;
   subject: string;
+  inboxStatus: InboxThreadStatus;
+  inboxPriority: InboxPriority;
+  assignedUserId: string | null;
+  assignedUser: InboxUser | null;
+  isUnread: boolean;
+  dueAt: string | null;
+  resolvedAt: string | null;
+  lastMessageAt: string;
   relatedEntityType: 'LEAD' | 'CONTACT' | 'COMPANY' | null;
   relatedEntityId: string | null;
   mailboxConnection: Pick<MailboxConnection, 'id' | 'emailAddress' | 'name' | 'status'> | null;
@@ -61,9 +79,70 @@ export interface EmailThread {
       }>;
     }
   >;
+  notes: Array<{
+    id: string;
+    content: string;
+    createdAt: string;
+    updatedAt: string;
+    author: InboxUser;
+  }>;
+  events: Array<{
+    id: string;
+    type:
+      | 'ASSIGNED'
+      | 'REASSIGNED'
+      | 'UNASSIGNED'
+      | 'STATUS_CHANGED'
+      | 'PRIORITY_CHANGED'
+      | 'DUE_AT_CHANGED'
+      | 'NOTE_ADDED'
+      | 'CRM_LINKED'
+      | 'RESOLVED'
+      | 'REOPENED';
+    metadata: Record<string, unknown> | null;
+    createdAt: string;
+    actor: InboxUser | null;
+  }>;
+}
+
+export interface InboxConversationSummary {
+  id: string;
+  subject: string;
+  inboxStatus: InboxThreadStatus;
+  inboxPriority: InboxPriority;
+  assignedUserId: string | null;
+  assignedUser: InboxUser | null;
+  isUnread: boolean;
+  dueAt: string | null;
+  resolvedAt: string | null;
+  lastMessageAt: string;
+  relatedEntityType: 'LEAD' | 'CONTACT' | 'COMPANY' | null;
+  relatedEntityId: string | null;
+  mailboxConnection: Pick<MailboxConnection, 'id' | 'emailAddress' | 'name'> | null;
+  messages: Array<
+    Pick<
+      MailMessageSummary,
+      | 'id'
+      | 'direction'
+      | 'fromName'
+      | 'fromAddress'
+      | 'toAddresses'
+      | 'body'
+      | 'status'
+      | 'receivedAt'
+      | 'sentAt'
+      | 'createdAt'
+    >
+  >;
+  _count: { notes: number };
 }
 
 export interface PaginatedMail {
   data: MailMessageSummary[];
+  meta: { page: number; limit: number; total: number; totalPages: number };
+}
+
+export interface PaginatedInboxConversations {
+  data: InboxConversationSummary[];
   meta: { page: number; limit: number; total: number; totalPages: number };
 }

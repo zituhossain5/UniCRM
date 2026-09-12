@@ -12,7 +12,7 @@ export interface DashboardTask {
   dueDate: string;
   priority: string;
   status: string;
-  project: { id: string; name: string };
+  project: { id: string; name: string } | null;
 }
 export interface DashboardFollowUp {
   id: string;
@@ -58,7 +58,7 @@ export interface SearchResults {
   tasks: Array<{
     id: string;
     title: string;
-    project: { id: string; name: string };
+    project: { id: string; name: string } | null;
     status: string;
   }>;
   quotations: Array<{

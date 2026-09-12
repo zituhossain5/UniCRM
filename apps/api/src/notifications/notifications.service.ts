@@ -88,7 +88,7 @@ export class NotificationsService {
     const today = utcToday(now),
       tomorrow = addUtcDays(today, 1),
       dayAfter = addUtcDays(today, 2);
-    const [overdueTasks, dueSoonTasks, followUps, projects] = await Promise.all([
+    const [overdueTasks, dueSoonTasks, followUps, projects, inboxDue] = await Promise.all([
       this.prisma.task.findMany({
         where: {
           archivedAt: null,
@@ -133,6 +133,20 @@ export class NotificationsService {
           projectManagerId: true,
           name: true,
           deadline: true,
+        },
+      }),
+      this.prisma.emailThread.findMany({
+        where: {
+          assignedUserId: { not: null },
+          inboxStatus: { notIn: ['RESOLVED', 'CLOSED'] },
+          dueAt: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+        },
+        select: {
+          id: true,
+          organizationId: true,
+          assignedUserId: true,
+          subject: true,
+          dueAt: true,
         },
       }),
     ]);
@@ -200,6 +214,21 @@ export class NotificationsService {
           dedupeKey: `project:${project.id}:deadline:${project.deadline!.toISOString().slice(0, 10)}`,
         }),
       );
+    for (const thread of inboxDue) {
+      const overdue = thread.dueAt! <= now;
+      work.push(
+        this.create({
+          organizationId: thread.organizationId,
+          userId: thread.assignedUserId!,
+          type: 'INBOX_DUE',
+          title: overdue ? 'Inbox conversation overdue' : 'Inbox conversation due soon',
+          message: thread.subject,
+          entityType: 'EMAIL_THREAD',
+          entityId: thread.id,
+          dedupeKey: `inbox:${thread.id}:${overdue ? 'overdue' : 'due'}:${thread.dueAt!.toISOString()}`,
+        }),
+      );
+    }
     await Promise.all(work);
     return work.length;
   }

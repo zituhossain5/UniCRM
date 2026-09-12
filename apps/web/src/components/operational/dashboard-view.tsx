@@ -116,12 +116,16 @@ export function DashboardView() {
             tasks.data.data.map((task) => (
               <Link
                 className="attention-row"
-                href={`/app/projects/${task.project.id}?task=${task.id}`}
+                href={
+                  task.project
+                    ? `/app/projects/${task.project.id}?task=${task.id}`
+                    : `/app/tasks?task=${task.id}`
+                }
                 key={task.id}
               >
                 <span>
                   <strong>{task.title}</strong>
-                  <small>{task.project.name}</small>
+                  <small>{task.project?.name ?? 'No project'}</small>
                 </span>
                 <time className={new Date(task.dueDate) < new Date() ? 'overdue-text' : ''}>
                   {when(task.dueDate)}

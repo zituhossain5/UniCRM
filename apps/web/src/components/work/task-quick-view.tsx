@@ -166,7 +166,7 @@ export function TaskQuickView({
 
   return (
     <Sheet
-      description={task ? task.project.name : 'Task details'}
+      description={task ? (task.project?.name ?? 'No project') : 'Task details'}
       onOpenChange={onOpenChange}
       open={open}
       title={task?.title ?? 'Task'}
@@ -192,7 +192,11 @@ export function TaskQuickView({
             >
               {labelize(task.status)}
             </Badge>
-            <Link href={`/app/projects/${task.projectId}`}>{task.project.name}</Link>
+            {task.project && task.projectId ? (
+              <Link href={`/app/projects/${task.projectId}`}>{task.project.name}</Link>
+            ) : (
+              <span>No project</span>
+            )}
           </div>
           {current.permissions.includes('task.update') ? (
             <form

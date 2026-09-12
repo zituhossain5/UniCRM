@@ -60,7 +60,7 @@ export interface ProjectRecord extends ProjectRef, ConfigurableRecordMetadata {
 
 export interface TaskRecord {
   id: string;
-  projectId: string;
+  projectId: string | null;
   title: string;
   description: string | null;
   assigneeId: string | null;
@@ -73,7 +73,7 @@ export interface TaskRecord {
   archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  project: ProjectRef;
+  project: ProjectRef | null;
   assignee: PersonRef | null;
   reporter: PersonRef;
   _count: { comments: number; attachments: number };

@@ -21,6 +21,7 @@ export interface OverlayProps {
 
 export interface SheetProps extends OverlayProps {
   footer?: ReactNode;
+  popupClassName?: string;
 }
 
 export function Dialog({
@@ -67,6 +68,7 @@ export function Sheet({
   footer,
   onOpenChange,
   open,
+  popupClassName,
   title,
   trigger,
 }: SheetProps) {
@@ -76,7 +78,9 @@ export function Sheet({
       <BaseDialog.Portal>
         <BaseDialog.Backdrop className="ui-overlay" />
         <BaseDialog.Viewport className="ui-sheet-viewport">
-          <BaseDialog.Popup className="ui-sheet-popup">
+          <BaseDialog.Popup
+            className={`ui-sheet-popup${popupClassName ? ` ${popupClassName}` : ''}`}
+          >
             <div className="ui-dialog-header">
               <div>
                 <BaseDialog.Title>{title}</BaseDialog.Title>

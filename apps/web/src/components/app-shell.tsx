@@ -78,7 +78,7 @@ const navSections: readonly NavSection[] = [
       { href: '/app/leads', icon: UsersRound, label: 'Leads' },
       { href: '/app/companies', icon: Building2, label: 'Companies' },
       { href: '/app/contacts', icon: ContactRound, label: 'Contacts' },
-      { href: '/app/email', icon: Mail, label: 'Email', permission: 'mail.read' },
+      { href: '/app/email', icon: Mail, label: 'Email', permission: 'inbox.read' },
     ],
   },
   {
@@ -588,7 +588,7 @@ function SearchResultGroups({
       results.tasks.map((item) => ({
         id: item.id,
         label: item.title,
-        detail: item.project.name,
+        detail: item.project?.name ?? 'No project',
         href: `/app/tasks?task=${item.id}`,
       })),
     ],
