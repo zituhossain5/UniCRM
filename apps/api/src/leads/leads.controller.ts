@@ -15,6 +15,7 @@ import { PERMISSIONS } from '../auth/auth.constants';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import {
   ActivityListQueryDto,
+  ConvertLeadDto,
   CreateActivityDto,
   CreateFollowUpDto,
   CreateLeadDto,
@@ -81,6 +82,15 @@ export class LeadsController {
     @Body() dto: UpdateLeadOwnerDto,
   ) {
     return { data: await this.leads.changeOwner(principal, id, dto) };
+  }
+  @RequirePermission(PERMISSIONS.dealConvert)
+  @Post(':id/convert')
+  async convert(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ConvertLeadDto,
+  ) {
+    return { data: await this.leads.convert(principal, id, dto) };
   }
   @RequirePermission(PERMISSIONS.activityRead)
   @Get(':id/activities')

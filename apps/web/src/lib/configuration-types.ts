@@ -1,4 +1,4 @@
-export type ConfigurableEntityType = 'LEAD' | 'COMPANY' | 'CONTACT' | 'PROJECT';
+export type ConfigurableEntityType = 'LEAD' | 'DEAL' | 'COMPANY' | 'CONTACT' | 'PROJECT';
 export type SavedViewEntityType = ConfigurableEntityType | 'TASK';
 export type CustomFieldType =
   | 'TEXT'

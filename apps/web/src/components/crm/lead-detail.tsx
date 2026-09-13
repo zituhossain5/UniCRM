@@ -59,6 +59,7 @@ export function LeadDetail({ id }: { id: string }) {
   const current = useCurrentUser();
   const [lead, setLead] = useState<LeadRecord>();
   const [pipelines, setPipelines] = useState<Pipeline[]>([]);
+  const [dealPipelines, setDealPipelines] = useState<Pipeline[]>([]);
   const [companies, setCompanies] = useState<CompanyRecord[]>([]);
   const [contacts, setContacts] = useState<ContactRecord[]>([]);
   const [users, setUsers] = useState<PersonRef[]>([]);
@@ -68,6 +69,7 @@ export function LeadDetail({ id }: { id: string }) {
   const [followOpen, setFollowOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
+  const [convertOpen, setConvertOpen] = useState(false);
   const [reschedule, setReschedule] = useState<FollowUp>();
   const configuration = useRecordConfiguration('LEAD');
   const load = useCallback(async () => {
@@ -84,9 +86,11 @@ export function LeadDetail({ id }: { id: string }) {
       apiRequest<{ data: Pipeline[] }>('/pipelines'),
       apiRequest<{ data: CompanyRecord[] }>('/companies?limit=100&sort=name&order=asc'),
       apiRequest<{ data: ContactRecord[] }>('/contacts?limit=100&sort=lastName&order=asc'),
+      apiRequest<{ data: Pipeline[] }>('/pipelines?entityType=DEAL'),
     ])
-      .then(([p, c, k]) => {
+      .then(([p, c, k, dealPipelineResult]) => {
         setPipelines(p.data);
+        setDealPipelines(dealPipelineResult.data);
         setCompanies(c.data);
         setContacts(k.data);
       })
@@ -160,6 +164,30 @@ export function LeadDetail({ id }: { id: string }) {
   async function archive() {
     if (await mutate(`/leads/${id}`, { method: 'DELETE' })) router.push('/app/leads');
   }
+  async function convertLead(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const payload = Object.fromEntries([...form.entries()].filter(([, value]) => value !== ''));
+    const createDeal = form.get('createDeal') === 'on';
+    setBusy(true);
+    setError('');
+    try {
+      const result = await apiRequest<{ data: { deal: { id: string } | null } }>(
+        `/leads/${id}/convert`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ ...payload, createDeal }),
+        },
+      );
+      setConvertOpen(false);
+      await load();
+      if (result.data.deal) router.push(`/app/deals/${result.data.deal.id}`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Lead conversion failed.');
+    } finally {
+      setBusy(false);
+    }
+  }
   if (!lead && !error) return <LoadingState label="Loading lead" />;
   if (!lead)
     return (
@@ -173,7 +201,7 @@ export function LeadDetail({ id }: { id: string }) {
       />
     );
   const stages = pipelines.find((p) => p.id === lead.pipelineId)?.stages ?? [];
-  const canUpdate = current.permissions.includes('lead.update');
+  const canUpdate = !lead.convertedAt && current.permissions.includes('lead.update');
   const canActivity = current.permissions.includes('activity.create');
   return (
     <div className="crm-page crm-record-page">
@@ -189,6 +217,11 @@ export function LeadDetail({ id }: { id: string }) {
         actions={
           !lead.archivedAt ? (
             <div className="record-actions">
+              {!lead.convertedAt && current.permissions.includes('deal.convert') ? (
+                <Button onClick={() => setConvertOpen(true)}>
+                  <Check size={15} /> Convert lead
+                </Button>
+              ) : null}
               <RecordEmail
                 entityId={lead.id}
                 entityType="LEAD"
@@ -400,7 +433,9 @@ export function LeadDetail({ id }: { id: string }) {
       <div className="lead-command-bar">
         <div>
           <span>Pipeline</span>
-          {!lead.archivedAt && current.permissions.includes('lead.stage.update') ? (
+          {!lead.archivedAt &&
+          !lead.convertedAt &&
+          current.permissions.includes('lead.stage.update') ? (
             <Select
               value={lead.pipelineId}
               onValueChange={(value) => {
@@ -415,7 +450,9 @@ export function LeadDetail({ id }: { id: string }) {
         </div>
         <div>
           <span>Stage</span>
-          {!lead.archivedAt && current.permissions.includes('lead.stage.update') ? (
+          {!lead.archivedAt &&
+          !lead.convertedAt &&
+          current.permissions.includes('lead.stage.update') ? (
             <Select
               value={lead.stageId}
               onValueChange={(v) => void changeStage(v)}
@@ -692,6 +729,109 @@ export function LeadDetail({ id }: { id: string }) {
           </div>
         </form>
       </Dialog>
+      <Sheet
+        open={convertOpen}
+        onOpenChange={setConvertOpen}
+        title="Convert lead"
+        description="Create or reuse the account and contact, then optionally create a deal."
+        trigger={
+          <button className="visually-hidden" type="button">
+            Convert lead
+          </button>
+        }
+        footer={
+          <>
+            <Button disabled={busy} onClick={() => setConvertOpen(false)} variant="secondary">
+              Cancel
+            </Button>
+            <Button form="convert-lead-form" loading={busy} type="submit">
+              Convert lead
+            </Button>
+          </>
+        }
+      >
+        <form
+          className="dialog-form"
+          id="convert-lead-form"
+          onSubmit={(event) => void convertLead(event)}
+        >
+          <Select
+            defaultValue={lead.companyId ?? ''}
+            label="Existing company"
+            name="companyId"
+            options={[
+              { label: 'Create a company below', value: '' },
+              ...companies.map((company) => ({ label: company.name, value: company.id })),
+            ]}
+          />
+          <label>
+            <span>New company name</span>
+            <Input name="companyName" placeholder="Required when no company is selected" />
+          </label>
+          <Select
+            defaultValue={lead.contactId ?? ''}
+            label="Existing contact"
+            name="contactId"
+            options={[
+              { label: 'Create or reuse from lead details', value: '' },
+              ...contacts.map((contact) => ({
+                label: `${contact.firstName} ${contact.lastName}`,
+                value: contact.id,
+              })),
+            ]}
+          />
+          <label className="native-check">
+            <input defaultChecked name="createDeal" type="checkbox" />
+            <span>Create a deal for this opportunity</span>
+          </label>
+          <label>
+            <span>Deal name</span>
+            <Input defaultValue={lead.title} name="dealName" />
+          </label>
+          <div className="form-two-columns">
+            <Select
+              label="Deal pipeline"
+              name="dealPipelineId"
+              options={dealPipelines.map((pipeline) => ({
+                label: pipeline.name,
+                value: pipeline.id,
+              }))}
+              defaultValue={
+                dealPipelines.find(({ isDefault }) => isDefault)?.id ?? dealPipelines[0]?.id
+              }
+            />
+            <Select
+              label="Starting stage"
+              name="dealStageId"
+              options={
+                (dealPipelines.find(({ isDefault }) => isDefault) ?? dealPipelines[0])?.stages.map(
+                  (stage) => ({ label: stage.name, value: stage.id }),
+                ) ?? []
+              }
+              defaultValue={
+                (dealPipelines.find(({ isDefault }) => isDefault) ?? dealPipelines[0])?.stages[0]
+                  ?.id
+              }
+            />
+          </div>
+          <div className="form-two-columns">
+            <label>
+              <span>Deal amount</span>
+              <Input
+                defaultValue={lead.estimatedValue ?? ''}
+                min="0"
+                name="dealAmount"
+                step="0.01"
+                type="number"
+              />
+            </label>
+            <label>
+              <span>Expected close</span>
+              <Input name="expectedCloseDate" type="date" />
+            </label>
+          </div>
+        </form>
+      </Sheet>
     </div>
   );
 }

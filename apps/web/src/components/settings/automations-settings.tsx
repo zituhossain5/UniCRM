@@ -53,6 +53,7 @@ type FlowNode = Node<FlowNodeData>;
 
 const triggers: Record<AutomationEntityType, AutomationTriggerType[]> = {
   LEAD: ['LEAD_CREATED', 'LEAD_STAGE_CHANGED', 'LEAD_OWNER_CHANGED'],
+  DEAL: ['DEAL_CREATED', 'DEAL_STAGE_CHANGED', 'DEAL_OWNER_CHANGED', 'DEAL_WON', 'DEAL_LOST'],
   PROJECT: ['PROJECT_CREATED', 'PROJECT_STATUS_CHANGED'],
   TASK: ['TASK_CREATED', 'TASK_STATUS_CHANGED', 'TASK_OVERDUE'],
   QUOTATION: ['QUOTATION_CREATED', 'QUOTATION_STATUS_CHANGED'],
@@ -60,6 +61,7 @@ const triggers: Record<AutomationEntityType, AutomationTriggerType[]> = {
 };
 const fields: Record<AutomationEntityType, string[]> = {
   LEAD: ['stageId', 'ownerId', 'priority', 'tagIds', 'pipelineId', 'estimatedValue', 'customField'],
+  DEAL: ['stageId', 'ownerId', 'priority', 'tagIds', 'pipelineId', 'amount', 'customField'],
   PROJECT: ['status', 'ownerId', 'priority', 'tagIds', 'amount', 'customField'],
   TASK: ['status', 'ownerId', 'priority'],
   QUOTATION: ['status', 'ownerId', 'amount'],
@@ -813,9 +815,11 @@ function AutomationVisualBuilder({
   const selectedAction = selectedNode?.data.action ?? blankAction();
   const isChangeNodeTrigger = selectedNode?.data.triggerType?.endsWith('_CHANGED') ?? false;
   const selectedTransitionOptions =
-    selectedNode?.data.triggerType === 'LEAD_STAGE_CHANGED'
+    selectedNode?.data.triggerType === 'LEAD_STAGE_CHANGED' ||
+    selectedNode?.data.triggerType === 'DEAL_STAGE_CHANGED'
       ? referenceOptions(stages)
-      : selectedNode?.data.triggerType === 'LEAD_OWNER_CHANGED'
+      : selectedNode?.data.triggerType === 'LEAD_OWNER_CHANGED' ||
+          selectedNode?.data.triggerType === 'DEAL_OWNER_CHANGED'
         ? userOptions(references)
         : options(statusValues(selectedNode?.data.entityType ?? entityType));
 
@@ -1163,9 +1167,9 @@ export function AutomationsSettings({
   const isChangeTrigger = triggerType.endsWith('_CHANGED');
   const stages = references.pipelines.flatMap(({ stages: values }) => values);
   const transitionOptions =
-    triggerType === 'LEAD_STAGE_CHANGED'
+    triggerType === 'LEAD_STAGE_CHANGED' || triggerType === 'DEAL_STAGE_CHANGED'
       ? referenceOptions(stages)
-      : triggerType === 'LEAD_OWNER_CHANGED'
+      : triggerType === 'LEAD_OWNER_CHANGED' || triggerType === 'DEAL_OWNER_CHANGED'
         ? userOptions(references)
         : options(statusValues(entityType));
 

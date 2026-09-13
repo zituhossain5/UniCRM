@@ -23,6 +23,7 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
   const [companyId, setCompanyId] = useState(search.get('companyId') ?? '');
   const [contactId, setContactId] = useState(search.get('contactId') ?? '');
   const [leadId, setLeadId] = useState(search.get('leadId') ?? '');
+  const [dealId, setDealId] = useState(search.get('dealId') ?? '');
   const [projectId, setProjectId] = useState(search.get('projectId') ?? '');
   const [currency, setCurrency] = useState(search.get('currency') ?? 'BDT');
   const [discountType, setDiscountType] = useState('');
@@ -47,6 +48,7 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
           setCompanyId(value.companyId);
           setContactId(value.contactId ?? '');
           setLeadId(value.leadId ?? '');
+          setDealId(value.dealId ?? '');
           setProjectId(value.projectId ?? '');
           setCurrency(value.currency);
           setDiscountType(value.discountType ?? '');
@@ -76,6 +78,10 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
   );
   const projects = useMemo(
     () => (refs?.projects ?? []).filter((item) => item.companyId === companyId),
+    [companyId, refs],
+  );
+  const deals = useMemo(
+    () => (refs?.deals ?? []).filter((item) => item.companyId === companyId),
     [companyId, refs],
   );
   const subtotal = items.reduce(
@@ -109,6 +115,7 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
             companyId,
             contactId: optional(contactId),
             leadId: optional(leadId),
+            dealId: optional(dealId),
             projectId: optional(projectId),
             issueDate: field('issueDate'),
             expiryDate: optional(field('expiryDate')),
@@ -149,6 +156,7 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
                 setCompanyId(value ?? '');
                 setContactId('');
                 setLeadId('');
+                setDealId('');
                 setProjectId('');
               }}
               options={(refs?.companies ?? []).map((item) => ({
@@ -176,6 +184,13 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
               options={leads.map((item) => ({ label: item.title, value: item.id }))}
               placeholder="Optional"
               value={leadId}
+            />
+            <Select
+              label="Deal"
+              onValueChange={(value) => setDealId(value ?? '')}
+              options={deals.map((item) => ({ label: item.name, value: item.id }))}
+              placeholder="Optional"
+              value={dealId}
             />
             <Select
               label="Project"

@@ -2,7 +2,7 @@ import { Inject, Injectable } from '@nestjs/common';
 import { DEFAULT_ROLES, DEFAULT_ROLE_PERMISSIONS, PERMISSION_CATALOG } from './auth/auth.constants';
 import { PasswordService } from './auth/password.service';
 import { PrismaService } from './database/prisma.service';
-import { DEFAULT_STAGES } from './pipelines/pipelines.service';
+import { DEFAULT_DEAL_STAGES, DEFAULT_STAGES } from './pipelines/pipelines.service';
 import type { Prisma } from './generated/prisma/client';
 
 @Injectable()
@@ -69,11 +69,16 @@ export class IdentityBootstrapService {
       await tx.rolePermission.createMany({ data: rolePermissions, skipDuplicates: true });
 
       const defaultPipeline = await tx.pipeline.findFirst({
-        where: { organizationId: organization.id, isDefault: true, archivedAt: null },
+        where: {
+          organizationId: organization.id,
+          entityType: 'LEAD',
+          isDefault: true,
+          archivedAt: null,
+        },
       });
       if (!defaultPipeline) {
         const firstPipeline = await tx.pipeline.findFirst({
-          where: { organizationId: organization.id, archivedAt: null },
+          where: { organizationId: organization.id, entityType: 'LEAD', archivedAt: null },
           orderBy: { createdAt: 'asc' },
         });
         if (firstPipeline) {
@@ -94,6 +99,29 @@ export class IdentityBootstrapService {
           });
         }
       }
+      const defaultDealPipeline = await tx.pipeline.findFirst({
+        where: {
+          organizationId: organization.id,
+          entityType: 'DEAL',
+          isDefault: true,
+          archivedAt: null,
+        },
+      });
+      if (!defaultDealPipeline)
+        await tx.pipeline.create({
+          data: {
+            isDefault: true,
+            name: 'Standard Deal Pipeline',
+            entityType: 'DEAL',
+            organizationId: organization.id,
+            stages: {
+              create: DEFAULT_DEAL_STAGES.map((stage) => ({
+                ...stage,
+                organizationId: organization.id,
+              })),
+            },
+          },
+        });
 
       if (existingOwner) {
         await this.ensureDefaultEmailTemplate(tx, organization.id, existingOwner.id);

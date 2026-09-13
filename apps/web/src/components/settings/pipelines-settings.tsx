@@ -4,7 +4,7 @@ import { AuthMessage } from '@/components/auth-screen';
 import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
 import type { Pipeline } from '@/lib/crm-types';
-import { Badge, Button, ConfirmationDialog, Dialog, Input, LoadingState } from '@unicrm/ui';
+import { Badge, Button, ConfirmationDialog, Dialog, Input, LoadingState, Select } from '@unicrm/ui';
 import { ArrowDown, ArrowUp, Pencil, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState, type FormEvent } from 'react';
 
@@ -20,6 +20,15 @@ const initialStages: DraftStage[] = [
   { name: 'Won', isWon: true, isLost: false },
   { name: 'Lost', isWon: false, isLost: true },
 ];
+const initialDealStages: DraftStage[] = [
+  { name: 'Discovery', isWon: false, isLost: false },
+  { name: 'Qualified', isWon: false, isLost: false },
+  { name: 'Proposal', isWon: false, isLost: false },
+  { name: 'Negotiation', isWon: false, isLost: false },
+  { name: 'Contract', isWon: false, isLost: false },
+  { name: 'Won', isWon: true, isLost: false },
+  { name: 'Lost', isWon: false, isLost: true },
+];
 
 export function PipelinesSettings() {
   const current = useCurrentUser();
@@ -29,23 +38,28 @@ export function PipelinesSettings() {
   const [open, setOpen] = useState(false);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [entityType, setEntityType] = useState<'LEAD' | 'DEAL'>('LEAD');
   const canManage = current.permissions.includes('pipeline.manage');
   async function load() {
     try {
-      setPipelines((await apiRequest<{ data: Pipeline[] }>('/pipelines')).data);
+      setPipelines(
+        (await apiRequest<{ data: Pipeline[] }>(`/pipelines?entityType=${entityType}`)).data,
+      );
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not load pipelines.');
     }
   }
   useEffect(() => {
     void load();
-  }, []);
+  }, [entityType]);
   function edit(pipeline?: Pipeline) {
     setEditing(pipeline);
     setStages(
       pipeline
         ? pipeline.stages.map(({ id, name, isWon, isLost }) => ({ id, name, isWon, isLost }))
-        : initialStages.map((stage) => ({ ...stage })),
+        : (entityType === 'DEAL' ? initialDealStages : initialStages).map((stage) => ({
+            ...stage,
+          })),
     );
     setOpen(true);
   }
@@ -92,7 +106,7 @@ export function PipelinesSettings() {
       } else {
         await apiRequest('/pipelines', {
           method: 'POST',
-          body: JSON.stringify({ name, isDefault, stages: ordered }),
+          body: JSON.stringify({ name, isDefault, entityType, stages: ordered }),
         });
       }
       setOpen(false);
@@ -126,6 +140,17 @@ export function PipelinesSettings() {
           </Button>
         ) : null}
       </div>
+      <Select
+        aria-label="Pipeline record type"
+        value={entityType}
+        onValueChange={(value) => {
+          if (value === 'LEAD' || value === 'DEAL') setEntityType(value);
+        }}
+        options={[
+          { label: 'Lead pipelines', value: 'LEAD' },
+          { label: 'Deal pipelines', value: 'DEAL' },
+        ]}
+      />
       {error ? <AuthMessage>{error}</AuthMessage> : null}
       <div className="pipeline-settings-grid">
         {pipelines?.map((pipeline) => (

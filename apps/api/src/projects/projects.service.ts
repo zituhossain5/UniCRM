@@ -39,6 +39,15 @@ const projectInclude = {
       stage: { select: { isWon: true, name: true } },
     },
   },
+  sourceDeal: {
+    select: {
+      id: true,
+      name: true,
+      amount: true,
+      currency: true,
+      stage: { select: { isWon: true, name: true } },
+    },
+  },
   createdBy: { select: userSelect },
   members: {
     include: { user: { select: userSelect } },
@@ -197,6 +206,7 @@ export class ProjectsService {
     await this.validateCompany(principal.organizationId, dto.companyId);
     await this.validateManager(principal.organizationId, dto.projectManagerId);
     await this.validateSourceLead(principal.organizationId, dto.sourceLeadId, dto.companyId);
+    await this.validateSourceDeal(principal.organizationId, dto.sourceDealId, dto.companyId);
     this.validateDates(dto.startDate, dto.deadline);
     const { startDate, deadline, currency, customFields, tagIds, ...input } = dto;
     try {
@@ -239,7 +249,11 @@ export class ProjectsService {
             entityId: project.id,
             entityType: 'PROJECT',
             organizationId: principal.organizationId,
-            metadata: dto.sourceLeadId ? { sourceLeadId: dto.sourceLeadId } : undefined,
+            metadata: dto.sourceDealId
+              ? { sourceDealId: dto.sourceDealId }
+              : dto.sourceLeadId
+                ? { sourceLeadId: dto.sourceLeadId }
+                : undefined,
           },
           tx,
         );
@@ -258,7 +272,7 @@ export class ProjectsService {
       return (await this.decorate(principal.organizationId, [project]))[0];
     } catch (cause) {
       if (cause instanceof Error && 'code' in cause && cause.code === 'P2002')
-        throw new ConflictException('A project has already been created from this lead');
+        throw new ConflictException('A project has already been created from this lead or deal');
       throw cause;
     }
   }
@@ -272,6 +286,8 @@ export class ProjectsService {
       await this.validateManager(principal.organizationId, dto.projectManagerId);
     if (dto.sourceLeadId !== undefined)
       await this.validateSourceLead(principal.organizationId, dto.sourceLeadId, companyId);
+    if (dto.sourceDealId !== undefined)
+      await this.validateSourceDeal(principal.organizationId, dto.sourceDealId, companyId);
     const existingStartDate: Date | null = existing.startDate;
     const existingDeadline: Date | null = existing.deadline;
     const finalStartDate =
@@ -513,6 +529,22 @@ export class ProjectsService {
     if (!lead.stage.isWon) throw new ConflictException('Only won leads can create projects');
     if (lead.companyId !== companyId)
       throw new BadRequestException('Project company must match the source lead company');
+  }
+
+  private async validateSourceDeal(
+    organizationId: string,
+    sourceDealId: string | null | undefined,
+    companyId: string,
+  ) {
+    if (!sourceDealId) return;
+    const deal = await this.prisma.deal.findFirst({
+      where: { id: sourceDealId, organizationId, archivedAt: null },
+      select: { companyId: true, stage: { select: { isWon: true } } },
+    });
+    if (!deal) throw new NotFoundException('Source deal not found');
+    if (!deal.stage.isWon) throw new ConflictException('Only won deals can create projects');
+    if (deal.companyId !== companyId)
+      throw new BadRequestException('Project company must match the source deal company');
   }
 
   private async requireProject(organizationId: string, id: string) {

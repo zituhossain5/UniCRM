@@ -20,6 +20,21 @@ export class ReportsController {
   conversion(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {
     return this.reports.leadConversion(p, q);
   }
+  @RequirePermission(PERMISSIONS.dealRead)
+  @Get('deal-pipeline')
+  dealPipeline(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {
+    return this.reports.dealPipeline(p, q);
+  }
+  @RequirePermission(PERMISSIONS.dealRead)
+  @Get('deal-conversion')
+  dealConversion(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {
+    return this.reports.dealConversion(p, q);
+  }
+  @RequirePermission(PERMISSIONS.dealRead)
+  @Get('lead-to-deal')
+  leadToDeal(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {
+    return this.reports.leadToDeal(p, q);
+  }
   @RequirePermission(PERMISSIONS.leadRead)
   @Get('leads-by-source')
   sources(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {

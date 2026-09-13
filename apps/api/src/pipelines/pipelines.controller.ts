@@ -9,12 +9,14 @@ import {
   Patch,
   Post,
   Put,
+  Query,
 } from '@nestjs/common';
 import { CurrentPrincipal, RequirePermission } from '../auth/auth.decorators';
 import { PERMISSIONS } from '../auth/auth.constants';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import {
   CreatePipelineDto,
+  PipelineListQueryDto,
   ReplacePipelineStagesDto,
   UpdatePipelineDto,
 } from './dto/pipelines.dto';
@@ -25,8 +27,11 @@ export class PipelinesController {
   constructor(@Inject(PipelinesService) private readonly pipelines: PipelinesService) {}
   @RequirePermission(PERMISSIONS.pipelineRead)
   @Get()
-  async list(@CurrentPrincipal() principal: AuthenticatedPrincipal) {
-    return { data: await this.pipelines.list(principal) };
+  async list(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Query() query: PipelineListQueryDto,
+  ) {
+    return { data: await this.pipelines.list(principal, query.entityType) };
   }
   @RequirePermission(PERMISSIONS.pipelineManage)
   @Post()

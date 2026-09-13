@@ -10,10 +10,12 @@ export interface QuotationRecord {
   companyId: string;
   contactId: string | null;
   leadId: string | null;
+  dealId: string | null;
   projectId: string | null;
   company: { id: string; name: string };
   contact: { id: string; firstName: string; lastName: string; email?: string | null } | null;
   lead: { id: string; title: string } | null;
+  deal: { id: string; name: string } | null;
   project: { id: string; name: string } | null;
   status: QuotationStatus;
   issueDate: string;
@@ -71,6 +73,14 @@ export interface CommercialReferences {
     contactId: string | null;
     title: string;
     estimatedValue: string | null;
+    currency: string;
+  }>;
+  deals?: Array<{
+    id: string;
+    companyId: string;
+    contactId: string | null;
+    name: string;
+    amount: string | null;
     currency: string;
   }>;
   projects: Array<{ id: string; companyId: string; name: string; currency: string }>;

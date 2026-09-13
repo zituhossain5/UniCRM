@@ -1,9 +1,14 @@
-export type AutomationEntityType = 'LEAD' | 'PROJECT' | 'TASK' | 'QUOTATION' | 'PAYMENT';
+export type AutomationEntityType = 'LEAD' | 'DEAL' | 'PROJECT' | 'TASK' | 'QUOTATION' | 'PAYMENT';
 
 export type AutomationTriggerType =
   | 'LEAD_CREATED'
   | 'LEAD_STAGE_CHANGED'
   | 'LEAD_OWNER_CHANGED'
+  | 'DEAL_CREATED'
+  | 'DEAL_STAGE_CHANGED'
+  | 'DEAL_OWNER_CHANGED'
+  | 'DEAL_WON'
+  | 'DEAL_LOST'
   | 'PROJECT_CREATED'
   | 'PROJECT_STATUS_CHANGED'
   | 'TASK_CREATED'

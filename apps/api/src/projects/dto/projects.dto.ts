@@ -82,6 +82,10 @@ export class CreateProjectDto {
   @IsUUID()
   sourceLeadId?: string | null;
 
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @IsUUID()
+  sourceDealId?: string | null;
+
   @IsEnum(ProjectStatus)
   @IsOptional()
   status?: ProjectStatus;
@@ -124,6 +128,9 @@ export class UpdateProjectDto extends CreateProjectDto {
 
   @IsOptional()
   declare sourceLeadId?: string | null;
+
+  @IsOptional()
+  declare sourceDealId?: string | null;
 }
 
 export class AddProjectMemberDto {

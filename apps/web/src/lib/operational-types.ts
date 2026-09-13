@@ -54,6 +54,12 @@ export interface SearchResults {
     company: { name: string } | null;
     stage: { name: string };
   }>;
+  deals: Array<{
+    id: string;
+    name: string;
+    company: { name: string };
+    stage: { name: string };
+  }>;
   projects: Array<{ id: string; name: string; company: { name: string }; status: string }>;
   tasks: Array<{
     id: string;

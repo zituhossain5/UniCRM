@@ -52,6 +52,11 @@ enum LeadPriority {
   URGENT
 }
 
+enum PipelineEntityType {
+  LEAD
+  DEAL
+}
+
 enum LeadSource {
   REFERRAL
   WEBSITE
@@ -207,6 +212,7 @@ enum NotificationType {
 
 enum ConfigurableEntityType {
   LEAD
+  DEAL
   COMPANY
   CONTACT
   PROJECT
@@ -228,6 +234,7 @@ enum CustomFieldType {
 
 enum SavedViewEntityType {
   LEAD
+  DEAL
   COMPANY
   CONTACT
   PROJECT
@@ -322,6 +329,7 @@ enum UnicrmIntegrationEntityType {
 
 enum AutomationEntityType {
   LEAD
+  DEAL
   PROJECT
   TASK
   QUOTATION
@@ -332,6 +340,11 @@ enum AutomationTriggerType {
   LEAD_CREATED
   LEAD_STAGE_CHANGED
   LEAD_OWNER_CHANGED
+  DEAL_CREATED
+  DEAL_STAGE_CHANGED
+  DEAL_OWNER_CHANGED
+  DEAL_WON
+  DEAL_LOST
   PROJECT_CREATED
   PROJECT_STATUS_CHANGED
   TASK_CREATED
@@ -351,115 +364,118 @@ enum AutomationRunStatus {
 }
 
 model Organization {
-  id                String                  @id @default(uuid()) @db.Uuid
-  name              String
-  slug              String                  @unique
-  status            OrganizationStatus      @default(ACTIVE)
-  timezone          String                  @default("UTC") @db.VarChar(64)
-  defaultCurrency   String                  @default("BDT") @map("default_currency") @db.VarChar(3)
-  emailFromName     String?                 @map("email_from_name") @db.VarChar(160)
-  emailFromAddress  String?                 @map("email_from_address") @db.VarChar(320)
-  emailReplyTo      String?                 @map("email_reply_to") @db.VarChar(320)
-  createdAt         DateTime                @default(now()) @map("created_at")
-  updatedAt         DateTime                @updatedAt @map("updated_at")
-  users             User[]
-  sessions          AuthSession[]
-  roles             Role[]
-  invitations       UserInvitation[]
-  securityEvents    SecurityEvent[]
-  companies         Company[]
-  contacts          Contact[]
-  pipelines         Pipeline[]
-  leads             Lead[]
-  leadActivities    LeadActivity[]
-  followUps         FollowUp[]
-  activityLogs      ActivityLog[]
-  pipelineStages    PipelineStage[]
-  projects          Project[]
-  projectMembers    ProjectMember[]
-  tasks             Task[]
-  taskComments      TaskComment[]
-  attachments       Attachment[]
-  quotationCounter  QuotationNumberCounter?
-  quotations        Quotation[]
-  quotationItems    QuotationItem[]
-  payments          Payment[]
-  notifications     Notification[]
-  customFields      CustomFieldDefinition[]
-  customFieldValues CustomFieldValue[]
-  tags              Tag[]
-  entityTags        EntityTag[]
-  savedViews        SavedView[]
-  importJobs        DataImportJob[]
-  exportJobs        DataExportJob[]
-  mergeRecords      DataMergeRecord[]
+  id                     String                  @id @default(uuid()) @db.Uuid
+  name                   String
+  slug                   String                  @unique
+  status                 OrganizationStatus      @default(ACTIVE)
+  timezone               String                  @default("UTC") @db.VarChar(64)
+  defaultCurrency        String                  @default("BDT") @map("default_currency") @db.VarChar(3)
+  emailFromName          String?                 @map("email_from_name") @db.VarChar(160)
+  emailFromAddress       String?                 @map("email_from_address") @db.VarChar(320)
+  emailReplyTo           String?                 @map("email_reply_to") @db.VarChar(320)
+  createdAt              DateTime                @default(now()) @map("created_at")
+  updatedAt              DateTime                @updatedAt @map("updated_at")
+  users                  User[]
+  sessions               AuthSession[]
+  roles                  Role[]
+  invitations            UserInvitation[]
+  securityEvents         SecurityEvent[]
+  companies              Company[]
+  contacts               Contact[]
+  pipelines              Pipeline[]
+  leads                  Lead[]
+  deals                  Deal[]
+  leadActivities         LeadActivity[]
+  followUps              FollowUp[]
+  activityLogs           ActivityLog[]
+  pipelineStages         PipelineStage[]
+  projects               Project[]
+  projectMembers         ProjectMember[]
+  tasks                  Task[]
+  taskComments           TaskComment[]
+  attachments            Attachment[]
+  quotationCounter       QuotationNumberCounter?
+  quotations             Quotation[]
+  quotationItems         QuotationItem[]
+  payments               Payment[]
+  notifications          Notification[]
+  customFields           CustomFieldDefinition[]
+  customFieldValues      CustomFieldValue[]
+  tags                   Tag[]
+  entityTags             EntityTag[]
+  savedViews             SavedView[]
+  importJobs             DataImportJob[]
+  exportJobs             DataExportJob[]
+  mergeRecords           DataMergeRecord[]
   integrationConnections IntegrationConnection[]
   integrationEvents      IntegrationEvent[]
   webhookSubscriptions   WebhookSubscription[]
   webhookDeliveries      WebhookDelivery[]
   externalEntityMappings ExternalEntityMapping[]
-  automationRules         AutomationRule[]
-  automationRuns          AutomationRun[]
-  emailTemplates          EmailTemplate[]
-  emailMessages           EmailMessage[]
-  mailboxConnections      MailboxConnection[]
-  emailThreads            EmailThread[]
-  emailAttachments        EmailAttachment[]
-  conversationNotes       ConversationNote[]
-  conversationEvents      ConversationEvent[]
+  automationRules        AutomationRule[]
+  automationRuns         AutomationRun[]
+  emailTemplates         EmailTemplate[]
+  emailMessages          EmailMessage[]
+  mailboxConnections     MailboxConnection[]
+  emailThreads           EmailThread[]
+  emailAttachments       EmailAttachment[]
+  conversationNotes      ConversationNote[]
+  conversationEvents     ConversationEvent[]
 
   @@map("organizations")
 }
 
 model User {
-  id                  String               @id @default(uuid()) @db.Uuid
-  organizationId      String               @map("organization_id") @db.Uuid
-  firstName           String               @map("first_name")
-  lastName            String               @map("last_name")
-  email               String
-  normalizedEmail     String               @unique @map("normalized_email")
-  passwordHash        String?              @map("password_hash")
-  status              UserStatus           @default(INVITED)
-  emailVerifiedAt     DateTime?            @map("email_verified_at")
-  lastLoginAt         DateTime?            @map("last_login_at")
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
-  organization        Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessions            AuthSession[]
-  userRoles           UserRole[]
-  invitationsSent     UserInvitation[]     @relation("InvitationSender")
-  passwordResetTokens PasswordResetToken[]
-  securityEvents      SecurityEvent[]
-  companiesOwned      Company[]            @relation("CompanyOwner")
-  companiesCreated    Company[]            @relation("CompanyCreator")
-  contactsCreated     Contact[]            @relation("ContactCreator")
-  leadsOwned          Lead[]               @relation("LeadOwner")
-  leadsCreated        Lead[]               @relation("LeadCreator")
-  leadActivities      LeadActivity[]       @relation("LeadActivityCreator")
-  followUpsAssigned   FollowUp[]           @relation("FollowUpAssignee")
-  followUpsCreated    FollowUp[]           @relation("FollowUpCreator")
-  activityLogs        ActivityLog[]        @relation("ActivityLogActor")
-  projectsManaged     Project[]            @relation("ProjectManager")
-  projectsCreated     Project[]            @relation("ProjectCreator")
-  projectMemberships  ProjectMember[]
-  tasksAssigned       Task[]               @relation("TaskAssignee")
-  tasksReported       Task[]               @relation("TaskReporter")
-  tasksCreated        Task[]               @relation("TaskCreator")
-  taskComments        TaskComment[]
-  attachmentsUploaded Attachment[]
-  quotationsCreated   Quotation[]          @relation("QuotationCreator")
-  paymentsRecorded    Payment[]            @relation("PaymentRecorder")
-  notifications       Notification[]
-  savedViews          SavedView[]
-  importJobsCreated   DataImportJob[]      @relation("ImportJobCreator")
-  exportJobsCreated   DataExportJob[]      @relation("ExportJobCreator")
-  mergeRecordsCreated DataMergeRecord[]    @relation("MergeRecordCreator")
-  automationRulesCreated AutomationRule[]   @relation("AutomationRuleCreator")
-  emailTemplatesCreated  EmailTemplate[]     @relation("EmailTemplateCreator")
-  emailMessagesSent      EmailMessage[]      @relation("EmailMessageSender")
-  inboxThreadsAssigned   EmailThread[]       @relation("InboxThreadAssignee")
-  conversationNotes      ConversationNote[]  @relation("ConversationNoteAuthor")
-  conversationEvents     ConversationEvent[] @relation("ConversationEventActor")
+  id                     String               @id @default(uuid()) @db.Uuid
+  organizationId         String               @map("organization_id") @db.Uuid
+  firstName              String               @map("first_name")
+  lastName               String               @map("last_name")
+  email                  String
+  normalizedEmail        String               @unique @map("normalized_email")
+  passwordHash           String?              @map("password_hash")
+  status                 UserStatus           @default(INVITED)
+  emailVerifiedAt        DateTime?            @map("email_verified_at")
+  lastLoginAt            DateTime?            @map("last_login_at")
+  createdAt              DateTime             @default(now()) @map("created_at")
+  updatedAt              DateTime             @updatedAt @map("updated_at")
+  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions               AuthSession[]
+  userRoles              UserRole[]
+  invitationsSent        UserInvitation[]     @relation("InvitationSender")
+  passwordResetTokens    PasswordResetToken[]
+  securityEvents         SecurityEvent[]
+  companiesOwned         Company[]            @relation("CompanyOwner")
+  companiesCreated       Company[]            @relation("CompanyCreator")
+  contactsCreated        Contact[]            @relation("ContactCreator")
+  leadsOwned             Lead[]               @relation("LeadOwner")
+  leadsCreated           Lead[]               @relation("LeadCreator")
+  dealsOwned             Deal[]               @relation("DealOwner")
+  dealsCreated           Deal[]               @relation("DealCreator")
+  leadActivities         LeadActivity[]       @relation("LeadActivityCreator")
+  followUpsAssigned      FollowUp[]           @relation("FollowUpAssignee")
+  followUpsCreated       FollowUp[]           @relation("FollowUpCreator")
+  activityLogs           ActivityLog[]        @relation("ActivityLogActor")
+  projectsManaged        Project[]            @relation("ProjectManager")
+  projectsCreated        Project[]            @relation("ProjectCreator")
+  projectMemberships     ProjectMember[]
+  tasksAssigned          Task[]               @relation("TaskAssignee")
+  tasksReported          Task[]               @relation("TaskReporter")
+  tasksCreated           Task[]               @relation("TaskCreator")
+  taskComments           TaskComment[]
+  attachmentsUploaded    Attachment[]
+  quotationsCreated      Quotation[]          @relation("QuotationCreator")
+  paymentsRecorded       Payment[]            @relation("PaymentRecorder")
+  notifications          Notification[]
+  savedViews             SavedView[]
+  importJobsCreated      DataImportJob[]      @relation("ImportJobCreator")
+  exportJobsCreated      DataExportJob[]      @relation("ExportJobCreator")
+  mergeRecordsCreated    DataMergeRecord[]    @relation("MergeRecordCreator")
+  automationRulesCreated AutomationRule[]     @relation("AutomationRuleCreator")
+  emailTemplatesCreated  EmailTemplate[]      @relation("EmailTemplateCreator")
+  emailMessagesSent      EmailMessage[]       @relation("EmailMessageSender")
+  inboxThreadsAssigned   EmailThread[]        @relation("InboxThreadAssignee")
+  conversationNotes      ConversationNote[]   @relation("ConversationNoteAuthor")
+  conversationEvents     ConversationEvent[]  @relation("ConversationEventActor")
 
   @@index([organizationId, status])
   @@map("users")
@@ -617,6 +633,7 @@ model Company {
   createdBy      User?         @relation("CompanyCreator", fields: [createdById], references: [id], onDelete: SetNull)
   contacts       Contact[]
   leads          Lead[]
+  deals          Deal[]
   projects       Project[]
   quotations     Quotation[]
   payments       Payment[]
@@ -649,6 +666,7 @@ model Contact {
   company         Company?     @relation(fields: [companyId], references: [id], onDelete: SetNull)
   createdBy       User?        @relation("ContactCreator", fields: [createdById], references: [id], onDelete: SetNull)
   leads           Lead[]
+  deals           Deal[]
   quotations      Quotation[]
 
   @@unique([companyId], map: "contacts_one_primary_per_company", where: raw("\"is_primary\" = true AND \"archived_at\" IS NULL"))
@@ -660,20 +678,22 @@ model Contact {
 }
 
 model Pipeline {
-  id             String          @id @default(uuid()) @db.Uuid
-  organizationId String          @map("organization_id") @db.Uuid
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
   name           String
-  isDefault      Boolean         @default(false) @map("is_default")
-  archivedAt     DateTime?       @map("archived_at")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  organization   Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  entityType     PipelineEntityType @default(LEAD) @map("entity_type")
+  isDefault      Boolean            @default(false) @map("is_default")
+  archivedAt     DateTime?          @map("archived_at")
+  createdAt      DateTime           @default(now()) @map("created_at")
+  updatedAt      DateTime           @updatedAt @map("updated_at")
+  organization   Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   stages         PipelineStage[]
   leads          Lead[]
+  deals          Deal[]
 
-  @@unique([organizationId, name])
-  @@unique([organizationId], map: "pipelines_one_active_default", where: raw("\"is_default\" = true AND \"archived_at\" IS NULL"))
-  @@index([organizationId, archivedAt, name])
+  @@unique([organizationId, entityType, name])
+  @@unique([organizationId, entityType], map: "pipelines_one_active_default", where: raw("\"is_default\" = true AND \"archived_at\" IS NULL"))
+  @@index([organizationId, entityType, archivedAt, name])
   @@map("pipelines")
 }
 
@@ -690,6 +710,7 @@ model PipelineStage {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   pipeline       Pipeline     @relation(fields: [pipelineId], references: [id], onDelete: Cascade)
   leads          Lead[]
+  deals          Deal[]
 
   @@unique([pipelineId, name])
   @@unique([pipelineId, position])
@@ -719,6 +740,7 @@ model Lead {
   description     String?
   notes           String?
   lostReason      String?        @map("lost_reason")
+  convertedAt     DateTime?      @map("converted_at")
   createdById     String?        @map("created_by_id") @db.Uuid
   archivedAt      DateTime?      @map("archived_at")
   lastActivityAt  DateTime       @default(now()) @map("last_activity_at")
@@ -735,6 +757,7 @@ model Lead {
   followUps       FollowUp[]
   project         Project?
   quotations      Quotation[]
+  convertedDeal   Deal?
 
   @@index([organizationId, stageId, archivedAt])
   @@index([organizationId, ownerId, archivedAt])
@@ -745,6 +768,48 @@ model Lead {
   @@index([organizationId, source, archivedAt, createdAt])
   @@index([organizationId, normalizedEmail])
   @@map("leads")
+}
+
+model Deal {
+  id                String        @id @default(uuid()) @db.Uuid
+  organizationId    String        @map("organization_id") @db.Uuid
+  name              String
+  companyId         String        @map("company_id") @db.Uuid
+  contactId         String?       @map("contact_id") @db.Uuid
+  sourceLeadId      String?       @unique @map("source_lead_id") @db.Uuid
+  ownerId           String?       @map("owner_id") @db.Uuid
+  pipelineId        String        @map("pipeline_id") @db.Uuid
+  stageId           String        @map("stage_id") @db.Uuid
+  amount            Decimal?      @db.Decimal(19, 2)
+  currency          String        @default("BDT") @db.VarChar(3)
+  probability       Int           @default(0)
+  expectedCloseDate DateTime?     @map("expected_close_date") @db.Date
+  priority          LeadPriority  @default(MEDIUM)
+  description       String?
+  lostReason        String?       @map("lost_reason")
+  wonAt             DateTime?     @map("won_at")
+  lostAt            DateTime?     @map("lost_at")
+  createdById       String        @map("created_by_id") @db.Uuid
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+  archivedAt        DateTime?     @map("archived_at")
+  organization      Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  company           Company       @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  contact           Contact?      @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  sourceLead        Lead?         @relation(fields: [sourceLeadId], references: [id], onDelete: SetNull)
+  owner             User?         @relation("DealOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  pipeline          Pipeline      @relation(fields: [pipelineId], references: [id], onDelete: Restrict)
+  stage             PipelineStage @relation(fields: [stageId], references: [id], onDelete: Restrict)
+  createdBy         User          @relation("DealCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  quotations        Quotation[]
+  project           Project?
+
+  @@index([organizationId, stageId, archivedAt])
+  @@index([organizationId, ownerId, archivedAt])
+  @@index([organizationId, companyId, archivedAt])
+  @@index([organizationId, expectedCloseDate, archivedAt])
+  @@index([organizationId, priority, archivedAt])
+  @@map("deals")
 }
 
 model LeadActivity {
@@ -830,42 +895,42 @@ model EmailTemplate {
 }
 
 model EmailMessage {
-  id               String                 @id @default(uuid()) @db.Uuid
-  organizationId   String                 @map("organization_id") @db.Uuid
-  senderUserId     String?                @map("sender_user_id") @db.Uuid
-  templateId       String?                @map("template_id") @db.Uuid
-  mailboxConnectionId String?              @map("mailbox_connection_id") @db.Uuid
-  threadId         String?                 @map("thread_id") @db.Uuid
-  direction        EmailDirection         @default(OUTBOUND)
-  relatedEntityType EmailRelatedEntityType? @map("related_entity_type")
-  relatedEntityId  String?                @map("related_entity_id") @db.Uuid
-  fromName         String                 @map("from_name") @db.VarChar(160)
-  fromAddress      String                 @map("from_address") @db.VarChar(320)
-  replyTo          String?                @map("reply_to") @db.VarChar(320)
-  toAddresses      String[]               @map("to_addresses")
-  ccAddresses      String[]               @map("cc_addresses")
-  subject          String                 @db.VarChar(300)
-  body             String                 @db.Text
-  externalMessageId String?               @map("external_message_id") @db.VarChar(998)
-  inReplyTo        String?                @map("in_reply_to") @db.VarChar(998)
-  references       String[]               @default([])
-  providerUid      String?                @map("provider_uid") @db.VarChar(128)
-  folder           String?                @db.VarChar(64)
-  status           EmailMessageStatus     @default(DRAFT)
-  queuedAt         DateTime?              @map("queued_at")
-  sentAt           DateTime?              @map("sent_at")
-  failedAt         DateTime?              @map("failed_at")
-  receivedAt       DateTime?              @map("received_at")
-  safeErrorSummary String?                @map("safe_error_summary") @db.VarChar(1000)
-  idempotencyKey   String?                @map("idempotency_key") @db.VarChar(300)
-  createdAt        DateTime               @default(now()) @map("created_at")
-  updatedAt        DateTime               @updatedAt @map("updated_at")
-  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sender           User?                  @relation("EmailMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
-  template         EmailTemplate?         @relation(fields: [templateId], references: [id], onDelete: SetNull)
-  mailboxConnection MailboxConnection?    @relation(fields: [mailboxConnectionId], references: [id], onDelete: SetNull)
-  thread           EmailThread?           @relation(fields: [threadId], references: [id], onDelete: SetNull)
-  attachments      EmailAttachment[]
+  id                  String                  @id @default(uuid()) @db.Uuid
+  organizationId      String                  @map("organization_id") @db.Uuid
+  senderUserId        String?                 @map("sender_user_id") @db.Uuid
+  templateId          String?                 @map("template_id") @db.Uuid
+  mailboxConnectionId String?                 @map("mailbox_connection_id") @db.Uuid
+  threadId            String?                 @map("thread_id") @db.Uuid
+  direction           EmailDirection          @default(OUTBOUND)
+  relatedEntityType   EmailRelatedEntityType? @map("related_entity_type")
+  relatedEntityId     String?                 @map("related_entity_id") @db.Uuid
+  fromName            String                  @map("from_name") @db.VarChar(160)
+  fromAddress         String                  @map("from_address") @db.VarChar(320)
+  replyTo             String?                 @map("reply_to") @db.VarChar(320)
+  toAddresses         String[]                @map("to_addresses")
+  ccAddresses         String[]                @map("cc_addresses")
+  subject             String                  @db.VarChar(300)
+  body                String                  @db.Text
+  externalMessageId   String?                 @map("external_message_id") @db.VarChar(998)
+  inReplyTo           String?                 @map("in_reply_to") @db.VarChar(998)
+  references          String[]                @default([])
+  providerUid         String?                 @map("provider_uid") @db.VarChar(128)
+  folder              String?                 @db.VarChar(64)
+  status              EmailMessageStatus      @default(DRAFT)
+  queuedAt            DateTime?               @map("queued_at")
+  sentAt              DateTime?               @map("sent_at")
+  failedAt            DateTime?               @map("failed_at")
+  receivedAt          DateTime?               @map("received_at")
+  safeErrorSummary    String?                 @map("safe_error_summary") @db.VarChar(1000)
+  idempotencyKey      String?                 @map("idempotency_key") @db.VarChar(300)
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  organization        Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sender              User?                   @relation("EmailMessageSender", fields: [senderUserId], references: [id], onDelete: SetNull)
+  template            EmailTemplate?          @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  mailboxConnection   MailboxConnection?      @relation(fields: [mailboxConnectionId], references: [id], onDelete: SetNull)
+  thread              EmailThread?            @relation(fields: [threadId], references: [id], onDelete: SetNull)
+  attachments         EmailAttachment[]
 
   @@unique([organizationId, idempotencyKey])
   @@unique([mailboxConnectionId, externalMessageId])
@@ -992,6 +1057,7 @@ model Project {
   organizationId   String          @map("organization_id") @db.Uuid
   companyId        String          @map("company_id") @db.Uuid
   sourceLeadId     String?         @unique @map("source_lead_id") @db.Uuid
+  sourceDealId     String?         @unique @map("source_deal_id") @db.Uuid
   name             String
   description      String?
   projectManagerId String?         @map("project_manager_id") @db.Uuid
@@ -1009,6 +1075,7 @@ model Project {
   organization     Organization    @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   company          Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
   sourceLead       Lead?           @relation(fields: [sourceLeadId], references: [id], onDelete: SetNull)
+  sourceDeal       Deal?           @relation(fields: [sourceDealId], references: [id], onDelete: SetNull)
   projectManager   User?           @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
   createdBy        User            @relation("ProjectCreator", fields: [createdById], references: [id], onDelete: Restrict)
   members          ProjectMember[]
@@ -1046,7 +1113,7 @@ model ProjectMember {
 model Task {
   id               String        @id @default(uuid()) @db.Uuid
   organizationId   String        @map("organization_id") @db.Uuid
-    projectId        String?       @map("project_id") @db.Uuid
+  projectId        String?       @map("project_id") @db.Uuid
   title            String
   description      String?
   assigneeId       String?       @map("assignee_id") @db.Uuid
@@ -1062,7 +1129,7 @@ model Task {
   updatedAt        DateTime      @updatedAt @map("updated_at")
   archivedAt       DateTime?     @map("archived_at")
   organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    project          Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  project          Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
   assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   reporter         User          @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   createdBy        User          @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -1130,6 +1197,7 @@ model Quotation {
   companyId       String          @map("company_id") @db.Uuid
   contactId       String?         @map("contact_id") @db.Uuid
   leadId          String?         @map("lead_id") @db.Uuid
+  dealId          String?         @map("deal_id") @db.Uuid
   projectId       String?         @map("project_id") @db.Uuid
   status          QuotationStatus @default(DRAFT)
   issueDate       DateTime        @map("issue_date") @db.Date
@@ -1157,6 +1225,7 @@ model Quotation {
   company         Company         @relation(fields: [companyId], references: [id], onDelete: Restrict)
   contact         Contact?        @relation(fields: [contactId], references: [id], onDelete: SetNull)
   lead            Lead?           @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  deal            Deal?           @relation(fields: [dealId], references: [id], onDelete: SetNull)
   project         Project?        @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdBy       User            @relation("QuotationCreator", fields: [createdById], references: [id], onDelete: Restrict)
   items           QuotationItem[]
@@ -1166,6 +1235,7 @@ model Quotation {
   @@index([organizationId, archivedAt, createdAt])
   @@index([organizationId, companyId, archivedAt])
   @@index([organizationId, leadId])
+  @@index([organizationId, dealId])
   @@index([organizationId, projectId])
   @@index([organizationId, status, archivedAt])
   @@index([organizationId, issueDate])
@@ -1394,23 +1464,23 @@ model DataMergeRecord {
 }
 
 model IntegrationConnection {
-  id                    String                      @id @default(uuid()) @db.Uuid
-  organizationId        String                      @map("organization_id") @db.Uuid
-  name                  String                      @db.VarChar(120)
-  provider              IntegrationProvider
-  status                IntegrationConnectionStatus @default(ACTIVE)
-  direction             IntegrationDirection       @default(BOTH)
-  configuration         Json?
-  encryptedSecret       String                      @map("encrypted_secret") @db.Text
-  secretLastFour        String                      @map("secret_last_four") @db.VarChar(4)
-  secretRotatedAt       DateTime                    @default(now()) @map("secret_rotated_at")
-  lastActivityAt        DateTime?                   @map("last_activity_at")
-  createdAt             DateTime                    @default(now()) @map("created_at")
-  updatedAt             DateTime                    @updatedAt @map("updated_at")
-  organization          Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  events                IntegrationEvent[]
-  subscriptions         WebhookSubscription[]
-  externalMappings      ExternalEntityMapping[]
+  id               String                      @id @default(uuid()) @db.Uuid
+  organizationId   String                      @map("organization_id") @db.Uuid
+  name             String                      @db.VarChar(120)
+  provider         IntegrationProvider
+  status           IntegrationConnectionStatus @default(ACTIVE)
+  direction        IntegrationDirection        @default(BOTH)
+  configuration    Json?
+  encryptedSecret  String                      @map("encrypted_secret") @db.Text
+  secretLastFour   String                      @map("secret_last_four") @db.VarChar(4)
+  secretRotatedAt  DateTime                    @default(now()) @map("secret_rotated_at")
+  lastActivityAt   DateTime?                   @map("last_activity_at")
+  createdAt        DateTime                    @default(now()) @map("created_at")
+  updatedAt        DateTime                    @updatedAt @map("updated_at")
+  organization     Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  events           IntegrationEvent[]
+  subscriptions    WebhookSubscription[]
+  externalMappings ExternalEntityMapping[]
 
   @@unique([organizationId, name])
   @@index([organizationId, status, createdAt])
@@ -1418,24 +1488,24 @@ model IntegrationConnection {
 }
 
 model IntegrationEvent {
-  id              String                     @id @default(uuid()) @db.Uuid
-  organizationId  String                     @map("organization_id") @db.Uuid
-  connectionId    String?                    @map("connection_id") @db.Uuid
+  id              String                    @id @default(uuid()) @db.Uuid
+  organizationId  String                    @map("organization_id") @db.Uuid
+  connectionId    String?                   @map("connection_id") @db.Uuid
   direction       IntegrationEventDirection
-  externalEventId String                     @map("external_event_id") @db.VarChar(160)
-  eventType       String                     @map("event_type") @db.VarChar(120)
-  status          IntegrationEventStatus     @default(RECEIVED)
-  attemptCount    Int                        @default(0) @map("attempt_count")
-  retryable       Boolean                    @default(false)
+  externalEventId String                    @map("external_event_id") @db.VarChar(160)
+  eventType       String                    @map("event_type") @db.VarChar(120)
+  status          IntegrationEventStatus    @default(RECEIVED)
+  attemptCount    Int                       @default(0) @map("attempt_count")
+  retryable       Boolean                   @default(false)
   payload         Json?
   metadata        Json?
-  receivedAt      DateTime?                  @map("received_at")
-  processedAt     DateTime?                  @map("processed_at")
-  lastError       String?                    @map("last_error") @db.VarChar(1000)
-  createdAt       DateTime                   @default(now()) @map("created_at")
-  updatedAt       DateTime                   @updatedAt @map("updated_at")
-  organization    Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  connection      IntegrationConnection?     @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  receivedAt      DateTime?                 @map("received_at")
+  processedAt     DateTime?                 @map("processed_at")
+  lastError       String?                   @map("last_error") @db.VarChar(1000)
+  createdAt       DateTime                  @default(now()) @map("created_at")
+  updatedAt       DateTime                  @updatedAt @map("updated_at")
+  organization    Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection      IntegrationConnection?    @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@unique([connectionId, externalEventId])
   @@index([organizationId, status, createdAt])
@@ -1444,19 +1514,19 @@ model IntegrationEvent {
 }
 
 model WebhookSubscription {
-  id              String                 @id @default(uuid()) @db.Uuid
-  organizationId  String                 @map("organization_id") @db.Uuid
-  connectionId    String                 @map("connection_id") @db.Uuid
-  name            String                 @db.VarChar(120)
-  targetUrl       String                 @map("target_url") @db.VarChar(2048)
-  encryptedSecret String                 @map("encrypted_secret") @db.Text
-  secretLastFour  String                 @map("secret_last_four") @db.VarChar(4)
-  active          Boolean                @default(true)
-  eventTypes      String[]               @map("event_types")
-  createdAt       DateTime               @default(now()) @map("created_at")
-  updatedAt       DateTime               @updatedAt @map("updated_at")
-  organization    Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  connection      IntegrationConnection  @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  id              String                @id @default(uuid()) @db.Uuid
+  organizationId  String                @map("organization_id") @db.Uuid
+  connectionId    String                @map("connection_id") @db.Uuid
+  name            String                @db.VarChar(120)
+  targetUrl       String                @map("target_url") @db.VarChar(2048)
+  encryptedSecret String                @map("encrypted_secret") @db.Text
+  secretLastFour  String                @map("secret_last_four") @db.VarChar(4)
+  active          Boolean               @default(true)
+  eventTypes      String[]              @map("event_types")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+  organization    Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection      IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
   deliveries      WebhookDelivery[]
 
   @@unique([organizationId, name])
@@ -1466,22 +1536,22 @@ model WebhookSubscription {
 }
 
 model WebhookDelivery {
-  id              String                  @id @default(uuid()) @db.Uuid
-  organizationId  String                  @map("organization_id") @db.Uuid
-  subscriptionId  String                  @map("subscription_id") @db.Uuid
-  eventId         String                  @map("event_id") @db.Uuid
-  eventType       String                  @map("event_type") @db.VarChar(120)
-  payload         Json
-  attempt         Int                     @default(0)
-  statusCode      Int?                    @map("status_code")
-  status          WebhookDeliveryStatus   @default(PENDING)
-  retryable       Boolean                 @default(true)
-  lastError       String?                 @map("last_error") @db.VarChar(1000)
-  createdAt       DateTime                @default(now()) @map("created_at")
-  updatedAt       DateTime                @updatedAt @map("updated_at")
-  deliveredAt     DateTime?               @map("delivered_at")
-  organization    Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  subscription    WebhookSubscription     @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  subscriptionId String                @map("subscription_id") @db.Uuid
+  eventId        String                @map("event_id") @db.Uuid
+  eventType      String                @map("event_type") @db.VarChar(120)
+  payload        Json
+  attempt        Int                   @default(0)
+  statusCode     Int?                  @map("status_code")
+  status         WebhookDeliveryStatus @default(PENDING)
+  retryable      Boolean               @default(true)
+  lastError      String?               @map("last_error") @db.VarChar(1000)
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  deliveredAt    DateTime?             @map("delivered_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  subscription   WebhookSubscription   @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@unique([subscriptionId, eventId])
   @@index([organizationId, status, createdAt])
@@ -1490,17 +1560,17 @@ model WebhookDelivery {
 }
 
 model ExternalEntityMapping {
-  id                 String                        @id @default(uuid()) @db.Uuid
-  organizationId     String                        @map("organization_id") @db.Uuid
-  connectionId       String                        @map("connection_id") @db.Uuid
-  externalEntityType String                        @map("external_entity_type") @db.VarChar(80)
-  externalEntityId   String                        @map("external_entity_id") @db.VarChar(255)
-  unicrmEntityType   UnicrmIntegrationEntityType   @map("unicrm_entity_type")
-  unicrmEntityId     String                        @map("unicrm_entity_id") @db.Uuid
-  createdAt          DateTime                      @default(now()) @map("created_at")
-  updatedAt          DateTime                      @updatedAt @map("updated_at")
-  organization       Organization                  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  connection         IntegrationConnection         @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  id                 String                      @id @default(uuid()) @db.Uuid
+  organizationId     String                      @map("organization_id") @db.Uuid
+  connectionId       String                      @map("connection_id") @db.Uuid
+  externalEntityType String                      @map("external_entity_type") @db.VarChar(80)
+  externalEntityId   String                      @map("external_entity_id") @db.VarChar(255)
+  unicrmEntityType   UnicrmIntegrationEntityType @map("unicrm_entity_type")
+  unicrmEntityId     String                      @map("unicrm_entity_id") @db.Uuid
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt @map("updated_at")
+  organization       Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  connection         IntegrationConnection       @relation(fields: [connectionId], references: [id], onDelete: Cascade)
 
   @@unique([connectionId, externalEntityType, externalEntityId])
   @@index([organizationId, unicrmEntityType, unicrmEntityId])
@@ -1509,21 +1579,21 @@ model ExternalEntityMapping {
 }
 
 model AutomationRule {
-  id             String                    @id @default(uuid()) @db.Uuid
-  organizationId String                    @map("organization_id") @db.Uuid
-  name           String                    @db.VarChar(160)
-  entityType     AutomationEntityType      @map("entity_type")
-  triggerType    AutomationTriggerType     @map("trigger_type")
-  triggerConfig  Json?                     @map("trigger_config")
+  id             String                @id @default(uuid()) @db.Uuid
+  organizationId String                @map("organization_id") @db.Uuid
+  name           String                @db.VarChar(160)
+  entityType     AutomationEntityType  @map("entity_type")
+  triggerType    AutomationTriggerType @map("trigger_type")
+  triggerConfig  Json?                 @map("trigger_config")
   conditions     Json
   actions        Json
-  graphMetadata  Json?                     @map("graph_metadata")
-  active         Boolean                   @default(true)
-  createdById    String                    @map("created_by_id") @db.Uuid
-  createdAt      DateTime                  @default(now()) @map("created_at")
-  updatedAt      DateTime                  @updatedAt @map("updated_at")
-  organization   Organization              @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  createdBy      User                      @relation("AutomationRuleCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  graphMetadata  Json?                 @map("graph_metadata")
+  active         Boolean               @default(true)
+  createdById    String                @map("created_by_id") @db.Uuid
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  organization   Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy      User                  @relation("AutomationRuleCreator", fields: [createdById], references: [id], onDelete: Restrict)
   runs           AutomationRun[]
 
   @@unique([organizationId, name])
@@ -1532,25 +1602,25 @@ model AutomationRule {
 }
 
 model AutomationRun {
-  id               String                 @id @default(uuid()) @db.Uuid
-  organizationId   String                 @map("organization_id") @db.Uuid
-  automationRuleId String                 @map("automation_rule_id") @db.Uuid
-  triggerEventId   String                 @map("trigger_event_id") @db.VarChar(220)
-  entityType       AutomationEntityType   @map("entity_type")
-  entityId         String                 @map("entity_id") @db.Uuid
-  status           AutomationRunStatus    @default(PENDING)
-  attemptCount     Int                    @default(0) @map("attempt_count")
-  depth            Int                    @default(0)
-  retryable        Boolean                @default(true)
-  triggerPayload   Json                   @map("trigger_payload")
-  actionResults    Json?                  @map("action_results")
-  startedAt        DateTime?              @map("started_at")
-  completedAt      DateTime?              @map("completed_at")
-  errorSummary     String?                @map("error_summary") @db.VarChar(1000)
-  createdAt        DateTime               @default(now()) @map("created_at")
-  updatedAt        DateTime               @updatedAt @map("updated_at")
-  organization     Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  automationRule   AutomationRule         @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
+  id               String               @id @default(uuid()) @db.Uuid
+  organizationId   String               @map("organization_id") @db.Uuid
+  automationRuleId String               @map("automation_rule_id") @db.Uuid
+  triggerEventId   String               @map("trigger_event_id") @db.VarChar(220)
+  entityType       AutomationEntityType @map("entity_type")
+  entityId         String               @map("entity_id") @db.Uuid
+  status           AutomationRunStatus  @default(PENDING)
+  attemptCount     Int                  @default(0) @map("attempt_count")
+  depth            Int                  @default(0)
+  retryable        Boolean              @default(true)
+  triggerPayload   Json                 @map("trigger_payload")
+  actionResults    Json?                @map("action_results")
+  startedAt        DateTime?            @map("started_at")
+  completedAt      DateTime?            @map("completed_at")
+  errorSummary     String?              @map("error_summary") @db.VarChar(1000)
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt @map("updated_at")
+  organization     Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  automationRule   AutomationRule       @relation(fields: [automationRuleId], references: [id], onDelete: Cascade)
 
   @@unique([automationRuleId, triggerEventId])
   @@index([organizationId, status, createdAt])

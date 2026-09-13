@@ -2,6 +2,7 @@ import { Transform } from 'class-transformer';
 import {
   ArrayUnique,
   IsArray,
+  IsBoolean,
   IsDateString,
   IsDecimal,
   IsEmail,
@@ -37,9 +38,9 @@ export class LeadListQueryDto extends ListQueryDto {
   @IsUUID() @IsOptional() company?: string;
   @IsEnum(LeadPriority) @IsOptional() priority?: LeadPriority;
   @IsEnum(LeadSource) @IsOptional() source?: LeadSource;
-  @IsIn(['all', 'mine', 'followUpDue', 'won', 'lost'])
+  @IsIn(['active', 'all', 'mine', 'followUpDue', 'won', 'lost', 'converted'])
   @IsOptional()
-  view: 'all' | 'mine' | 'followUpDue' | 'won' | 'lost' = 'all';
+  view: 'active' | 'all' | 'mine' | 'followUpDue' | 'won' | 'lost' | 'converted' = 'active';
   @IsDateString() @IsOptional() createdFrom?: string;
   @IsDateString() @IsOptional() createdTo?: string;
   @IsIn(['title', 'createdAt', 'updatedAt', 'estimatedValue', 'nextFollowUpAt', 'lastActivityAt'])
@@ -122,6 +123,26 @@ export class UpdateLeadOwnerDto {
   @ValidateIf((_object, value) => value !== null)
   @IsUUID()
   ownerId!: string | null;
+}
+
+export class ConvertLeadDto {
+  @IsUUID() @IsOptional() companyId?: string;
+  @Transform(trim) @IsString() @MinLength(1) @MaxLength(180) @IsOptional() companyName?: string;
+  @IsUUID() @IsOptional() contactId?: string;
+  @Transform(trim) @IsString() @MaxLength(100) @IsOptional() contactFirstName?: string;
+  @Transform(trim) @IsString() @MaxLength(100) @IsOptional() contactLastName?: string;
+  @Transform(email) @IsEmail() @IsOptional() contactEmail?: string;
+  @Transform(trim) @IsString() @MaxLength(40) @IsOptional() contactPhone?: string;
+  @IsBoolean() @IsOptional() createDeal: boolean = true;
+  @Transform(trim) @IsString() @MinLength(1) @MaxLength(180) @IsOptional() dealName?: string;
+  @IsUUID() @IsOptional() dealPipelineId?: string;
+  @IsUUID() @IsOptional() dealStageId?: string;
+  @Transform(trim)
+  @IsDecimal({ decimal_digits: '0,2', force_decimal: false })
+  @Matches(/^\d{1,17}(?:\.\d{1,2})?$/)
+  @IsOptional()
+  dealAmount?: string;
+  @IsDateString() @IsOptional() expectedCloseDate?: string;
 }
 
 export class CreateActivityDto {

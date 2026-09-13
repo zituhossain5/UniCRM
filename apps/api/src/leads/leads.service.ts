@@ -20,6 +20,7 @@ import { IntegrationsService } from '../integrations/integrations.service';
 import { AutomationsService } from '../automations/automations.service';
 import type {
   ActivityListQueryDto,
+  ConvertLeadDto,
   CreateActivityDto,
   CreateFollowUpDto,
   CreateLeadDto,
@@ -63,7 +64,10 @@ export class LeadsService {
       throw new BadRequestException('Unsupported lead priority');
     if (query.source && !Object.values(LeadSource).includes(query.source))
       throw new BadRequestException('Unsupported lead source');
-    if (query.view && !['all', 'mine', 'followUpDue', 'won', 'lost'].includes(query.view))
+    if (
+      query.view &&
+      !['active', 'all', 'mine', 'followUpDue', 'won', 'lost', 'converted'].includes(query.view)
+    )
       throw new BadRequestException('Unsupported lead view');
     for (const [name, value] of [
       ['stage', query.stage],
@@ -108,6 +112,8 @@ export class LeadsService {
     const where: Prisma.LeadWhereInput = {
       organizationId: principal.organizationId,
       archivedAt: null,
+      ...(query.view === 'converted' ? { convertedAt: { not: null } } : {}),
+      ...(!['all', 'converted'].includes(query.view) ? { convertedAt: null } : {}),
       ...(recordIds ? { id: { in: recordIds } } : {}),
       ...(query.pipeline ? { pipelineId: query.pipeline } : {}),
       ...(query.stage ? { stageId: query.stage } : {}),
@@ -173,6 +179,13 @@ export class LeadsService {
           orderBy: { dueAt: 'desc' },
           take: 20,
         },
+        convertedDeal: {
+          select: {
+            id: true,
+            name: true,
+            stage: { select: { name: true, isWon: true, isLost: true } },
+          },
+        },
       },
     });
     if (!lead) throw new NotFoundException('Lead not found');
@@ -209,7 +222,12 @@ export class LeadsService {
       throw new BadRequestException('pipelineId and stageId must be selected together');
     const pipeline = dto.pipelineId
       ? await this.prisma.pipeline.findFirst({
-          where: { id: dto.pipelineId, organizationId: principal.organizationId, archivedAt: null },
+          where: {
+            id: dto.pipelineId,
+            organizationId: principal.organizationId,
+            entityType: 'LEAD',
+            archivedAt: null,
+          },
           include: { stages: { orderBy: { position: 'asc' } } },
         })
       : await this.pipelines.ensureDefault(principal.organizationId);
@@ -309,6 +327,7 @@ export class LeadsService {
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadDto) {
     this.customFields.rejectGeneratedControlKeys(dto);
     const existing = await this.requireLead(principal, id);
+    if (existing.convertedAt) throw new ConflictException('Converted leads cannot be modified');
     await this.validateRelationships(
       principal.organizationId,
       dto.companyId !== undefined ? dto.companyId : existing.companyId,
@@ -402,13 +421,14 @@ export class LeadsService {
 
   async changeStage(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadStageDto) {
     const lead = await this.requireLead(principal, id);
+    if (lead.convertedAt) throw new ConflictException('Converted leads cannot change stage');
     const pipelineId = dto.pipelineId ?? lead.pipelineId;
     const stage = await this.prisma.pipelineStage.findFirst({
       where: {
         id: dto.stageId,
         organizationId: principal.organizationId,
         pipelineId,
-        pipeline: { archivedAt: null },
+        pipeline: { entityType: 'LEAD', archivedAt: null },
       },
     });
     if (!stage) throw new BadRequestException('Pipeline stage is invalid or unavailable');
@@ -476,6 +496,7 @@ export class LeadsService {
 
   async changeOwner(principal: AuthenticatedPrincipal, id: string, dto: UpdateLeadOwnerDto) {
     const lead = await this.requireLead(principal, id);
+    if (lead.convertedAt) throw new ConflictException('Converted leads cannot change owner');
     if (dto.ownerId === lead.ownerId) return lead;
     await this.validateRelationships(principal.organizationId, undefined, undefined, dto.ownerId);
     const owner = dto.ownerId
@@ -523,6 +544,184 @@ export class LeadsService {
       },
     );
     return updated;
+  }
+
+  async convert(principal: AuthenticatedPrincipal, id: string, dto: ConvertLeadDto) {
+    const lead = await this.requireLead(principal, id);
+    if (lead.convertedAt) throw new ConflictException('Lead has already been converted');
+    if ((dto.dealPipelineId && !dto.dealStageId) || (!dto.dealPipelineId && dto.dealStageId))
+      throw new BadRequestException('dealPipelineId and dealStageId must be selected together');
+    let dealPipeline: Awaited<ReturnType<PipelinesService['ensureDefault']>> | null = null;
+    let dealStageId: string | undefined;
+    if (dto.createDeal) {
+      dealPipeline = dto.dealPipelineId
+        ? await this.prisma.pipeline.findFirst({
+            where: {
+              id: dto.dealPipelineId,
+              organizationId: principal.organizationId,
+              entityType: 'DEAL',
+              archivedAt: null,
+            },
+            include: { stages: { orderBy: { position: 'asc' } } },
+          })
+        : await this.pipelines.ensureDefault(principal.organizationId, 'DEAL');
+      if (!dealPipeline) throw new BadRequestException('Deal pipeline is invalid or unavailable');
+      dealStageId = dto.dealStageId ?? dealPipeline.stages[0]?.id;
+      if (!dealStageId || !dealPipeline.stages.some(({ id: stageId }) => stageId === dealStageId))
+        throw new BadRequestException('Deal stage is invalid or unavailable');
+    }
+    if (dto.companyId) await this.validateRelationships(principal.organizationId, dto.companyId);
+    if (dto.contactId)
+      await this.validateRelationships(principal.organizationId, undefined, dto.contactId);
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.lead.findFirst({
+        where: { id, organizationId: principal.organizationId, archivedAt: null },
+      });
+      if (!current) throw new NotFoundException('Lead not found');
+      if (current.convertedAt) throw new ConflictException('Lead has already been converted');
+      let companyId = dto.companyId ?? current.companyId;
+      if (!companyId && dto.companyName) {
+        const matching = await tx.company.findFirst({
+          where: {
+            organizationId: principal.organizationId,
+            archivedAt: null,
+            name: { equals: dto.companyName, mode: 'insensitive' },
+          },
+        });
+        companyId =
+          matching?.id ??
+          (
+            await tx.company.create({
+              data: {
+                organizationId: principal.organizationId,
+                name: dto.companyName,
+                accountOwnerId: current.ownerId,
+                createdById: principal.userId,
+              },
+            })
+          ).id;
+      }
+      if (dto.createDeal && !companyId)
+        throw new BadRequestException('Select or create a company before creating a deal');
+
+      let contactId = dto.contactId ?? current.contactId;
+      const contactEmail = dto.contactEmail ?? current.email;
+      if (!contactId && contactEmail) {
+        const matching = await tx.contact.findFirst({
+          where: {
+            organizationId: principal.organizationId,
+            archivedAt: null,
+            normalizedEmail: contactEmail.toLowerCase(),
+          },
+        });
+        if (matching) {
+          if (companyId && matching.companyId && matching.companyId !== companyId)
+            throw new ConflictException('A contact with this email belongs to another company');
+          contactId = matching.id;
+          if (companyId && !matching.companyId)
+            await tx.contact.update({ where: { id: matching.id }, data: { companyId } });
+        }
+      }
+      if (
+        !contactId &&
+        (dto.contactFirstName ||
+          current.firstName ||
+          dto.contactLastName ||
+          current.lastName ||
+          contactEmail)
+      ) {
+        contactId = (
+          await tx.contact.create({
+            data: {
+              organizationId: principal.organizationId,
+              companyId,
+              firstName: dto.contactFirstName ?? current.firstName ?? 'Unknown',
+              lastName: dto.contactLastName ?? current.lastName ?? 'Contact',
+              email: contactEmail,
+              normalizedEmail: contactEmail?.toLowerCase(),
+              phone: dto.contactPhone ?? current.phone,
+              createdById: principal.userId,
+            },
+          })
+        ).id;
+      }
+      const convertedAt = new Date();
+      await tx.lead.update({
+        where: { id },
+        data: { companyId, contactId, convertedAt, lastActivityAt: convertedAt },
+      });
+      await tx.leadActivity.create({
+        data: {
+          organizationId: principal.organizationId,
+          leadId: id,
+          type: 'SYSTEM',
+          title: 'Lead converted',
+          occurredAt: convertedAt,
+          createdById: principal.userId,
+          metadata: { companyId, contactId, createDeal: dto.createDeal },
+        },
+      });
+      await tx.activityLog.create({
+        data: {
+          organizationId: principal.organizationId,
+          actorId: principal.userId,
+          entityType: 'LEAD',
+          entityId: id,
+          action: 'LEAD_CONVERTED',
+          metadata: { companyId, contactId },
+        },
+      });
+      const deal = dto.createDeal
+        ? await tx.deal.create({
+            data: {
+              organizationId: principal.organizationId,
+              sourceLeadId: id,
+              name: dto.dealName ?? current.title,
+              companyId: companyId!,
+              contactId,
+              ownerId: current.ownerId,
+              pipelineId: dealPipeline!.id,
+              stageId: dealStageId!,
+              amount: dto.dealAmount ?? current.estimatedValue,
+              currency: current.currency,
+              priority: current.priority,
+              expectedCloseDate: dto.expectedCloseDate
+                ? new Date(dto.expectedCloseDate)
+                : undefined,
+              description: current.description,
+              createdById: principal.userId,
+            },
+          })
+        : null;
+      if (deal)
+        await tx.activityLog.create({
+          data: {
+            organizationId: principal.organizationId,
+            actorId: principal.userId,
+            entityType: 'DEAL',
+            entityId: deal.id,
+            action: 'DEAL_CREATED',
+            metadata: { sourceLeadId: id },
+          },
+        });
+      return { companyId, contactId, deal };
+    });
+    if (result.deal)
+      await this.automations.publishBusinessEvent(
+        principal.organizationId,
+        'deal.created',
+        result.deal.id,
+        {
+          name: result.deal.name,
+          stageId: result.deal.stageId,
+          ownerId: result.deal.ownerId,
+          priority: result.deal.priority,
+          amount: result.deal.amount?.toNumber() ?? null,
+          sourceLeadId: id,
+        },
+      );
+    return result;
   }
 
   async activities(principal: AuthenticatedPrincipal, leadId: string, query: ActivityListQueryDto) {

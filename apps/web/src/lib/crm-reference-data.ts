@@ -43,6 +43,7 @@ const invalidatedReferences: Record<CrmDataKey, ReferenceKey[]> = {
   companies: ['companies'],
   contacts: ['contacts'],
   leads: [],
+  deals: [],
   projects: [],
   tasks: [],
   users: ['users'],

@@ -25,6 +25,7 @@ const summaryInclude = {
   company: { select: { id: true, name: true } },
   contact: { select: { id: true, firstName: true, lastName: true } },
   lead: { select: { id: true, title: true } },
+  deal: { select: { id: true, name: true } },
   project: { select: { id: true, name: true } },
   createdBy: { select: { id: true, firstName: true, lastName: true } },
   _count: { select: { items: true } },
@@ -75,6 +76,7 @@ export class QuotationsService {
       ...(query.status ? { status: query.status } : {}),
       ...(query.company ? { companyId: query.company } : {}),
       ...(query.lead ? { leadId: query.lead } : {}),
+      ...(query.deal ? { dealId: query.deal } : {}),
       ...(query.project ? { projectId: query.project } : {}),
       ...(query.createdBy ? { createdById: query.createdBy } : {}),
       ...(query.currency ? { currency: query.currency.toUpperCase() } : {}),
@@ -138,7 +140,7 @@ export class QuotationsService {
 
   async referenceData(principal: AuthenticatedPrincipal) {
     const organizationId = principal.organizationId;
-    const [companies, contacts, leads, projects, users] = await this.prisma.$transaction([
+    const [companies, contacts, leads, deals, projects, users] = await this.prisma.$transaction([
       this.prisma.company.findMany({
         where: { organizationId, archivedAt: null },
         select: { id: true, name: true },
@@ -161,6 +163,18 @@ export class QuotationsService {
         },
         orderBy: { createdAt: 'desc' },
       }),
+      this.prisma.deal.findMany({
+        where: { organizationId, archivedAt: null },
+        select: {
+          id: true,
+          companyId: true,
+          contactId: true,
+          name: true,
+          amount: true,
+          currency: true,
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
       this.prisma.project.findMany({
         where: { organizationId, archivedAt: null },
         select: { id: true, companyId: true, name: true, currency: true },
@@ -172,7 +186,7 @@ export class QuotationsService {
         orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
       }),
     ]);
-    return { companies, contacts, leads, projects, users };
+    return { companies, contacts, leads, deals, projects, users };
   }
 
   async create(principal: AuthenticatedPrincipal, dto: CreateQuotationDto) {
@@ -181,6 +195,7 @@ export class QuotationsService {
       dto.companyId,
       dto.contactId,
       dto.leadId,
+      dto.dealId,
       dto.projectId,
     );
     this.validateDates(dto.issueDate, dto.expiryDate);
@@ -200,6 +215,7 @@ export class QuotationsService {
           companyId: dto.companyId,
           contactId: dto.contactId,
           leadId: dto.leadId,
+          dealId: dto.dealId,
           projectId: dto.projectId,
           issueDate: dateOnly(dto.issueDate)!,
           expiryDate: dateOnly(dto.expiryDate),
@@ -262,6 +278,7 @@ export class QuotationsService {
       companyId,
       dto.contactId === undefined ? existing.contactId : dto.contactId,
       dto.leadId === undefined ? existing.leadId : dto.leadId,
+      dto.dealId === undefined ? existing.dealId : dto.dealId,
       dto.projectId === undefined ? existing.projectId : dto.projectId,
     );
     this.validateDates(
@@ -290,6 +307,7 @@ export class QuotationsService {
           companyId: dto.companyId,
           contactId: dto.contactId,
           leadId: dto.leadId,
+          dealId: dto.dealId,
           projectId: dto.projectId,
           issueDate: dto.issueDate ? dateOnly(dto.issueDate) : undefined,
           expiryDate: dto.expiryDate === null ? null : dateOnly(dto.expiryDate),
@@ -513,6 +531,7 @@ export class QuotationsService {
     companyId: string,
     contactId?: string | null,
     leadId?: string | null,
+    dealId?: string | null,
     projectId?: string | null,
   ) {
     const company = await this.prisma.company.findFirst({
@@ -537,6 +556,15 @@ export class QuotationsService {
       if (!lead) throw new NotFoundException('Lead not found');
       if (lead.companyId !== companyId)
         throw new BadRequestException('Lead must belong to the selected company');
+    }
+    if (dealId) {
+      const deal = await this.prisma.deal.findFirst({
+        where: { id: dealId, organizationId, archivedAt: null },
+        select: { companyId: true },
+      });
+      if (!deal) throw new NotFoundException('Deal not found');
+      if (deal.companyId !== companyId)
+        throw new BadRequestException('Deal must belong to the selected company');
     }
     if (projectId) {
       const project = await this.prisma.project.findFirst({

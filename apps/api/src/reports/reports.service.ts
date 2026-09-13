@@ -20,7 +20,7 @@ export class ReportsService {
     };
     return this.prisma.pipelineStage
       .findMany({
-        where: { organizationId: principal.organizationId },
+        where: { organizationId: principal.organizationId, pipeline: { entityType: 'LEAD' } },
         select: {
           id: true,
           name: true,
@@ -62,6 +62,80 @@ export class ReportsService {
         conversionPercent: closed ? Number(((won * 100) / closed).toFixed(1)) : null,
       },
       meta: { formula: 'Won leads / (Won leads + Lost leads)' },
+    };
+  }
+
+  dealPipeline(principal: AuthenticatedPrincipal, query: ReportFilterDto) {
+    const where = {
+      organizationId: principal.organizationId,
+      archivedAt: null,
+      ...(query.owner ? { ownerId: query.owner } : {}),
+    };
+    return this.prisma.pipelineStage
+      .findMany({
+        where: { organizationId: principal.organizationId, pipeline: { entityType: 'DEAL' } },
+        select: {
+          id: true,
+          name: true,
+          position: true,
+          isWon: true,
+          isLost: true,
+          deals: { where, select: { amount: true, currency: true } },
+        },
+        orderBy: { position: 'asc' },
+      })
+      .then((stages) => ({
+        data: stages.map((stage) => ({
+          id: stage.id,
+          name: stage.name,
+          position: stage.position,
+          isWon: stage.isWon,
+          isLost: stage.isLost,
+          count: stage.deals.length,
+          values: this.sumByCurrency(stage.deals),
+        })),
+      }));
+  }
+
+  async dealConversion(principal: AuthenticatedPrincipal, query: ReportFilterDto) {
+    const base = {
+      organizationId: principal.organizationId,
+      archivedAt: null,
+      ...(query.owner ? { ownerId: query.owner } : {}),
+    };
+    const [won, lost] = await this.prisma.$transaction([
+      this.prisma.deal.count({ where: { ...base, stage: { isWon: true } } }),
+      this.prisma.deal.count({ where: { ...base, stage: { isLost: true } } }),
+    ]);
+    const closed = won + lost;
+    return {
+      data: {
+        won,
+        lost,
+        closed,
+        conversionPercent: closed ? Number(((won * 100) / closed).toFixed(1)) : null,
+      },
+      meta: { formula: 'Won deals / (Won deals + Lost deals)' },
+    };
+  }
+
+  async leadToDeal(principal: AuthenticatedPrincipal, query: ReportFilterDto) {
+    const base = {
+      organizationId: principal.organizationId,
+      archivedAt: null,
+      ...(query.owner ? { ownerId: query.owner } : {}),
+    };
+    const [leads, converted] = await this.prisma.$transaction([
+      this.prisma.lead.count({ where: base }),
+      this.prisma.lead.count({ where: { ...base, convertedDeal: { isNot: null } } }),
+    ]);
+    return {
+      data: {
+        leads,
+        converted,
+        conversionPercent: leads ? Number(((converted * 100) / leads).toFixed(1)) : null,
+      },
+      meta: { formula: 'Leads converted to a deal / all leads' },
     };
   }
 

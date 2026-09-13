@@ -16,7 +16,7 @@ export class SearchService {
     const boundedLimit = Number.isFinite(parsedLimit) ? Math.min(10, Math.max(1, parsedLimit)) : 5;
     const can = (permission: string) => principal.permissions.includes(permission);
     const contains = { contains: query, mode: 'insensitive' as const };
-    const [companies, contacts, leads, projects, tasks, quotations] = await Promise.all([
+    const [companies, contacts, leads, deals, projects, tasks, quotations] = await Promise.all([
       can(PERMISSIONS.companyRead)
         ? this.prisma.company.findMany({
             where: {
@@ -80,6 +80,23 @@ export class SearchService {
             take: boundedLimit,
           })
         : [],
+      can(PERMISSIONS.dealRead)
+        ? this.prisma.deal.findMany({
+            where: {
+              organizationId,
+              archivedAt: null,
+              OR: [{ name: contains }, { company: { name: contains } }],
+            },
+            select: {
+              id: true,
+              name: true,
+              company: { select: { name: true } },
+              stage: { select: { name: true } },
+            },
+            orderBy: { updatedAt: 'desc' },
+            take: boundedLimit,
+          })
+        : [],
       can(PERMISSIONS.projectRead)
         ? this.prisma.project.findMany({
             where: {
@@ -128,7 +145,7 @@ export class SearchService {
         : [],
     ]);
     return {
-      data: { companies, contacts, leads, projects, tasks, quotations },
+      data: { companies, contacts, leads, deals, projects, tasks, quotations },
       meta: { query, limit: boundedLimit },
     };
   }

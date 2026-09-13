@@ -8,6 +8,9 @@ import { apiRequest } from '@/lib/api';
 const reports = [
   ['lead-pipeline', 'Lead pipeline'],
   ['lead-conversion', 'Lead conversion'],
+  ['lead-to-deal', 'Lead to deal'],
+  ['deal-pipeline', 'Deal pipeline'],
+  ['deal-conversion', 'Deal win rate'],
   ['leads-by-source', 'Leads by source'],
   ['projects-by-status', 'Projects by status'],
   ['tasks-by-status', 'Tasks by status'],
@@ -99,15 +102,19 @@ export function ReportsView() {
 }
 
 function ReportResult({ id, payload }: { id: ReportId; payload: ReportPayload }) {
-  if (id === 'lead-conversion') {
+  if (id === 'lead-conversion' || id === 'deal-conversion' || id === 'lead-to-deal') {
     const data = payload.data as Record<string, unknown>;
     return (
       <section className="conversion-panel">
         <strong>
-          {data.conversionPercent == null ? 'No closed leads' : `${text(data.conversionPercent)}%`}
+          {data.conversionPercent == null
+            ? 'No completed records'
+            : `${text(data.conversionPercent)}%`}
         </strong>
         <p>
-          {text(data.won)} won · {text(data.lost)} lost
+          {id === 'lead-to-deal'
+            ? `${text(data.converted)} converted / ${text(data.leads)} leads`
+            : `${text(data.won)} won / ${text(data.lost)} lost`}
         </p>
         <small>{text(payload.meta?.formula)}</small>
       </section>
@@ -159,10 +166,10 @@ function ReportResult({ id, payload }: { id: ReportId; payload: ReportPayload })
         ])}
       />
     );
-  if (id === 'lead-pipeline')
+  if (id === 'lead-pipeline' || id === 'deal-pipeline')
     return (
       <Table
-        columns={['Stage', 'Leads', 'Value']}
+        columns={['Stage', id === 'deal-pipeline' ? 'Deals' : 'Leads', 'Value']}
         rows={rows.map((row) => [row.name, row.count, values(row.values)])}
       />
     );

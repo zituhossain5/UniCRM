@@ -113,16 +113,22 @@ export class AutomationsService {
           select: { id: true, firstName: true, lastName: true },
           orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
         }),
-        entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.PROJECT
+        entityType === AutomationEntityType.LEAD ||
+        entityType === AutomationEntityType.DEAL ||
+        entityType === AutomationEntityType.PROJECT
           ? this.prisma.tag.findMany({
               where: { organizationId },
               select: { id: true, name: true },
               orderBy: { name: 'asc' },
             })
           : [],
-        entityType === AutomationEntityType.LEAD
+        entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.DEAL
           ? this.prisma.pipeline.findMany({
-              where: { organizationId, archivedAt: null },
+              where: {
+                organizationId,
+                entityType: entityType === AutomationEntityType.DEAL ? 'DEAL' : 'LEAD',
+                archivedAt: null,
+              },
               select: {
                 id: true,
                 name: true,
@@ -131,7 +137,9 @@ export class AutomationsService {
               orderBy: { name: 'asc' },
             })
           : [],
-        entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.PROJECT
+        entityType === AutomationEntityType.LEAD ||
+        entityType === AutomationEntityType.DEAL ||
+        entityType === AutomationEntityType.PROJECT
           ? this.prisma.customFieldDefinition.findMany({
               where: { organizationId, entityType, active: true },
               select: { id: true, name: true, fieldType: true, options: true },
@@ -463,14 +471,14 @@ export class AutomationsService {
           where: {
             tagId_entityType_entityId: {
               tagId,
-              entityType: run.entityType as 'LEAD' | 'PROJECT',
+              entityType: run.entityType as 'LEAD' | 'DEAL' | 'PROJECT',
               entityId: run.entityId,
             },
           },
           create: {
             organizationId: run.organizationId,
             tagId,
-            entityType: run.entityType as 'LEAD' | 'PROJECT',
+            entityType: run.entityType as 'LEAD' | 'DEAL' | 'PROJECT',
             entityId: run.entityId,
           },
           update: {},
@@ -480,7 +488,7 @@ export class AutomationsService {
           where: {
             organizationId: run.organizationId,
             tagId,
-            entityType: run.entityType as 'LEAD' | 'PROJECT',
+            entityType: run.entityType as 'LEAD' | 'DEAL' | 'PROJECT',
             entityId: run.entityId,
           },
         });
@@ -494,6 +502,11 @@ export class AutomationsService {
     if (action.type === 'ASSIGN_OWNER') {
       if (run.entityType === 'LEAD')
         await this.prisma.lead.update({
+          where: { id: run.entityId },
+          data: { ownerId: action.ownerId },
+        });
+      else if (run.entityType === 'DEAL')
+        await this.prisma.deal.update({
           where: { id: run.entityId },
           data: { ownerId: action.ownerId },
         });
@@ -514,6 +527,11 @@ export class AutomationsService {
         await this.prisma.lead.update({
           where: { id: run.entityId },
           data: { priority: action.priority },
+        });
+      else if (run.entityType === 'DEAL')
+        await this.prisma.deal.update({
+          where: { id: run.entityId },
+          data: { priority: action.priority as LeadPriority },
         });
       else if (run.entityType === 'PROJECT')
         await this.prisma.project.update({
@@ -862,6 +880,8 @@ export class AutomationsService {
     const changed = [
       AutomationTriggerType.LEAD_STAGE_CHANGED,
       AutomationTriggerType.LEAD_OWNER_CHANGED,
+      AutomationTriggerType.DEAL_STAGE_CHANGED,
+      AutomationTriggerType.DEAL_OWNER_CHANGED,
       AutomationTriggerType.PROJECT_STATUS_CHANGED,
       AutomationTriggerType.TASK_STATUS_CHANGED,
       AutomationTriggerType.QUOTATION_STATUS_CHANGED,
@@ -869,10 +889,27 @@ export class AutomationsService {
     if (!changed.some((value) => value === triggerType))
       throw new BadRequestException('Trigger configuration is only valid for change triggers');
     for (const value of [config.from, config.to].filter(Boolean) as string[]) {
-      if (triggerType === AutomationTriggerType.LEAD_STAGE_CHANGED) {
-        if (!(await this.prisma.pipelineStage.findFirst({ where: { id: value, organizationId } })))
+      if (
+        triggerType === AutomationTriggerType.LEAD_STAGE_CHANGED ||
+        triggerType === AutomationTriggerType.DEAL_STAGE_CHANGED
+      ) {
+        if (
+          !(await this.prisma.pipelineStage.findFirst({
+            where: {
+              id: value,
+              organizationId,
+              pipeline: {
+                entityType:
+                  triggerType === AutomationTriggerType.DEAL_STAGE_CHANGED ? 'DEAL' : 'LEAD',
+              },
+            },
+          }))
+        )
           throw new BadRequestException('Trigger stage is invalid');
-      } else if (triggerType === AutomationTriggerType.LEAD_OWNER_CHANGED) {
+      } else if (
+        triggerType === AutomationTriggerType.LEAD_OWNER_CHANGED ||
+        triggerType === AutomationTriggerType.DEAL_OWNER_CHANGED
+      ) {
         if (!(await this.activeUser(organizationId, value)))
           throw new BadRequestException('Trigger owner is invalid');
       } else {
@@ -903,6 +940,7 @@ export class AutomationsService {
         'estimatedValue',
         'customField',
       ],
+      DEAL: ['stageId', 'ownerId', 'priority', 'tagIds', 'pipelineId', 'amount', 'customField'],
       PROJECT: ['status', 'ownerId', 'priority', 'tagIds', 'amount', 'customField'],
       TASK: ['status', 'ownerId', 'priority'],
       QUOTATION: ['status', 'ownerId', 'amount'],
@@ -986,7 +1024,7 @@ export class AutomationsService {
     }
     if (condition.field === 'priority' && !emptyOperator) {
       const priorities =
-        entityType === AutomationEntityType.LEAD
+        entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.DEAL
           ? Object.values(LeadPriority)
           : Object.values(WorkPriority);
       if (
@@ -1034,13 +1072,18 @@ export class AutomationsService {
     if (action.type === 'CREATE_FOLLOW_UP' && entityType !== AutomationEntityType.LEAD)
       throw new BadRequestException('Follow-ups can only be created for leads');
     if (['ADD_TAG', 'REMOVE_TAG'].includes(action.type)) {
-      if (entityType !== AutomationEntityType.LEAD && entityType !== AutomationEntityType.PROJECT)
+      if (
+        entityType !== AutomationEntityType.LEAD &&
+        entityType !== AutomationEntityType.DEAL &&
+        entityType !== AutomationEntityType.PROJECT
+      )
         throw new BadRequestException('Tags are not supported for this automation entity');
       await this.requireTag(organizationId, action.tagId);
     }
     if (action.type === 'ASSIGN_OWNER') {
       if (
         entityType !== AutomationEntityType.LEAD &&
+        entityType !== AutomationEntityType.DEAL &&
         entityType !== AutomationEntityType.PROJECT &&
         entityType !== AutomationEntityType.TASK
       )
@@ -1051,6 +1094,7 @@ export class AutomationsService {
     if (action.type === 'CHANGE_PRIORITY') {
       if (
         entityType !== AutomationEntityType.LEAD &&
+        entityType !== AutomationEntityType.DEAL &&
         entityType !== AutomationEntityType.PROJECT &&
         entityType !== AutomationEntityType.TASK
       )
@@ -1136,6 +1180,27 @@ export class AutomationsService {
           estimatedValue: entity.estimatedValue?.toNumber() ?? null,
           projectId: entity.project?.id ?? null,
         };
+    } else if (entityType === AutomationEntityType.DEAL) {
+      const entity = await this.prisma.deal.findFirst({
+        where: { id: entityId, organizationId, archivedAt: null },
+        select: {
+          id: true,
+          name: true,
+          stageId: true,
+          pipelineId: true,
+          ownerId: true,
+          priority: true,
+          amount: true,
+          companyId: true,
+          project: { select: { id: true } },
+        },
+      });
+      if (entity)
+        snapshot = {
+          ...entity,
+          amount: entity.amount?.toNumber() ?? null,
+          projectId: entity.project?.id ?? null,
+        };
     } else if (entityType === AutomationEntityType.PROJECT) {
       const entity = await this.prisma.project.findFirst({
         where: { id: entityId, organizationId, archivedAt: null },
@@ -1190,7 +1255,11 @@ export class AutomationsService {
         snapshot = { ...entity, ownerId: entity.recordedById, amount: entity.amount.toNumber() };
     }
     if (!snapshot) throw new NotFoundException('Automation entity not found');
-    if (entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.PROJECT) {
+    if (
+      entityType === AutomationEntityType.LEAD ||
+      entityType === AutomationEntityType.DEAL ||
+      entityType === AutomationEntityType.PROJECT
+    ) {
       const [tags, customFields] = await Promise.all([
         this.prisma.entityTag.findMany({
           where: {
@@ -1278,6 +1347,13 @@ export class AutomationsService {
       });
       return lead?.title ?? 'Unavailable lead';
     }
+    if (entityType === AutomationEntityType.DEAL) {
+      const deal = await this.prisma.deal.findFirst({
+        where: { id: entityId, organizationId },
+        select: { name: true },
+      });
+      return deal?.name ?? 'Unavailable deal';
+    }
     if (entityType === AutomationEntityType.PROJECT) {
       const project = await this.prisma.project.findFirst({
         where: { id: entityId, organizationId },
@@ -1315,6 +1391,10 @@ export class AutomationsService {
       return `Lead stage changed -> ${await this.stageLabel(organizationId, payload.toStageId)}`;
     if (triggerType === AutomationTriggerType.LEAD_OWNER_CHANGED)
       return `Lead owner changed -> ${await this.userValueLabel(organizationId, payload.toOwnerId)}`;
+    if (triggerType === AutomationTriggerType.DEAL_STAGE_CHANGED)
+      return `Deal stage changed -> ${await this.stageLabel(organizationId, payload.toStageId)}`;
+    if (triggerType === AutomationTriggerType.DEAL_OWNER_CHANGED)
+      return `Deal owner changed -> ${await this.userValueLabel(organizationId, payload.toOwnerId)}`;
     if (triggerType === AutomationTriggerType.PROJECT_STATUS_CHANGED)
       return `Project status changed -> ${this.valueLabel(payload.toStatus)}`;
     if (triggerType === AutomationTriggerType.TASK_STATUS_CHANGED)

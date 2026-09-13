@@ -8,6 +8,7 @@ import {
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AuditService } from '../audit/audit.service';
 import { Prisma } from '../generated/prisma/client';
+import { PipelineEntityType } from '../generated/prisma/enums';
 import { PrismaService } from '../database/prisma.service';
 import type {
   CreatePipelineDto,
@@ -25,6 +26,15 @@ export const DEFAULT_STAGES = [
   { name: 'Won', position: 5, isWon: true, isLost: false },
   { name: 'Lost', position: 6, isWon: false, isLost: true },
 ] as const;
+export const DEFAULT_DEAL_STAGES = [
+  { name: 'Discovery', position: 0, isWon: false, isLost: false },
+  { name: 'Qualified', position: 1, isWon: false, isLost: false },
+  { name: 'Proposal', position: 2, isWon: false, isLost: false },
+  { name: 'Negotiation', position: 3, isWon: false, isLost: false },
+  { name: 'Contract', position: 4, isWon: false, isLost: false },
+  { name: 'Won', position: 5, isWon: true, isLost: false },
+  { name: 'Lost', position: 6, isWon: false, isLost: true },
+] as const;
 
 @Injectable()
 export class PipelinesService {
@@ -33,14 +43,17 @@ export class PipelinesService {
     @Inject(PrismaService) private readonly prisma: PrismaService,
   ) {}
 
-  async ensureDefault(organizationId: string) {
+  async ensureDefault(
+    organizationId: string,
+    entityType: PipelineEntityType = PipelineEntityType.LEAD,
+  ) {
     const existing = await this.prisma.pipeline.findFirst({
-      where: { organizationId, isDefault: true, archivedAt: null },
+      where: { organizationId, entityType, isDefault: true, archivedAt: null },
       include: { stages: { orderBy: { position: 'asc' } } },
     });
     if (existing) return existing;
     const fallback = await this.prisma.pipeline.findFirst({
-      where: { organizationId, archivedAt: null },
+      where: { organizationId, entityType, archivedAt: null },
       orderBy: { createdAt: 'asc' },
     });
     if (fallback)
@@ -52,18 +65,27 @@ export class PipelinesService {
     return this.prisma.pipeline.create({
       data: {
         organizationId,
-        name: 'Sales Pipeline',
+        name: entityType === PipelineEntityType.DEAL ? 'Standard Deal Pipeline' : 'Sales Pipeline',
+        entityType,
         isDefault: true,
-        stages: { create: DEFAULT_STAGES.map((stage) => ({ ...stage, organizationId })) },
+        stages: {
+          create: (entityType === PipelineEntityType.DEAL
+            ? DEFAULT_DEAL_STAGES
+            : DEFAULT_STAGES
+          ).map((stage) => ({ ...stage, organizationId })),
+        },
       },
       include: { stages: { orderBy: { position: 'asc' } } },
     });
   }
 
-  async list(principal: AuthenticatedPrincipal) {
-    await this.ensureDefault(principal.organizationId);
+  async list(
+    principal: AuthenticatedPrincipal,
+    entityType: PipelineEntityType = PipelineEntityType.LEAD,
+  ) {
+    await this.ensureDefault(principal.organizationId, entityType);
     return this.prisma.pipeline.findMany({
-      where: { organizationId: principal.organizationId, archivedAt: null },
+      where: { organizationId: principal.organizationId, entityType, archivedAt: null },
       include: { stages: { orderBy: { position: 'asc' } } },
       orderBy: [{ isDefault: 'desc' }, { name: 'asc' }],
     });
@@ -79,16 +101,23 @@ export class PipelinesService {
 
   async create(principal: AuthenticatedPrincipal, dto: CreatePipelineDto) {
     this.validateStages(dto.stages);
+    const entityType = dto.entityType ?? PipelineEntityType.LEAD;
     try {
       return await this.prisma.$transaction(async (tx) => {
         if (dto.isDefault)
           await tx.pipeline.updateMany({
-            where: { organizationId: principal.organizationId, isDefault: true, archivedAt: null },
+            where: {
+              organizationId: principal.organizationId,
+              entityType,
+              isDefault: true,
+              archivedAt: null,
+            },
             data: { isDefault: false },
           });
         const pipeline = await tx.pipeline.create({
           data: {
             name: dto.name,
+            entityType,
             organizationId: principal.organizationId,
             isDefault: dto.isDefault ?? false,
             stages: {
@@ -128,7 +157,12 @@ export class PipelinesService {
       return await this.prisma.$transaction(async (tx) => {
         if (dto.isDefault && !existing.isDefault)
           await tx.pipeline.updateMany({
-            where: { organizationId: principal.organizationId, isDefault: true, archivedAt: null },
+            where: {
+              organizationId: principal.organizationId,
+              entityType: existing.entityType,
+              isDefault: true,
+              archivedAt: null,
+            },
             data: { isDefault: false },
           });
         const pipeline = await tx.pipeline.update({
@@ -162,14 +196,18 @@ export class PipelinesService {
     this.validateStages(dto.stages);
     const existing = await this.prisma.pipelineStage.findMany({
       where: { organizationId: principal.organizationId, pipelineId },
-      include: { _count: { select: { leads: true } } },
+      include: { _count: { select: { leads: true, deals: true } } },
     });
     const existingIds = new Set(existing.map(({ id }) => id));
     if (dto.stages.some((stage) => stage.id && !existingIds.has(stage.id)))
       throw new BadRequestException('A stage does not belong to this pipeline');
     const retained = new Set(dto.stages.flatMap((stage) => (stage.id ? [stage.id] : [])));
-    if (existing.some((stage) => !retained.has(stage.id) && stage._count.leads > 0))
-      throw new ConflictException('Stages with lead history cannot be removed');
+    if (
+      existing.some(
+        (stage) => !retained.has(stage.id) && (stage._count.leads > 0 || stage._count.deals > 0),
+      )
+    )
+      throw new ConflictException('Stages with record history cannot be removed');
     try {
       return await this.prisma.$transaction(async (tx) => {
         for (const stage of existing)
@@ -223,8 +261,11 @@ export class PipelinesService {
     const activeLeads = await this.prisma.lead.count({
       where: { organizationId: principal.organizationId, pipelineId: id, archivedAt: null },
     });
-    if (activeLeads)
-      throw new ConflictException('Move active leads before archiving this pipeline');
+    const activeDeals = await this.prisma.deal.count({
+      where: { organizationId: principal.organizationId, pipelineId: id, archivedAt: null },
+    });
+    if (activeLeads || activeDeals)
+      throw new ConflictException('Move active records before archiving this pipeline');
     return this.prisma.$transaction(async (tx) => {
       const archived = await tx.pipeline.update({
         where: { id },

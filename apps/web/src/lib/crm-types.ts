@@ -33,6 +33,7 @@ export interface Pipeline {
   id: string;
   name: string;
   isDefault: boolean;
+  entityType?: 'LEAD' | 'DEAL';
   stages: Stage[];
 }
 
@@ -127,6 +128,7 @@ export interface LeadRecord extends ConfigurableRecordMetadata {
   description: string | null;
   notes: string | null;
   lostReason: string | null;
+  convertedAt: string | null;
   archivedAt: string | null;
   companyId: string | null;
   contactId: string | null;
@@ -152,6 +154,49 @@ export interface LeadRecord extends ConfigurableRecordMetadata {
     currency: string;
     issueDate: string;
   }>;
+  convertedDeal?: {
+    id: string;
+    name: string;
+    stage: Pick<Stage, 'name' | 'isWon' | 'isLost'>;
+  } | null;
+}
+
+export interface DealRecord extends ConfigurableRecordMetadata {
+  id: string;
+  name: string;
+  companyId: string;
+  contactId: string | null;
+  sourceLeadId: string | null;
+  ownerId: string | null;
+  pipelineId: string;
+  stageId: string;
+  amount: string | null;
+  currency: string;
+  probability: number;
+  expectedCloseDate: string | null;
+  priority: string;
+  description: string | null;
+  lostReason: string | null;
+  wonAt: string | null;
+  lostAt: string | null;
+  archivedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  company: CompanyRef;
+  contact: ContactRef | null;
+  owner: PersonRef | null;
+  pipeline: { id: string; name: string; entityType?: 'DEAL' };
+  stage: Stage;
+  sourceLead?: { id: string; title: string } | null;
+  project?: { id: string; name: string; status: string; archivedAt: string | null } | null;
+  quotations?: Array<{
+    id: string;
+    quotationNumber: string;
+    status: string;
+    total: string;
+    currency: string;
+  }>;
+  activities?: Array<{ id: string; action: string; createdAt: string; actor: PersonRef | null }>;
 }
 
 export const companyStatuses = [

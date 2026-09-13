@@ -5,6 +5,7 @@ import {
   IsArray,
   IsBoolean,
   IsInt,
+  IsIn,
   IsOptional,
   IsString,
   IsUUID,
@@ -13,6 +14,7 @@ import {
   MinLength,
   ValidateNested,
 } from 'class-validator';
+import { PipelineEntityType } from '../../generated/prisma/enums';
 
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
@@ -26,12 +28,16 @@ export class PipelineStageInputDto {
 export class CreatePipelineDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(120) name!: string;
   @IsBoolean() @IsOptional() isDefault?: boolean;
+  @IsIn(Object.values(PipelineEntityType)) @IsOptional() entityType?: PipelineEntityType;
   @IsArray()
   @ArrayMinSize(2)
   @ArrayUnique((stage: PipelineStageInputDto) => stage.position)
   @ValidateNested({ each: true })
   @Type(() => PipelineStageInputDto)
   stages!: PipelineStageInputDto[];
+}
+export class PipelineListQueryDto {
+  @IsIn(Object.values(PipelineEntityType)) @IsOptional() entityType?: PipelineEntityType;
 }
 export class UpdatePipelineDto {
   @Transform(trim) @IsString() @MinLength(1) @MaxLength(120) @IsOptional() name?: string;

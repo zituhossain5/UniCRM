@@ -210,6 +210,7 @@ export class TagsService {
   ) {
     const required = {
       LEAD: PERMISSIONS.leadUpdate,
+      DEAL: PERMISSIONS.dealUpdate,
       COMPANY: PERMISSIONS.companyUpdate,
       CONTACT: PERMISSIONS.contactUpdate,
       PROJECT: PERMISSIONS.projectUpdate,
@@ -235,7 +236,9 @@ export class TagsService {
           ? await this.prisma.company.findFirst({ where, select: { id: true } })
           : entityType === 'CONTACT'
             ? await this.prisma.contact.findFirst({ where, select: { id: true } })
-            : await this.prisma.project.findFirst({ where, select: { id: true } });
+            : entityType === 'DEAL'
+              ? await this.prisma.deal.findFirst({ where, select: { id: true } })
+              : await this.prisma.project.findFirst({ where, select: { id: true } });
     if (!entity) throw new NotFoundException('Record not found');
   }
 }

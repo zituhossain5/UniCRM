@@ -48,6 +48,10 @@ export class CreateQuotationDto {
 
   @ValidateIf((_object, value) => value !== null && value !== undefined)
   @IsUUID()
+  dealId?: string | null;
+
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @IsUUID()
   projectId?: string | null;
 
   @IsISO8601({ strict: true })
@@ -118,6 +122,10 @@ export class QuotationListQueryDto extends ListQueryDto {
   @IsUUID()
   @IsOptional()
   lead?: string;
+
+  @IsUUID()
+  @IsOptional()
+  deal?: string;
 
   @IsUUID()
   @IsOptional()

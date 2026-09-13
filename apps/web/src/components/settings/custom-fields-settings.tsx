@@ -12,7 +12,7 @@ import { Badge, Button, Dialog, Input, LoadingState, Select } from '@unicrm/ui';
 import { ArrowDown, ArrowUp, Pencil, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
-const entities: ConfigurableEntityType[] = ['LEAD', 'COMPANY', 'CONTACT', 'PROJECT'];
+const entities: ConfigurableEntityType[] = ['LEAD', 'DEAL', 'COMPANY', 'CONTACT', 'PROJECT'];
 const fieldTypes: Array<{ label: string; value: CustomFieldType }> = [
   ['Text', 'TEXT'],
   ['Long text', 'LONG_TEXT'],

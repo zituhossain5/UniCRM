@@ -18,6 +18,7 @@ import {
   ContactCreateSheet,
   LeadCreateSheet,
 } from '@/components/crm/create-sheets';
+import { DealCreateSheet } from '@/components/crm/deals-view';
 import { ProjectCreateSheet, TaskCreateSheet } from '@/components/work/create-sheets';
 import {
   Bell,
@@ -39,6 +40,7 @@ import {
   Settings,
   Sun,
   UsersRound,
+  Handshake,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -76,6 +78,7 @@ const navSections: readonly NavSection[] = [
     label: 'CRM',
     items: [
       { href: '/app/leads', icon: UsersRound, label: 'Leads' },
+      { href: '/app/deals', icon: Handshake, label: 'Deals', permission: 'deal.read' },
       { href: '/app/companies', icon: Building2, label: 'Companies' },
       { href: '/app/contacts', icon: ContactRound, label: 'Contacts' },
       { href: '/app/email', icon: Mail, label: 'Email', permission: 'inbox.read' },
@@ -111,7 +114,7 @@ const commandItems = navSections
   .flatMap((section) => section.items)
   .concat({ href: '/app/settings', icon: Settings, label: 'Settings' });
 
-type GlobalCreateTarget = 'lead' | 'company' | 'contact' | 'project' | 'task';
+type GlobalCreateTarget = 'lead' | 'deal' | 'company' | 'contact' | 'project' | 'task';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -169,6 +172,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     () =>
       [
         { label: 'Create Project', permission: 'project.create', target: 'project' as const },
+        { label: 'Create Deal', permission: 'deal.create', target: 'deal' as const },
         { label: 'Create Task', permission: 'task.create', target: 'task' as const },
       ].filter(
         (item) =>
@@ -181,6 +185,8 @@ export function AppShell({ children }: { children: ReactNode }) {
     const items: DropdownItem[] = [];
     if (user.permissions.includes('lead.create'))
       items.push({ label: 'New Lead', onClick: () => setCreateTarget('lead') });
+    if (user.permissions.includes('deal.create'))
+      items.push({ label: 'New Deal', onClick: () => setCreateTarget('deal') });
     if (user.permissions.includes('company.create'))
       items.push({ label: 'New Company', onClick: () => setCreateTarget('company') });
     if (user.permissions.includes('contact.create'))
@@ -364,6 +370,17 @@ export function AppShell({ children }: { children: ReactNode }) {
           trigger={
             <button className="visually-hidden" type="button">
               New lead
+            </button>
+          }
+        />
+      ) : null}
+      {user.permissions.includes('deal.create') ? (
+        <DealCreateSheet
+          open={createTarget === 'deal'}
+          onOpenChange={(open) => setCreateTarget(open ? 'deal' : null)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              New deal
             </button>
           }
         />
@@ -581,6 +598,15 @@ function SearchResultGroups({
         label: item.name,
         detail: item.company.name,
         href: `/app/projects/${item.id}`,
+      })),
+    ],
+    [
+      'Deals',
+      results.deals.map((item) => ({
+        id: item.id,
+        label: item.name,
+        detail: item.company.name ?? item.stage.name,
+        href: `/app/deals/${item.id}`,
       })),
     ],
     [

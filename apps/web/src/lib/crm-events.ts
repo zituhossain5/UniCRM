@@ -1,6 +1,7 @@
 'use client';
 
-export type CrmDataKey = 'companies' | 'contacts' | 'leads' | 'projects' | 'tasks' | 'users';
+export type CrmDataKey =
+  'companies' | 'contacts' | 'leads' | 'deals' | 'projects' | 'tasks' | 'users';
 
 export const CRM_DATA_CHANGED_EVENT = 'unicrm:crm-data-changed';
 
