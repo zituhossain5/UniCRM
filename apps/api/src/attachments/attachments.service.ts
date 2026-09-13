@@ -181,7 +181,12 @@ export class AttachmentsService {
 
   private async requireTask(organizationId: string, id: string) {
     const task = await this.prisma.task.findFirst({
-      where: { id, organizationId, archivedAt: null, project: { archivedAt: null } },
+      where: {
+        id,
+        organizationId,
+        archivedAt: null,
+        OR: [{ projectId: null }, { project: { archivedAt: null } }],
+      },
       select: { id: true },
     });
     if (!task) throw new NotFoundException('Task not found');

@@ -477,9 +477,21 @@ describe('Milestone 14 mailbox integration', () => {
     const recovered = await mailboxes.recoverMailboxes();
     expect(recovered.mailboxes).toBeGreaterThan(0);
     expect(jobs.mailboxSyncs).toContain(mailboxId);
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'SYNCING' },
+    });
+    await expect(mailboxes.syncMailbox(mailboxId)).resolves.toMatchObject({ skipped: true });
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'CONNECTED' },
+    });
     await mutate(agentA, csrfA, 'patch', `/api/v1/mailboxes/${mailboxId}`)
       .send({ enabled: false })
       .expect(200);
+    jobs.mailboxSyncs = [];
+    await mailboxes.recoverMailboxes();
+    expect(jobs.mailboxSyncs).not.toContain(mailboxId);
     await expect(mailboxes.syncMailbox(mailboxId)).resolves.toMatchObject({ skipped: true });
   });
 

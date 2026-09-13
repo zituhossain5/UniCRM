@@ -50,7 +50,8 @@ export function EmailThreadSheet({
     refetchInterval: (query) =>
       query.state.data?.data.messages && hasActiveEmailDelivery(query.state.data.data.messages)
         ? 2500
-        : false,
+        : 25_000,
+    refetchOnWindowFocus: true,
   });
   const searchResults = useQuery({
     queryKey: ['mail', 'link-search', search],

@@ -21,6 +21,7 @@ import {
 } from '@unicrm/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
+  AlertTriangle,
   CheckCircle2,
   ChevronDown,
   Clock3,
@@ -93,7 +94,8 @@ export function MailboxInbox({ initialThreadId = null }: { initialThreadId?: str
     queryKey: ['mailboxes'],
     queryFn: () => apiRequest<{ data: AvailableMailbox[] }>('/mail/mailboxes'),
     refetchInterval: (query) =>
-      query.state.data?.data.some((mailbox) => mailbox.status === 'SYNCING') ? 2500 : false,
+      query.state.data?.data.some((mailbox) => mailbox.status === 'SYNCING') ? 2500 : 25_000,
+    refetchOnWindowFocus: true,
   });
   const collaborators = useQuery({
     queryKey: ['mail', 'collaborators'],
@@ -123,7 +125,8 @@ export function MailboxInbox({ initialThreadId = null }: { initialThreadId?: str
     ],
     queryFn: () =>
       apiRequest<PaginatedInboxConversations>(`/mail/conversations?${queryString.toString()}`),
-    refetchInterval: 10_000,
+    refetchInterval: 25_000,
+    refetchOnWindowFocus: true,
   });
   const sync = useMutation({
     mutationFn: (id: string) => apiRequest(`/mailboxes/${id}/sync`, { method: 'POST' }),
@@ -194,6 +197,7 @@ export function MailboxInbox({ initialThreadId = null }: { initialThreadId?: str
 
   const activeViewLabel = views.find((item) => item.value === view)?.label ?? 'Inbox';
   const secondaryFilterCount = Number(unread !== 'all') + Number(due !== 'all');
+  const hasMailboxError = mailboxes.data?.data.some((mailbox) => mailbox.status === 'ERROR');
 
   return (
     <div className="mail-page shared-inbox-page">
@@ -212,6 +216,12 @@ export function MailboxInbox({ initialThreadId = null }: { initialThreadId?: str
           ) : undefined
         }
       />
+      {hasMailboxError ? (
+        <div className="shared-inbox-sync-warning" role="status">
+          <AlertTriangle aria-hidden="true" size={14} />A connected mailbox needs attention. An
+          administrator can review it in Email settings.
+        </div>
+      ) : null}
       <div className="shared-inbox-mobile-view">
         <Select
           label="Inbox view"

@@ -54,6 +54,7 @@ const environmentSchema = z
       .max(25 * 1024 * 1024)
       .default(10 * 1024 * 1024),
     MAILBOX_SYNC_BATCH_SIZE: z.coerce.number().int().min(1).max(250).default(100),
+    MAILBOX_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(60),
     REQUEST_ID_HEADER: z.string().min(1).default('x-request-id'),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PASSWORD_RESET_TTL_SECONDS: z.coerce.number().int().positive().default(3600),

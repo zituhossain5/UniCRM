@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { validateEnvironment } from '../src/config/environment';
 import { HealthService } from '../src/health/health.service';
 import { JobsService } from '../src/jobs/jobs.service';
+import { MAILBOX_RECOVERY_JOB } from '../src/mailboxes/mailbox.constants';
 
 const queueAdd = vi.fn();
 const queueClose = vi.fn();
@@ -83,7 +84,11 @@ describe('worker queue scheduling', () => {
   it('uses stable recurring job IDs for idempotent worker starts', async () => {
     queueAdd.mockClear();
     const service = new JobsService({
-      get: (key: string) => (key === 'REDIS_URL' ? 'redis://localhost:6379' : 'unicrm'),
+      get: (key: string) => {
+        if (key === 'REDIS_URL') return 'redis://localhost:6379';
+        if (key === 'MAILBOX_SYNC_INTERVAL_SECONDS') return 90;
+        return 'unicrm';
+      },
     } as never);
 
     await service.scheduleRecurringMaintenance();
@@ -97,6 +102,14 @@ describe('worker queue scheduling', () => {
       'auth-maintenance',
       {},
       expect.objectContaining({ jobId: 'auth-maintenance' }),
+    );
+    expect(queueAdd).toHaveBeenCalledWith(
+      MAILBOX_RECOVERY_JOB,
+      {},
+      expect.objectContaining({
+        jobId: MAILBOX_RECOVERY_JOB,
+        repeat: { every: 90_000 },
+      }),
     );
   });
 });

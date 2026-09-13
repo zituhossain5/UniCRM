@@ -168,7 +168,9 @@ export class JobsService implements OnModuleDestroy {
         {},
         {
           jobId: MAILBOX_RECOVERY_JOB,
-          repeat: { every: 5 * 60_000 },
+          repeat: {
+            every: this.config.get('MAILBOX_SYNC_INTERVAL_SECONDS', { infer: true }) * 1000,
+          },
           removeOnComplete: { age: 86_400, count: 1000 },
           removeOnFail: { age: 604_800, count: 5000 },
         },

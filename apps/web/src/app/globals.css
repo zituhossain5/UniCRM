@@ -3532,6 +3532,23 @@ kbd {
 .shared-inbox-page {
   align-content: start;
 }
+.shared-inbox-sync-warning {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--warning) 28%, var(--border));
+  border-radius: var(--radius-sm);
+  background: color-mix(in srgb, var(--warning) 7%, var(--surface));
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.shared-inbox-sync-warning svg {
+  flex: none;
+  color: var(--warning);
+}
 .shared-inbox-workspace {
   display: grid;
   grid-template-columns: 180px minmax(0, 1fr);

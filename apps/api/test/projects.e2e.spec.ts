@@ -285,6 +285,78 @@ describe('Milestone 4 projects and tasks', () => {
       .expect(404);
   });
 
+  it('supports the full projectless task lifecycle with tenant isolation', async () => {
+    const created = body<{
+      data: { id: string; projectId: null; project: null; status: string };
+    }>(
+      await mutate(agentA, csrfA, 'post', '/api/v1/tasks')
+        .send({
+          title: 'Follow up without a project',
+          assigneeId: ownerA,
+          priority: 'MEDIUM',
+          startDate: '2026-09-13',
+          dueDate: '2026-09-15',
+        })
+        .expect(201),
+    ).data;
+    expect(created).toMatchObject({ projectId: null, project: null, status: 'TODO' });
+    expect(
+      body<{ data: Array<{ id: string; projectId: null; project: null }> }>(
+        await agentA.get('/api/v1/tasks?search=Follow%20up%20without%20a%20project').expect(200),
+      ).data,
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ id: created.id, project: null })]));
+    expect(
+      body<{ data: { id: string; projectId: null; project: null } }>(
+        await agentA.get(`/api/v1/tasks/${created.id}`).expect(200),
+      ).data,
+    ).toMatchObject({ id: created.id, projectId: null, project: null });
+
+    await agentA.get(`/api/v1/tasks/${created.id}/attachments`).expect(200);
+    const updated = body<{
+      data: { assigneeId: string; priority: string; status: string; projectId: null };
+    }>(
+      await mutate(agentA, csrfA, 'patch', `/api/v1/tasks/${created.id}`)
+        .send({
+          assigneeId: ownerA,
+          priority: 'HIGH',
+          status: 'IN_PROGRESS',
+          startDate: '2026-09-14',
+          dueDate: '2026-09-16',
+        })
+        .expect(200),
+    ).data;
+    expect(updated).toMatchObject({
+      assigneeId: ownerA,
+      priority: 'HIGH',
+      status: 'IN_PROGRESS',
+      projectId: null,
+    });
+
+    await mutate(agentA, csrfA, 'post', `/api/v1/tasks/${created.id}/comments`)
+      .send({ content: 'Projectless task comment.' })
+      .expect(201);
+    expect(
+      body<{ data: Array<{ content: string }> }>(
+        await agentA.get(`/api/v1/tasks/${created.id}/comments`).expect(200),
+      ).data,
+    ).toEqual(
+      expect.arrayContaining([expect.objectContaining({ content: 'Projectless task comment.' })]),
+    );
+
+    await agentB.get(`/api/v1/tasks/${created.id}`).expect(404);
+    await agentB.get(`/api/v1/tasks/${created.id}/comments`).expect(404);
+    await agentB.get(`/api/v1/tasks/${created.id}/attachments`).expect(404);
+
+    await mutate(agentA, csrfA, 'patch', `/api/v1/tasks/${created.id}`)
+      .send({ status: 'COMPLETED' })
+      .expect(200);
+    expect(
+      body<{ data: { status: string; completedAt: string; projectId: null } }>(
+        await agentA.get(`/api/v1/tasks/${created.id}`).expect(200),
+      ).data,
+    ).toMatchObject({ status: 'COMPLETED', projectId: null });
+  });
+
   it('supports comments and secure project/task attachments', async () => {
     const comment = body<{ data: { id: string } }>(
       await mutate(agentA, csrfA, 'post', `/api/v1/tasks/${taskA}/comments`)

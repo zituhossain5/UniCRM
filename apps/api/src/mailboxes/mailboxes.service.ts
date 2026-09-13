@@ -234,13 +234,22 @@ export class MailboxesService {
   }
 
   async recoverMailboxes() {
-    const mailboxes = await this.prisma.mailboxConnection.findMany({
-      where: { status: { not: MailboxConnectionStatus.DISABLED } },
-      select: { id: true },
-      take: 250,
-    });
-    await Promise.allSettled(mailboxes.map(({ id }) => this.jobs.enqueueMailboxSync(id)));
-    return { mailboxes: mailboxes.length };
+    let cursor: string | undefined;
+    let count = 0;
+    do {
+      const mailboxes = await this.prisma.mailboxConnection.findMany({
+        where: { status: { not: MailboxConnectionStatus.DISABLED } },
+        select: { id: true },
+        orderBy: { id: 'asc' },
+        take: 250,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      });
+      await Promise.allSettled(mailboxes.map(({ id }) => this.jobs.enqueueMailboxSync(id)));
+      count += mailboxes.length;
+      cursor = mailboxes.at(-1)?.id;
+      if (mailboxes.length < 250) break;
+    } while (cursor);
+    return { mailboxes: count };
   }
 
   async syncMailbox(id: string) {
