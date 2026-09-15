@@ -23,6 +23,11 @@ export const AUTOMATION_EVENT_MAP = {
     triggerType: 'QUOTATION_STATUS_CHANGED',
   },
   'payment.created': { entityType: 'PAYMENT', triggerType: 'PAYMENT_CREATED' },
+  'case.created': { entityType: 'CASE', triggerType: 'CASE_CREATED' },
+  'case.assigned': { entityType: 'CASE', triggerType: 'CASE_ASSIGNED' },
+  'case.status_changed': { entityType: 'CASE', triggerType: 'CASE_STATUS_CHANGED' },
+  'case.priority_changed': { entityType: 'CASE', triggerType: 'CASE_PRIORITY_CHANGED' },
+  'case.resolved': { entityType: 'CASE', triggerType: 'CASE_RESOLVED' },
 } as const;
 
 export type AutomationEventType = keyof typeof AUTOMATION_EVENT_MAP;

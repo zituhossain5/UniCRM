@@ -21,6 +21,7 @@ import {
   AssignConversationDto,
   CreateLeadFromThreadDto,
   CreateTaskFromThreadDto,
+  CreateCaseFromThreadDto,
   LinkThreadDto,
   MailListQueryDto,
   ReplyThreadDto,
@@ -221,6 +222,16 @@ export class MailController {
     @Body() dto: CreateTaskFromThreadDto,
   ) {
     return { data: await this.inbox.createTask(principal, id, dto) };
+  }
+
+  @RequirePermission(PERMISSIONS.inboxRead, PERMISSIONS.caseCreate)
+  @Post('threads/:id/create-case')
+  async createCase(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: CreateCaseFromThreadDto,
+  ) {
+    return { data: await this.inbox.createCase(principal, id, dto) };
   }
 
   @RequirePermission(PERMISSIONS.mailRead)

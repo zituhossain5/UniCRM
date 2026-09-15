@@ -88,7 +88,7 @@ export class NotificationsService {
     const today = utcToday(now),
       tomorrow = addUtcDays(today, 1),
       dayAfter = addUtcDays(today, 2);
-    const [overdueTasks, dueSoonTasks, followUps, projects, inboxDue, activityReminders] =
+    const [overdueTasks, dueSoonTasks, followUps, projects, inboxDue, activityReminders, casesDue] =
       await Promise.all([
         this.prisma.task.findMany({
           where: {
@@ -158,6 +158,22 @@ export class NotificationsService {
             ownerId: true,
             subject: true,
             reminderAt: true,
+          },
+        }),
+        this.prisma.customerCase.findMany({
+          where: {
+            assignedUserId: { not: null },
+            archivedAt: null,
+            status: { notIn: ['RESOLVED', 'CLOSED'] },
+            dueAt: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+          },
+          select: {
+            id: true,
+            organizationId: true,
+            assignedUserId: true,
+            caseNumber: true,
+            title: true,
+            dueAt: true,
           },
         }),
       ]);
@@ -253,6 +269,21 @@ export class NotificationsService {
           dedupeKey: `activity:${activity.id}:reminder:${activity.reminderAt!.toISOString()}`,
         }),
       );
+    for (const customerCase of casesDue) {
+      const overdue = customerCase.dueAt! <= now;
+      work.push(
+        this.create({
+          organizationId: customerCase.organizationId,
+          userId: customerCase.assignedUserId!,
+          type: 'CASE_DUE',
+          title: overdue ? 'Case overdue' : 'Case due soon',
+          message: `${customerCase.caseNumber}: ${customerCase.title}`,
+          entityType: 'CASE',
+          entityId: customerCase.id,
+          dedupeKey: `case:${customerCase.id}:${overdue ? 'overdue' : 'due'}:${customerCase.dueAt!.toISOString()}`,
+        }),
+      );
+    }
     await Promise.all(work);
     return work.length;
   }

@@ -71,6 +71,31 @@ export class TaskAttachmentsController {
   }
 }
 
+@Controller('cases/:caseId/attachments')
+export class CaseAttachmentsController {
+  constructor(@Inject(AttachmentsService) private readonly attachments: AttachmentsService) {}
+
+  @RequirePermission(PERMISSIONS.caseRead, PERMISSIONS.attachmentRead)
+  @Get()
+  async list(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+  ) {
+    return { data: await this.attachments.listCase(principal, caseId) };
+  }
+
+  @RequirePermission(PERMISSIONS.caseUpdate, PERMISSIONS.attachmentCreate)
+  @Post()
+  @UseInterceptors(upload)
+  async upload(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('caseId', ParseUUIDPipe) caseId: string,
+    @UploadedFile() file?: FileUpload,
+  ) {
+    return { data: await this.attachments.uploadCase(principal, caseId, file) };
+  }
+}
+
 @Controller('attachments')
 export class AttachmentsController {
   constructor(@Inject(AttachmentsService) private readonly attachments: AttachmentsService) {}

@@ -25,6 +25,10 @@ export class TaskListQueryDto extends ListQueryDto {
 
   @IsUUID()
   @IsOptional()
+  case?: string;
+
+  @IsUUID()
+  @IsOptional()
   assignee?: string;
 
   @IsEnum(TaskStatus)
@@ -52,6 +56,10 @@ export class CreateTaskDto {
   @ValidateIf((_object, value) => value !== null && value !== undefined)
   @IsUUID()
   projectId?: string | null;
+
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @IsUUID()
+  caseId?: string | null;
 
   @Transform(trim)
   @IsString()

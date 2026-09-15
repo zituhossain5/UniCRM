@@ -27,6 +27,7 @@ import { useRouter } from 'next/navigation';
 import { RecordEmail } from './record-email';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ActivitySheet } from '@/components/activities/activity-sheet';
+import { RelatedCases } from '@/components/cases/related-cases';
 
 const EDIT_CONTACT_FORM_ID = 'edit-contact-form';
 
@@ -274,6 +275,7 @@ export function ContactDetail({ id }: { id: string }) {
             <p className="record-empty">No active leads associated with this contact.</p>
           )}
         </section>
+        <RelatedCases entityId={contact.id} entityType="contact" companyId={contact.company?.id} />
       </div>
     </div>
   );

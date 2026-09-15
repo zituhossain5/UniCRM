@@ -20,6 +20,7 @@ import { InboxPriority, InboxThreadStatus } from '../../generated/prisma/enums';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { CreateLeadDto } from '../../leads/dto/leads.dto';
 import { CreateTaskDto } from '../../tasks/dto/tasks.dto';
+import { CreateCaseDto } from '../../cases/dto/cases.dto';
 
 export class CreateMailboxDto {
   @IsString() @MinLength(1) @MaxLength(160) name!: string;
@@ -110,3 +111,8 @@ export class AddConversationNoteDto {
 export class CreateLeadFromThreadDto extends CreateLeadDto {}
 
 export class CreateTaskFromThreadDto extends CreateTaskDto {}
+
+export class CreateCaseFromThreadDto extends CreateCaseDto {
+  @IsOptional()
+  declare sourceThreadId?: string | null;
+}

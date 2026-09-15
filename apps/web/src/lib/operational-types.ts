@@ -7,6 +7,9 @@ export interface DashboardSummary {
   todaysActivities: number | null;
   upcomingMeetings: number | null;
   overdueFollowUps: number | null;
+  openCases: number | null;
+  myCases: number | null;
+  overdueCases: number | null;
   outstandingBalances: Array<{ currency: string; amount: string }> | null;
   forecast: {
     currencies: Array<{ currency: string; weightedPipeline: string; expectedThisMonth: string }>;

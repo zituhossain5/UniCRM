@@ -22,6 +22,8 @@ import {
   TaskStatus,
   LeadPriority,
   WorkPriority,
+  CustomerCasePriority,
+  CustomerCaseStatus,
 } from '../generated/prisma/client';
 import { IntegrationsService } from '../integrations/integrations.service';
 import { JobsService } from '../jobs/jobs.service';
@@ -515,6 +517,11 @@ export class AutomationsService {
           where: { id: run.entityId },
           data: { projectManagerId: action.ownerId },
         });
+      else if (run.entityType === 'CASE')
+        await this.prisma.customerCase.update({
+          where: { id: run.entityId },
+          data: { assignedUserId: action.ownerId },
+        });
       else
         await this.prisma.task.update({
           where: { id: run.entityId },
@@ -526,7 +533,7 @@ export class AutomationsService {
       if (run.entityType === 'LEAD')
         await this.prisma.lead.update({
           where: { id: run.entityId },
-          data: { priority: action.priority },
+          data: { priority: action.priority as LeadPriority },
         });
       else if (run.entityType === 'DEAL')
         await this.prisma.deal.update({
@@ -536,15 +543,26 @@ export class AutomationsService {
       else if (run.entityType === 'PROJECT')
         await this.prisma.project.update({
           where: { id: run.entityId },
-          data: { priority: action.priority },
+          data: { priority: action.priority as WorkPriority },
+        });
+      else if (run.entityType === 'CASE')
+        await this.prisma.customerCase.update({
+          where: { id: run.entityId },
+          data: { priority: action.priority as CustomerCasePriority },
         });
       else
         await this.prisma.task.update({
           where: { id: run.entityId },
-          data: { priority: action.priority },
+          data: { priority: action.priority as WorkPriority },
         });
       return this.result(index, action.type, `Changed priority to ${action.priority}`, completedAt);
     }
+    if (
+      (action.type === 'CREATE_TASK' || action.type === 'CREATE_SCHEDULED_ACTIVITY') &&
+      action.priority &&
+      !Object.values(WorkPriority).includes(action.priority as WorkPriority)
+    )
+      throw new BadRequestException('Action priority is invalid for created work');
     if (action.type === 'CREATE_FOLLOW_UP') {
       const dueAt = this.addDays(new Date(), action.dueInDays ?? 1);
       const followUp = await this.prisma.followUp.create({
@@ -578,7 +596,7 @@ export class AutomationsService {
             action.ownerId ?? (snapshot.ownerId as string | null) ?? run.automationRule.createdById,
           startAt,
           reminderAt,
-          priority: action.priority ?? 'MEDIUM',
+          priority: (action.priority ?? 'MEDIUM') as WorkPriority,
           createdById: run.automationRule.createdById,
           automationKey: `${run.id}:${index}`,
         },
@@ -593,18 +611,19 @@ export class AutomationsService {
     }
     if (action.type === 'CREATE_TASK') {
       const projectId = this.projectId(run.entityType, run.entityId, snapshot);
-      if (!projectId)
+      if (!projectId && run.entityType !== AutomationEntityType.CASE)
         throw new BadRequestException('Automation entity has no project for task creation');
       const task = await this.prisma.task.create({
         data: {
           organizationId: run.organizationId,
           projectId,
+          caseId: run.entityType === AutomationEntityType.CASE ? run.entityId : null,
           title: action.title ?? `Automation: ${run.automationRule.name}`,
           description: action.notes,
           assigneeId: action.ownerId ?? (snapshot.ownerId as string | null),
           reporterId: run.automationRule.createdById,
           createdById: run.automationRule.createdById,
-          priority: action.priority ?? 'MEDIUM',
+          priority: (action.priority ?? 'MEDIUM') as WorkPriority,
           dueDate: this.addDays(new Date(), action.dueInDays ?? 1),
         },
       });
@@ -652,11 +671,17 @@ export class AutomationsService {
       );
     }
     if (action.type === 'SEND_EMAIL') {
+      const emailEntityType =
+        run.entityType === AutomationEntityType.CASE ? 'CONTACT' : run.entityType;
+      const emailEntityId =
+        run.entityType === AutomationEntityType.CASE ? snapshot.contactId : run.entityId;
+      if (typeof emailEntityId !== 'string')
+        throw new BadRequestException('Case has no contact email recipient');
       const message = await this.crmEmail.sendAutomation({
         organizationId: run.organizationId,
         senderUserId: run.automationRule.createdById,
-        entityType: run.entityType,
-        entityId: run.entityId,
+        entityType: emailEntityType,
+        entityId: emailEntityId,
         templateId: action.emailTemplateId!,
         recipientSource: action.recipientSource!,
         idempotencyKey: `automation:${run.id}:${index}`,
@@ -916,6 +941,7 @@ export class AutomationsService {
       AutomationTriggerType.PROJECT_STATUS_CHANGED,
       AutomationTriggerType.TASK_STATUS_CHANGED,
       AutomationTriggerType.QUOTATION_STATUS_CHANGED,
+      AutomationTriggerType.CASE_STATUS_CHANGED,
     ];
     if (!changed.some((value) => value === triggerType))
       throw new BadRequestException('Trigger configuration is only valid for change triggers');
@@ -945,11 +971,13 @@ export class AutomationsService {
           throw new BadRequestException('Trigger owner is invalid');
       } else {
         const values =
-          triggerType === AutomationTriggerType.PROJECT_STATUS_CHANGED
-            ? Object.values(ProjectStatus)
-            : triggerType === AutomationTriggerType.TASK_STATUS_CHANGED
-              ? Object.values(TaskStatus)
-              : Object.values(QuotationStatus);
+          triggerType === AutomationTriggerType.CASE_STATUS_CHANGED
+            ? Object.values(CustomerCaseStatus)
+            : triggerType === AutomationTriggerType.PROJECT_STATUS_CHANGED
+              ? Object.values(ProjectStatus)
+              : triggerType === AutomationTriggerType.TASK_STATUS_CHANGED
+                ? Object.values(TaskStatus)
+                : Object.values(QuotationStatus);
         if (!values.includes(value as never))
           throw new BadRequestException('Trigger status is invalid');
       }
@@ -976,6 +1004,7 @@ export class AutomationsService {
       TASK: ['status', 'ownerId', 'priority'],
       QUOTATION: ['status', 'ownerId', 'amount'],
       PAYMENT: ['ownerId', 'amount'],
+      CASE: ['status', 'ownerId', 'priority'],
     };
     if (!fields[entityType].includes(condition.field))
       throw new BadRequestException('Condition field is not supported for this entity type');
@@ -1055,9 +1084,11 @@ export class AutomationsService {
     }
     if (condition.field === 'priority' && !emptyOperator) {
       const priorities =
-        entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.DEAL
-          ? Object.values(LeadPriority)
-          : Object.values(WorkPriority);
+        entityType === AutomationEntityType.CASE
+          ? Object.values(CustomerCasePriority)
+          : entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.DEAL
+            ? Object.values(LeadPriority)
+            : Object.values(WorkPriority);
       if (
         typeof condition.value !== 'string' ||
         !priorities.some((value) => value === condition.value)
@@ -1066,11 +1097,13 @@ export class AutomationsService {
     }
     if (condition.field === 'status' && !emptyOperator) {
       const statuses =
-        entityType === AutomationEntityType.PROJECT
-          ? Object.values(ProjectStatus)
-          : entityType === AutomationEntityType.TASK
-            ? Object.values(TaskStatus)
-            : Object.values(QuotationStatus);
+        entityType === AutomationEntityType.CASE
+          ? Object.values(CustomerCaseStatus)
+          : entityType === AutomationEntityType.PROJECT
+            ? Object.values(ProjectStatus)
+            : entityType === AutomationEntityType.TASK
+              ? Object.values(TaskStatus)
+              : Object.values(QuotationStatus);
       if (
         typeof condition.value !== 'string' ||
         !statuses.some((value) => value === condition.value)
@@ -1135,7 +1168,8 @@ export class AutomationsService {
         entityType !== AutomationEntityType.LEAD &&
         entityType !== AutomationEntityType.DEAL &&
         entityType !== AutomationEntityType.PROJECT &&
-        entityType !== AutomationEntityType.TASK
+        entityType !== AutomationEntityType.TASK &&
+        entityType !== AutomationEntityType.CASE
       )
         throw new BadRequestException('Owner assignment is not supported for this entity');
       if (!action.ownerId || !(await this.activeUser(organizationId, action.ownerId)))
@@ -1146,10 +1180,19 @@ export class AutomationsService {
         entityType !== AutomationEntityType.LEAD &&
         entityType !== AutomationEntityType.DEAL &&
         entityType !== AutomationEntityType.PROJECT &&
-        entityType !== AutomationEntityType.TASK
+        entityType !== AutomationEntityType.TASK &&
+        entityType !== AutomationEntityType.CASE
       )
         throw new BadRequestException('Priority is not supported for this entity');
       if (!action.priority) throw new BadRequestException('Action priority is required');
+      const priorities =
+        entityType === AutomationEntityType.CASE
+          ? Object.values(CustomerCasePriority)
+          : entityType === AutomationEntityType.LEAD || entityType === AutomationEntityType.DEAL
+            ? Object.values(LeadPriority)
+            : Object.values(WorkPriority);
+      if (!priorities.includes(action.priority as never))
+        throw new BadRequestException('Action priority is invalid for this entity');
     }
     if (action.ownerId && !(await this.activeUser(organizationId, action.ownerId)))
       throw new BadRequestException('Action user is invalid');
@@ -1167,12 +1210,16 @@ export class AutomationsService {
       if (!subscription) throw new BadRequestException('Outbound webhook subscription is invalid');
     }
     if (action.type === 'SEND_EMAIL') {
-      if (entityType !== AutomationEntityType.LEAD)
-        throw new BadRequestException('Send email is currently supported for lead automations');
+      if (entityType !== AutomationEntityType.LEAD && entityType !== AutomationEntityType.CASE)
+        throw new BadRequestException('Send email is supported for lead and case automations');
       if (!action.emailTemplateId || !action.recipientSource)
         throw new BadRequestException('Email template and recipient source are required');
-      if (!['LEAD_EMAIL', 'PRIMARY_CONTACT'].includes(action.recipientSource))
-        throw new BadRequestException('Recipient source is invalid for a lead');
+      const allowedRecipients =
+        entityType === AutomationEntityType.CASE
+          ? ['CONTACT_EMAIL']
+          : ['LEAD_EMAIL', 'PRIMARY_CONTACT'];
+      if (!allowedRecipients.includes(action.recipientSource))
+        throw new BadRequestException('Recipient source is invalid for this entity');
       const template = await this.prisma.emailTemplate.findFirst({
         where: { id: action.emailTemplateId, organizationId, active: true },
         select: { id: true },
@@ -1296,13 +1343,28 @@ export class AutomationsService {
       });
       if (entity)
         snapshot = { ...entity, ownerId: entity.createdById, amount: entity.total.toNumber() };
-    } else {
+    } else if (entityType === AutomationEntityType.PAYMENT) {
       const entity = await this.prisma.payment.findFirst({
         where: { id: entityId, organizationId, archivedAt: null },
         select: { id: true, amount: true, recordedById: true, projectId: true },
       });
       if (entity)
         snapshot = { ...entity, ownerId: entity.recordedById, amount: entity.amount.toNumber() };
+    } else {
+      const entity = await this.prisma.customerCase.findFirst({
+        where: { id: entityId, organizationId, archivedAt: null },
+        select: {
+          id: true,
+          caseNumber: true,
+          title: true,
+          status: true,
+          priority: true,
+          assignedUserId: true,
+          contactId: true,
+          companyId: true,
+        },
+      });
+      if (entity) snapshot = { ...entity, ownerId: entity.assignedUserId };
     }
     if (!snapshot) throw new NotFoundException('Automation entity not found');
     if (
@@ -1425,6 +1487,15 @@ export class AutomationsService {
       });
       return quotation?.quotationNumber ?? 'Unavailable quotation';
     }
+    if (entityType === AutomationEntityType.CASE) {
+      const customerCase = await this.prisma.customerCase.findFirst({
+        where: { id: entityId, organizationId },
+        select: { caseNumber: true, title: true },
+      });
+      return customerCase
+        ? `${customerCase.caseNumber}: ${customerCase.title}`
+        : 'Unavailable case';
+    }
     const payment = await this.prisma.payment.findFirst({
       where: { id: entityId, organizationId },
       select: { amount: true, currency: true },
@@ -1451,6 +1522,10 @@ export class AutomationsService {
       return `Task status changed -> ${this.valueLabel(payload.toStatus)}`;
     if (triggerType === AutomationTriggerType.QUOTATION_STATUS_CHANGED)
       return `Quotation status changed -> ${this.valueLabel(payload.toStatus)}`;
+    if (triggerType === AutomationTriggerType.CASE_STATUS_CHANGED)
+      return `Case status changed -> ${this.valueLabel(payload.toStatus)}`;
+    if (triggerType === AutomationTriggerType.CASE_PRIORITY_CHANGED)
+      return `Case priority changed -> ${this.valueLabel(payload.priority)}`;
     if (triggerType === AutomationTriggerType.PAYMENT_CREATED) return 'Payment recorded';
     return this.valueLabel(triggerType);
   }

@@ -15,6 +15,7 @@ import {
   ArrowUpRight,
   CheckCircle2,
   FilePlus2,
+  LifeBuoy,
   MessageSquarePlus,
   Paperclip,
   Reply,
@@ -40,7 +41,7 @@ export function EmailThreadSheet({
   const [replyBody, setReplyBody] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteBody, setNoteBody] = useState('');
-  const [conversionMode, setConversionMode] = useState<'lead' | 'task' | null>(null);
+  const [conversionMode, setConversionMode] = useState<'lead' | 'task' | 'case' | null>(null);
   const previousMessages = useRef<EmailThread['messages']>([]);
   const markedRead = useRef(new Set<string>());
   const thread = useQuery({
@@ -208,6 +209,18 @@ export function EmailThreadSheet({
     },
     onError: (cause) => setError(messageFor(cause, 'Could not create task.')),
   });
+  const createCase = useMutation({
+    mutationFn: (payload: Record<string, string>) =>
+      apiRequest(`/mail/threads/${threadId}/create-case`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }),
+    onSuccess: async () => {
+      setConversionMode(null);
+      await refreshConversation();
+    },
+    onError: (cause) => setError(messageFor(cause, 'Could not create case.')),
+  });
 
   const reply = useMutation({
     mutationFn: () =>
@@ -295,6 +308,21 @@ export function EmailThreadSheet({
     createTask.mutate(payload);
   }
 
+  function submitCase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError('');
+    const payload = compactPayload(new FormData(event.currentTarget), [
+      'title',
+      'description',
+      'type',
+      'priority',
+      'assignedUserId',
+      'dueAt',
+    ]);
+    if (payload.assignedUserId === 'unassigned') delete payload.assignedUserId;
+    createCase.mutate(payload);
+  }
+
   const canReply =
     user.permissions.includes('mail.send') &&
     user.permissions.includes('inbox.reply') &&
@@ -307,6 +335,7 @@ export function EmailThreadSheet({
   const canNote = user.permissions.includes('inbox.note');
   const canCreateLead = user.permissions.includes('lead.create');
   const canCreateTask = user.permissions.includes('task.create');
+  const canCreateCase = user.permissions.includes('case.create');
   const senderName = splitName(latestInbound?.fromName ?? '');
 
   return (
@@ -446,6 +475,11 @@ export function EmailThreadSheet({
                 <CheckCircle2 size={15} /> Create task
               </Button>
             ) : null}
+            {canCreateCase ? (
+              <Button onClick={() => setConversionMode('case')} type="button" variant="outline">
+                <LifeBuoy size={15} /> Create case
+              </Button>
+            ) : null}
           </div>
           {noteOpen ? (
             <form className="thread-note-form" onSubmit={submitNote}>
@@ -573,6 +607,80 @@ export function EmailThreadSheet({
                   type="submit"
                 >
                   Create task
+                </Button>
+              </div>
+            </form>
+          ) : null}
+          {conversionMode === 'case' ? (
+            <form className="thread-conversion-form" onSubmit={submitCase}>
+              <h3>Create case from conversation</h3>
+              <p>
+                Review the customer context before creating this case. The current thread remains
+                linked.
+              </p>
+              <label>
+                <span>Case title</span>
+                <Input defaultValue={current.subject} maxLength={220} name="title" required />
+              </label>
+              <label>
+                <span>Description</span>
+                <Textarea
+                  defaultValue={`From: ${latestInbound?.fromAddress ?? 'Unknown'}\n\n${latestInbound?.body ?? ''}`}
+                  maxLength={20000}
+                  name="description"
+                  rows={5}
+                />
+              </label>
+              <div className="form-two-columns">
+                <Select
+                  defaultValue="GENERAL_INQUIRY"
+                  label="Type"
+                  name="type"
+                  options={[
+                    'GENERAL_INQUIRY',
+                    'TECHNICAL_ISSUE',
+                    'SERVICE_REQUEST',
+                    'BILLING',
+                    'COMPLAINT',
+                    'OTHER',
+                  ].map((value) => ({ label: labelize(value), value }))}
+                />
+                <Select
+                  defaultValue="NORMAL"
+                  label="Priority"
+                  name="priority"
+                  options={['LOW', 'NORMAL', 'HIGH', 'URGENT'].map((value) => ({
+                    label: labelize(value),
+                    value,
+                  }))}
+                />
+              </div>
+              <Select
+                defaultValue="unassigned"
+                label="Assignee"
+                name="assignedUserId"
+                options={[
+                  { label: 'Unassigned', value: 'unassigned' },
+                  ...(collaborators.data?.data ?? []).map((person) => ({
+                    label: personName(person),
+                    value: person.id,
+                  })),
+                ]}
+              />
+              <label>
+                <span>Due</span>
+                <Input name="dueAt" type="datetime-local" />
+              </label>
+              <div className="dialog-actions">
+                <Button onClick={() => setConversionMode(null)} type="button" variant="ghost">
+                  Cancel
+                </Button>
+                <Button
+                  disabled={createCase.isPending}
+                  loading={createCase.isPending}
+                  type="submit"
+                >
+                  Create case
                 </Button>
               </div>
             </form>

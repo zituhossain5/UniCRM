@@ -19,6 +19,11 @@ const reports = [
   ['overdue-tasks', 'Overdue tasks'],
   ['payments', 'Payments received'],
   ['outstanding-balances', 'Outstanding balances'],
+  ['cases-by-status', 'Cases by status'],
+  ['cases-by-priority', 'Cases by priority'],
+  ['cases-by-assignee', 'Cases by assignee'],
+  ['overdue-cases', 'Overdue cases'],
+  ['case-resolution-time', 'Case resolution time'],
 ] as const;
 type ReportId = (typeof reports)[number][0];
 type ReportPayload = {
@@ -51,7 +56,12 @@ export function ReportsView() {
       : '';
   const report = useQuery({
     queryKey: ['report', active, from, to],
-    queryFn: () => apiRequest<ReportPayload>(`/reports/${active}${queryString}`),
+    queryFn: () =>
+      apiRequest<ReportPayload>(
+        active.startsWith('case') || active === 'overdue-cases'
+          ? '/cases/reports'
+          : `/reports/${active}${queryString}`,
+      ),
     staleTime: 60_000,
   });
   return (
@@ -104,6 +114,50 @@ export function ReportsView() {
 }
 
 function ReportResult({ id, payload }: { id: ReportId; payload: ReportPayload }) {
+  if (id.startsWith('cases-') || id === 'overdue-cases' || id === 'case-resolution-time') {
+    const data = payload.data as Record<string, unknown>;
+    if (id === 'overdue-cases')
+      return (
+        <section className="conversion-panel">
+          <strong>{text(data.overdue)}</strong>
+          <p>Cases past their due date and not resolved or closed</p>
+        </section>
+      );
+    if (id === 'case-resolution-time') {
+      const resolution = data.resolutionTime as Record<string, unknown>;
+      return (
+        <section className="conversion-panel">
+          <strong>
+            {resolution.averageHours == null ? '—' : `${text(resolution.averageHours)} hours`}
+          </strong>
+          <p>Average across {text(resolution.resolvedCount)} resolved cases</p>
+        </section>
+      );
+    }
+    const key =
+      id === 'cases-by-status'
+        ? 'byStatus'
+        : id === 'cases-by-priority'
+          ? 'byPriority'
+          : 'byAssignee';
+    const rows = data[key] as Array<Record<string, unknown>>;
+    return (
+      <Table
+        columns={[
+          id === 'cases-by-status'
+            ? 'Status'
+            : id === 'cases-by-priority'
+              ? 'Priority'
+              : 'Assignee',
+          'Cases',
+        ]}
+        rows={rows.map((row) => [
+          id === 'cases-by-assignee' ? row.assignee : label(row.status ?? row.priority),
+          row.count,
+        ])}
+      />
+    );
+  }
   if (id === 'lead-conversion' || id === 'deal-conversion' || id === 'lead-to-deal') {
     const data = payload.data as Record<string, unknown>;
     return (

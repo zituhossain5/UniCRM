@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { basename } from 'node:path';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
@@ -6,6 +12,7 @@ import { AuditService } from '../audit/audit.service';
 import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../database/prisma.service';
 import { RateLimitService } from '../auth/rate-limit.service';
+import { PERMISSIONS } from '../auth/auth.constants';
 import { ATTACHMENT_STORAGE, type AttachmentStorage } from './storage.service';
 
 export interface UploadedFile {
@@ -53,6 +60,15 @@ export class AttachmentsService {
     });
   }
 
+  async listCase(principal: AuthenticatedPrincipal, caseId: string) {
+    await this.requireCase(principal.organizationId, caseId);
+    return this.prisma.attachment.findMany({
+      where: { organizationId: principal.organizationId, caseId },
+      include: { uploadedBy: { select: uploaderSelect } },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   uploadProject(principal: AuthenticatedPrincipal, projectId: string, file?: UploadedFile) {
     return this.upload(principal, file, { projectId });
   }
@@ -61,11 +77,17 @@ export class AttachmentsService {
     return this.upload(principal, file, { taskId });
   }
 
+  uploadCase(principal: AuthenticatedPrincipal, caseId: string, file?: UploadedFile) {
+    return this.upload(principal, file, { caseId });
+  }
+
   async download(principal: AuthenticatedPrincipal, id: string) {
     const attachment = await this.prisma.attachment.findFirst({
       where: { id, organizationId: principal.organizationId },
     });
     if (!attachment) throw new NotFoundException('Attachment not found');
+    if (attachment.caseId && !principal.permissions.includes(PERMISSIONS.caseRead))
+      throw new ForbiddenException('Insufficient permission to view case attachments');
     return { attachment, content: await this.storage.get(attachment.storageKey) };
   }
 
@@ -74,6 +96,8 @@ export class AttachmentsService {
       where: { id, organizationId: principal.organizationId },
     });
     if (!attachment) throw new NotFoundException('Attachment not found');
+    if (attachment.caseId && !principal.permissions.includes(PERMISSIONS.caseUpdate))
+      throw new ForbiddenException('Insufficient permission to delete case attachments');
     await this.prisma.$transaction(async (tx) => {
       await tx.attachment.delete({ where: { id } });
       await this.audit.create(
@@ -83,7 +107,11 @@ export class AttachmentsService {
           entityId: id,
           entityType: 'ATTACHMENT',
           organizationId: principal.organizationId,
-          metadata: { projectId: attachment.projectId, taskId: attachment.taskId },
+          metadata: {
+            projectId: attachment.projectId,
+            taskId: attachment.taskId,
+            caseId: attachment.caseId,
+          },
         },
         tx,
       );
@@ -94,11 +122,12 @@ export class AttachmentsService {
   private async upload(
     principal: AuthenticatedPrincipal,
     file: UploadedFile | undefined,
-    parent: { projectId: string } | { taskId: string },
+    parent: { projectId: string } | { taskId: string } | { caseId: string },
   ) {
     if ('projectId' in parent)
       await this.requireProject(principal.organizationId, parent.projectId);
-    else await this.requireTask(principal.organizationId, parent.taskId);
+    else if ('taskId' in parent) await this.requireTask(principal.organizationId, parent.taskId);
+    else await this.requireCase(principal.organizationId, parent.caseId);
     await this.rateLimit.consume('upload', `${principal.organizationId}:${principal.userId}`, {
       limit: this.config.get('UPLOAD_RATE_LIMIT_MAX', { infer: true }),
       windowSeconds: this.config.get('UPLOAD_RATE_LIMIT_WINDOW_SECONDS', { infer: true }),
@@ -190,5 +219,13 @@ export class AttachmentsService {
       select: { id: true },
     });
     if (!task) throw new NotFoundException('Task not found');
+  }
+
+  private async requireCase(organizationId: string, id: string) {
+    const customerCase = await this.prisma.customerCase.findFirst({
+      where: { id, organizationId, archivedAt: null },
+      select: { id: true },
+    });
+    if (!customerCase) throw new NotFoundException('Case not found');
   }
 }

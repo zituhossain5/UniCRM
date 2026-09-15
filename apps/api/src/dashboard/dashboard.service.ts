@@ -46,6 +46,9 @@ export class DashboardService {
       upcomingMeetings,
       overdueScheduledFollowUps,
       overdueLegacyFollowUps,
+      openCases,
+      myCases,
+      overdueCases,
       forecast,
     ] = await Promise.all([
       can(PERMISSIONS.leadRead)
@@ -144,6 +147,31 @@ export class DashboardService {
             },
           })
         : Promise.resolve(null),
+      can(PERMISSIONS.caseRead)
+        ? this.prisma.customerCase.count({
+            where: { organizationId, archivedAt: null, status: { notIn: ['RESOLVED', 'CLOSED'] } },
+          })
+        : Promise.resolve(null),
+      can(PERMISSIONS.caseRead)
+        ? this.prisma.customerCase.count({
+            where: {
+              organizationId,
+              archivedAt: null,
+              assignedUserId: principal.userId,
+              status: { notIn: ['RESOLVED', 'CLOSED'] },
+            },
+          })
+        : Promise.resolve(null),
+      can(PERMISSIONS.caseRead)
+        ? this.prisma.customerCase.count({
+            where: {
+              organizationId,
+              archivedAt: null,
+              dueAt: { lt: new Date() },
+              status: { notIn: ['RESOLVED', 'CLOSED'] },
+            },
+          })
+        : Promise.resolve(null),
       this.forecast.dashboard(principal),
     ]);
 
@@ -161,6 +189,9 @@ export class DashboardService {
           overdueScheduledFollowUps === null || overdueLegacyFollowUps === null
             ? null
             : overdueScheduledFollowUps + overdueLegacyFollowUps,
+        openCases,
+        myCases,
+        overdueCases,
         forecast,
       },
       meta: { dateStrategy: 'UTC date-only boundaries', generatedAt: new Date().toISOString() },

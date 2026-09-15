@@ -4,6 +4,7 @@ import { AuthModule } from '../auth/auth.module';
 import { AuditModule } from '../audit/audit.module';
 import {
   AttachmentsController,
+  CaseAttachmentsController,
   ProjectAttachmentsController,
   TaskAttachmentsController,
 } from './attachments.controller';
@@ -14,7 +15,12 @@ import { ATTACHMENT_STORAGE } from './storage.service';
 
 @Module({
   imports: [AuditModule, AuthModule],
-  controllers: [AttachmentsController, ProjectAttachmentsController, TaskAttachmentsController],
+  controllers: [
+    AttachmentsController,
+    ProjectAttachmentsController,
+    TaskAttachmentsController,
+    CaseAttachmentsController,
+  ],
   providers: [
     AttachmentsService,
     LocalStorageService,

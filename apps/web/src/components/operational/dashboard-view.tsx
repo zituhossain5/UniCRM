@@ -10,6 +10,7 @@ import {
   CalendarClock,
   CircleDollarSign,
   ListChecks,
+  LifeBuoy,
   UsersRound,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -64,6 +65,14 @@ export function DashboardView() {
     data.outstandingBalances?.map((entry) => money(entry.amount, entry.currency)).join(' · ') ??
     null;
   const metrics = [
+    { label: 'Open cases', value: data.openCases, href: '/app/cases?view=open', icon: LifeBuoy },
+    { label: 'My cases', value: data.myCases, href: '/app/cases?view=mine', icon: LifeBuoy },
+    {
+      label: 'Overdue cases',
+      value: data.overdueCases,
+      href: '/app/cases?view=overdue',
+      icon: AlertTriangle,
+    },
     { label: 'Open leads', value: data.openLeads, href: '/app/leads?view=open', icon: UsersRound },
     {
       label: 'Active projects',

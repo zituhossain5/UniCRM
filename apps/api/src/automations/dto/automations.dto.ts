@@ -87,9 +87,9 @@ export class AutomationActionDto {
   @IsOptional()
   recipientSource?: EmailRecipientSource;
 
-  @IsIn(['LOW', 'MEDIUM', 'HIGH', 'URGENT'])
+  @IsIn(['LOW', 'NORMAL', 'MEDIUM', 'HIGH', 'URGENT'])
   @IsOptional()
-  priority?: 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
+  priority?: 'LOW' | 'NORMAL' | 'MEDIUM' | 'HIGH' | 'URGENT';
 
   @IsIn(['CALL', 'MEETING', 'EMAIL', 'OTHER'])
   @IsOptional()

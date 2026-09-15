@@ -53,6 +53,7 @@ import { ProjectCreateSheet } from '@/components/work/create-sheets';
 import { RecordEmail } from './record-email';
 import { ActivitySheet } from '@/components/activities/activity-sheet';
 import { RelatedActivities } from '@/components/activities/related-activities';
+import { RelatedCases } from '@/components/cases/related-cases';
 
 const EDIT_LEAD_FORM_ID = 'edit-lead-form';
 
@@ -515,6 +516,7 @@ export function LeadDetail({ id }: { id: string }) {
         ) : null}
       </div>
       <RelatedActivities entityId={lead.id} entityType="LEAD" />
+      <RelatedCases entityId={lead.id} entityType="lead" companyId={lead.companyId} />
       <div className="record-grid">
         <section className="record-section">
           <h2>Overview</h2>

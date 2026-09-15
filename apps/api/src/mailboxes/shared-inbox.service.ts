@@ -17,12 +17,14 @@ import {
 } from '../generated/prisma/enums';
 import { LeadsService } from '../leads/leads.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { CasesService } from '../cases/cases.service';
 import { TasksService } from '../tasks/tasks.service';
 import type {
   AddConversationNoteDto,
   AssignConversationDto,
   CreateLeadFromThreadDto,
   CreateTaskFromThreadDto,
+  CreateCaseFromThreadDto,
   SetConversationReadDto,
   SharedInboxQueryDto,
   UpdateConversationPriorityDto,
@@ -42,6 +44,7 @@ export class SharedInboxService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(NotificationsService) private readonly notifications: NotificationsService,
+    @Inject(CasesService) private readonly cases: CasesService,
     @Inject(LeadsService) private readonly leads: LeadsService,
     @Inject(TasksService) private readonly tasks: TasksService,
   ) {}
@@ -351,6 +354,30 @@ export class SharedInboxService {
       created: true,
     });
     return task;
+  }
+
+  async createCase(principal: AuthenticatedPrincipal, id: string, dto: CreateCaseFromThreadDto) {
+    const thread = await this.requireThread(principal.organizationId, id);
+    const latestInbound = await this.latestInbound(principal.organizationId, id);
+    const related =
+      thread.relatedEntityType && thread.relatedEntityId
+        ? { [`${thread.relatedEntityType.toLowerCase()}Id`]: thread.relatedEntityId }
+        : {};
+    const customerCase = await this.cases.create(principal, {
+      ...related,
+      ...dto,
+      sourceThreadId: id,
+      title: dto.title || thread.subject,
+      description:
+        dto.description ??
+        `Created from shared inbox conversation.\n\nFrom: ${latestInbound.fromAddress}\nSubject: ${thread.subject}`,
+    });
+    await this.event(this.prisma, thread, principal.userId, ConversationEventType.CRM_LINKED, {
+      relatedEntityType: 'CASE',
+      relatedEntityId: customerCase.id,
+      created: true,
+    });
+    return customerCase;
   }
 
   get(principal: AuthenticatedPrincipal, id: string) {

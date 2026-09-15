@@ -1,0 +1,341 @@
+Milestone 20 — Customer Cases / Support Management V1
+
+Goal: add a generic support Case module for customer issues/requests, deeply integrated with existing CRM records and Shared Inbox.
+
+Do NOT implement ecommerce-specific returns/refunds, knowledge base, live chat, AI support, telephony, advanced SLA rules, or customer portal.
+
+1. Case model
+
+Add organization-scoped CustomerCase.
+
+Fields approximately:
+
+id
+organizationId
+caseNumber
+title
+description
+type
+status
+priority
+contactId nullable
+companyId nullable
+leadId nullable
+dealId nullable
+sourceThreadId nullable
+assignedUserId nullable
+dueAt nullable
+resolvedAt nullable
+closedAt nullable
+createdById
+createdAt
+updatedAt
+archivedAt nullable
+
+Case number example:
+
+CS-000001
+
+Generate safely and organization-scoped.
+
+2. Status / priority / type
+
+Status:
+
+OPEN
+IN_PROGRESS
+WAITING_FOR_CUSTOMER
+WAITING_INTERNAL
+RESOLVED
+CLOSED
+
+Priority:
+
+LOW
+NORMAL
+HIGH
+URGENT
+
+Type:
+
+GENERAL_INQUIRY
+TECHNICAL_ISSUE
+SERVICE_REQUEST
+BILLING
+COMPLAINT
+OTHER 3. Cases UI
+
+Add:
+
+Support
+→ Cases
+
+Routes:
+
+/app/cases
+/app/cases/[caseId]
+
+Views:
+
+All
+Mine
+Unassigned
+Open
+Waiting
+Overdue
+Resolved
+
+Filters:
+
+search
+status
+priority
+type
+assignee
+company/contact
+due date
+
+Server-driven search/filter/sort/pagination.
+
+4. Case detail
+
+Show:
+
+case number
+title
+description
+status
+priority
+type
+assignee
+contact/company
+related Lead/Deal
+due date
+linked email thread
+comments
+tasks
+attachments
+activity history
+
+Reuse existing UniCRM record/detail patterns.
+
+5. Shared Inbox integration
+
+From an EmailThread add:
+
+Create Case
+
+Prefill:
+
+title ← email subject
+contact/company ← matched CRM record
+sourceThreadId ← current thread
+description ← useful email context
+
+User must review before create.
+
+Do NOT auto-create Cases for every email.
+
+6. Comments / Tasks / Attachments
+
+Reuse existing systems.
+
+Add internal Case comments if needed.
+
+Allow:
+
+Create Task from Case
+Link existing Task if current architecture supports it cleanly
+Upload/view attachments
+
+Do not duplicate Task or Attachment logic.
+
+7. Contact / Company / Deal integration
+
+Contact, Company, and Deal detail pages should show related Cases.
+
+8. Lifecycle
+
+Support:
+
+assign / reassign / unassign
+change status
+change priority
+set due date
+resolve
+close
+reopen
+archive
+
+Preserve history.
+
+9. Activity / notifications
+
+Record meaningful events:
+
+CASE_CREATED
+CASE_ASSIGNED
+CASE_STATUS_CHANGED
+CASE_PRIORITY_CHANGED
+CASE_DUE_CHANGED
+CASE_RESOLVED
+CASE_REOPENED
+CASE_CLOSED
+
+Notify:
+
+case assigned
+urgent case assigned
+due soon
+overdue
+reopened
+
+Reuse BullMQ + Notifications; deduplicate scheduled notifications.
+
+10. Automation
+
+Add controlled triggers:
+
+case.created
+case.assigned
+case.status_changed
+case.priority_changed
+case.resolved
+
+Reuse existing actions where compatible:
+
+create task
+create notification
+send email
+assign owner
+change priority
+
+Do not add arbitrary new actions.
+
+11. Dashboard / reports
+
+Add only compact operational metrics:
+
+Open Cases
+My Cases
+Overdue Cases
+
+Basic reports:
+
+Cases by Status
+Cases by Priority
+Cases by Assignee
+Overdue Cases
+Resolution Time Summary
+
+Keep formulas backend-authoritative.
+
+12. Permissions
+
+Add:
+
+case.create
+case.read
+case.update
+case.assign
+case.resolve
+case.delete
+case.comment
+
+Suggested:
+
+Owner/Admin → full
+Manager → broad management
+Staff → create/read/update/comment/assigned work
+Viewer → read-only
+
+Backend authoritative.
+
+13. Tenant isolation
+
+Strictly validate:
+
+Case
+Contact
+Company
+Lead
+Deal
+EmailThread
+Assignee
+Task
+Comment
+Attachment
+
+No cross-tenant relationship IDs.
+
+14. Tests
+
+Add high-value tests for:
+
+case CRUD
+number uniqueness
+assignment
+status transitions
+resolve/reopen/close
+due/overdue
+Shared Inbox → Case
+Contact/Company/Deal relationships
+Task creation
+comments
+attachments
+notifications
+automation trigger
+RBAC
+tenant isolation
+
+Preserve all previous tests.
+
+15. Manual acceptance
+
+Use a real Shared Inbox thread:
+
+Open email thread.
+Create Case.
+Confirm Contact/Company prefill.
+Assign yourself.
+Set High priority.
+Set due date.
+Add internal comment.
+Create Task.
+Move:
+Open
+→ In Progress
+→ Waiting for Customer
+→ Resolved
+Reopen.
+Verify Contact/Company Cases section.
+Verify notifications/activity history.
+Test Manager/Staff/Viewer permissions.
+Do NOT Implement
+ecommerce return/refund workflows
+knowledge base
+chatbot
+AI support agent
+live chat
+VoIP
+advanced SLA policies
+customer portal
+Validation
+
+Run:
+
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm build
+pnpm format:check
+
+Also verify:
+
+Prisma generate
+current migration
+fresh migration
+notification worker
+automation Case trigger
+
+Stop after Milestone 20.

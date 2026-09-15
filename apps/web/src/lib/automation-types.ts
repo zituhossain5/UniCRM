@@ -1,4 +1,5 @@
-export type AutomationEntityType = 'LEAD' | 'DEAL' | 'PROJECT' | 'TASK' | 'QUOTATION' | 'PAYMENT';
+export type AutomationEntityType =
+  'LEAD' | 'DEAL' | 'PROJECT' | 'TASK' | 'QUOTATION' | 'PAYMENT' | 'CASE';
 
 export type AutomationTriggerType =
   | 'LEAD_CREATED'
@@ -16,7 +17,12 @@ export type AutomationTriggerType =
   | 'TASK_OVERDUE'
   | 'QUOTATION_CREATED'
   | 'QUOTATION_STATUS_CHANGED'
-  | 'PAYMENT_CREATED';
+  | 'PAYMENT_CREATED'
+  | 'CASE_CREATED'
+  | 'CASE_ASSIGNED'
+  | 'CASE_STATUS_CHANGED'
+  | 'CASE_PRIORITY_CHANGED'
+  | 'CASE_RESOLVED';
 
 export type AutomationCondition = {
   field: string;

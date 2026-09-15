@@ -18,15 +18,17 @@ const target = (item: NotificationItem) =>
       ? `/app/activities?activity=${item.entityId}`
       : item.entityType === 'LEAD'
         ? `/app/leads/${item.entityId}`
-        : item.entityType === 'PROJECT'
-          ? `/app/projects/${item.entityId}`
-          : item.entityType === 'QUOTATION'
-            ? `/app/quotations/${item.entityId}`
-            : item.entityType === 'TASK'
-              ? `/app/tasks?task=${item.entityId}`
-              : item.entityType === 'PAYMENT'
-                ? '/app/payments'
-                : '/app/dashboard';
+        : item.entityType === 'CASE'
+          ? `/app/cases/${item.entityId}`
+          : item.entityType === 'PROJECT'
+            ? `/app/projects/${item.entityId}`
+            : item.entityType === 'QUOTATION'
+              ? `/app/quotations/${item.entityId}`
+              : item.entityType === 'TASK'
+                ? `/app/tasks?task=${item.entityId}`
+                : item.entityType === 'PAYMENT'
+                  ? '/app/payments'
+                  : '/app/dashboard';
 const ago = (value: string) => {
   const minutes = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 60_000));
   return minutes < 1

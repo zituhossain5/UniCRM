@@ -47,6 +47,7 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ActivitySheet } from '@/components/activities/activity-sheet';
 import { RelatedActivities } from '@/components/activities/related-activities';
+import { RelatedCases } from '@/components/cases/related-cases';
 
 const EDIT_FORM_ID = 'edit-deal-form';
 
@@ -483,6 +484,7 @@ export function DealDetail({ id }: { id: string }) {
         </section>
       ) : null}
       <RelatedActivities entityId={deal.id} entityType="DEAL" />
+      <RelatedCases entityId={deal.id} entityType="deal" companyId={deal.companyId} />
       <section className="record-section">
         <h2>Activity</h2>
         {deal.activities?.length ? (

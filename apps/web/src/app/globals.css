@@ -2499,6 +2499,112 @@ kbd {
   }
 }
 
+.cases-toolbar {
+  grid-template-columns: repeat(4, minmax(140px, 1fr));
+}
+.cases-toolbar .crm-search {
+  grid-column: span 2;
+}
+.record-link {
+  display: grid;
+  gap: 2px;
+}
+.record-link span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.case-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.case-summary,
+.case-history {
+  grid-column: 1 / -1;
+}
+.case-field-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+.case-field-grid label,
+.form-stack label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.case-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-top: 18px;
+}
+.case-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--primary);
+}
+.case-feed {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+.case-feed article {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.case-feed article p {
+  flex-basis: 100%;
+  margin: 0;
+  white-space: pre-wrap;
+}
+.case-feed small {
+  color: var(--muted-foreground);
+}
+.inline-compose {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.inline-compose > :first-child {
+  flex: 1;
+}
+@media (max-width: 1023px) {
+  .cases-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cases-toolbar .crm-search {
+    grid-column: 1 / -1;
+  }
+  .case-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .cases-toolbar,
+  .case-detail-grid,
+  .case-field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .case-summary,
+  .case-history,
+  .cases-toolbar .crm-search {
+    grid-column: auto;
+  }
+  .inline-compose {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
+
 .activity-header-actions,
 .activity-detail-actions {
   display: flex;

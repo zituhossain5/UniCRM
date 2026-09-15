@@ -25,6 +25,7 @@ import type {
 const userSelect = { id: true, firstName: true, lastName: true, status: true } as const;
 const taskInclude = {
   project: { select: { id: true, name: true, status: true } },
+  customerCase: { select: { id: true, caseNumber: true, title: true, status: true } },
   assignee: { select: userSelect },
   reporter: { select: userSelect },
   _count: { select: { comments: true, attachments: true } },
@@ -79,6 +80,7 @@ export class TasksService {
           : []),
       ],
       ...(query.project ? { projectId: query.project } : {}),
+      ...(query.case ? { caseId: query.case } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.priority ? { priority: query.priority } : {}),
       ...(query.assignee ? { assigneeId: query.assignee } : {}),
@@ -114,6 +116,7 @@ export class TasksService {
     const project = dto.projectId
       ? await this.validateProject(principal.organizationId, dto.projectId)
       : null;
+    if (dto.caseId) await this.validateCase(principal.organizationId, dto.caseId);
     await this.validateAssignee(principal, dto.assigneeId);
     this.validateDates(dto.startDate, dto.dueDate);
     const { startDate, dueDate, ...input } = dto;
@@ -186,6 +189,8 @@ export class TasksService {
       dto.projectId !== existing.projectId
     )
       await this.validateProject(principal.organizationId, dto.projectId);
+    if (dto.caseId !== undefined && dto.caseId !== null && dto.caseId !== existing.caseId)
+      await this.validateCase(principal.organizationId, dto.caseId);
     if (dto.assigneeId !== undefined && dto.assigneeId !== existing.assigneeId)
       await this.validateAssignee(principal, dto.assigneeId);
     const existingStartDate: Date | null = existing.startDate;
@@ -388,6 +393,15 @@ export class TasksService {
     return project;
   }
 
+  private async validateCase(organizationId: string, caseId: string) {
+    const customerCase = await this.prisma.customerCase.findFirst({
+      where: { id: caseId, organizationId, archivedAt: null },
+      select: { id: true },
+    });
+    if (!customerCase) throw new NotFoundException('Case not found');
+    return customerCase;
+  }
+
   private async validateAssignee(
     principal: AuthenticatedPrincipal,
     assigneeId: string | null | undefined,
@@ -417,6 +431,7 @@ export class TasksService {
       select: {
         id: true,
         projectId: true,
+        caseId: true,
         assigneeId: true,
         status: true,
         completedAt: true,

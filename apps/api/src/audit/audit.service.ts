@@ -29,7 +29,8 @@ export interface AuditInput {
     | 'TAG'
     | 'PIPELINE'
     | 'TASK'
-    | 'CATALOG';
+    | 'CATALOG'
+    | 'CASE';
   metadata?: Prisma.InputJsonValue;
   organizationId: string;
 }

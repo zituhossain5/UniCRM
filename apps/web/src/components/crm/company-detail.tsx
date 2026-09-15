@@ -32,6 +32,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { RecordEmail } from './record-email';
 import { ActivitySheet } from '@/components/activities/activity-sheet';
+import { RelatedCases } from '@/components/cases/related-cases';
 
 const EDIT_COMPANY_FORM_ID = 'edit-company-form';
 
@@ -384,6 +385,7 @@ export function CompanyDetail({ id }: { id: string }) {
             <p className="record-empty">No company activity yet.</p>
           )}
         </section>
+        <RelatedCases entityId={company.id} entityType="company" />
       </div>
     </div>
   );

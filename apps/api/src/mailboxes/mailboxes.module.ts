@@ -9,6 +9,7 @@ import { MailboxesService } from './mailboxes.service';
 import { LeadsModule } from '../leads/leads.module';
 import { TasksModule } from '../tasks/tasks.module';
 import { SharedInboxService } from './shared-inbox.service';
+import { CasesModule } from '../cases/cases.module';
 
 @Module({
   imports: [
@@ -19,6 +20,7 @@ import { SharedInboxService } from './shared-inbox.service';
     IntegrationsModule,
     LeadsModule,
     TasksModule,
+    CasesModule,
   ],
   controllers: [MailboxesController, MailController],
   providers: [MailboxesService, SharedInboxService],

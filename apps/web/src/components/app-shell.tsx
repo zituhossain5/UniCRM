@@ -44,6 +44,7 @@ import {
   Handshake,
   TrendingUp,
   Package,
+  LifeBuoy,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -55,6 +56,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { SearchResults } from '@/lib/operational-types';
 import { NotificationBellContent, UnreadBadge } from './operational/notification-center';
 import { ActivitySheet } from './activities/activity-sheet';
+import { CaseCreateSheet } from './cases/case-create-sheet';
 
 interface NavItem {
   href: string;
@@ -87,6 +89,10 @@ const navSections: readonly NavSection[] = [
       { href: '/app/contacts', icon: ContactRound, label: 'Contacts' },
       { href: '/app/email', icon: Mail, label: 'Email', permission: 'inbox.read' },
     ],
+  },
+  {
+    label: 'Support',
+    items: [{ href: '/app/cases', icon: LifeBuoy, label: 'Cases', permission: 'case.read' }],
   },
   {
     label: 'Projects',
@@ -128,7 +134,16 @@ const commandItems = navSections
   .concat({ href: '/app/settings', icon: Settings, label: 'Settings' });
 
 type GlobalCreateTarget =
-  'lead' | 'deal' | 'company' | 'contact' | 'project' | 'task' | 'call' | 'meeting' | 'follow-up';
+  | 'lead'
+  | 'deal'
+  | 'company'
+  | 'contact'
+  | 'project'
+  | 'task'
+  | 'case'
+  | 'call'
+  | 'meeting'
+  | 'follow-up';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -188,6 +203,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         { label: 'Create Project', permission: 'project.create', target: 'project' as const },
         { label: 'Create Deal', permission: 'deal.create', target: 'deal' as const },
         { label: 'Create Task', permission: 'task.create', target: 'task' as const },
+        { label: 'Create Case', permission: 'case.create', target: 'case' as const },
         { label: 'Schedule Call', permission: 'activity.create', target: 'call' as const },
         { label: 'Schedule Meeting', permission: 'activity.create', target: 'meeting' as const },
         { label: 'Create Follow-up', permission: 'activity.create', target: 'follow-up' as const },
@@ -212,6 +228,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       items.push({ label: 'New Project', onClick: () => setCreateTarget('project') });
     if (user.permissions.includes('task.create'))
       items.push({ label: 'New Task', onClick: () => setCreateTarget('task') });
+    if (user.permissions.includes('case.create'))
+      items.push({ label: 'New Case', onClick: () => setCreateTarget('case') });
     if (user.permissions.includes('activity.create')) {
       items.push({ label: 'Schedule Call', onClick: () => setCreateTarget('call') });
       items.push({ label: 'Schedule Meeting', onClick: () => setCreateTarget('meeting') });
@@ -457,6 +475,18 @@ export function AppShell({ children }: { children: ReactNode }) {
           trigger={
             <button className="visually-hidden" type="button">
               New task
+            </button>
+          }
+        />
+      ) : null}
+      {user.permissions.includes('case.create') ? (
+        <CaseCreateSheet
+          open={createTarget === 'case'}
+          onOpenChange={(open) => setCreateTarget(open ? 'case' : null)}
+          onCreated={(record) => router.push(`/app/cases/${record.id}`)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              New case
             </button>
           }
         />

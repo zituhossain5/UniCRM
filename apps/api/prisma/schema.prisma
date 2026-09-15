@@ -209,6 +209,34 @@ enum NotificationType {
   INBOX_ASSIGNED
   INBOX_DUE
   ACTIVITY_REMINDER
+  CASE_ASSIGNED
+  CASE_DUE
+  CASE_REOPENED
+}
+
+enum CustomerCaseStatus {
+  OPEN
+  IN_PROGRESS
+  WAITING_FOR_CUSTOMER
+  WAITING_INTERNAL
+  RESOLVED
+  CLOSED
+}
+
+enum CustomerCasePriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
+enum CustomerCaseType {
+  GENERAL_INQUIRY
+  TECHNICAL_ISSUE
+  SERVICE_REQUEST
+  BILLING
+  COMPLAINT
+  OTHER
 }
 
 enum ScheduledActivityType {
@@ -362,6 +390,7 @@ enum AutomationEntityType {
   TASK
   QUOTATION
   PAYMENT
+  CASE
 }
 
 enum AutomationTriggerType {
@@ -381,6 +410,11 @@ enum AutomationTriggerType {
   QUOTATION_CREATED
   QUOTATION_STATUS_CHANGED
   PAYMENT_CREATED
+  CASE_CREATED
+  CASE_ASSIGNED
+  CASE_STATUS_CHANGED
+  CASE_PRIORITY_CHANGED
+  CASE_RESOLVED
 }
 
 enum AutomationRunStatus {
@@ -453,6 +487,9 @@ model Organization {
   catalogCategories      CatalogCategory[]
   catalogItems           CatalogItem[]
   dealItems              DealItem[]
+  caseCounter            CustomerCaseNumberCounter?
+  customerCases          CustomerCase[]
+  caseComments           CustomerCaseComment[]
 
   @@map("organizations")
 }
@@ -511,6 +548,9 @@ model User {
   scheduledActivitiesOwned   ScheduledActivity[]  @relation("ScheduledActivityOwner")
   scheduledActivitiesCreated ScheduledActivity[]  @relation("ScheduledActivityCreator")
   catalogItemsCreated        CatalogItem[]        @relation("CatalogItemCreator")
+  customerCasesAssigned      CustomerCase[]        @relation("CustomerCaseAssignee")
+  customerCasesCreated       CustomerCase[]        @relation("CustomerCaseCreator")
+  customerCaseComments       CustomerCaseComment[] @relation("CustomerCaseCommentAuthor")
 
   @@index([organizationId, status])
   @@map("users")
@@ -672,6 +712,7 @@ model Company {
   projects       Project[]
   quotations     Quotation[]
   payments       Payment[]
+  customerCases  CustomerCase[]
 
   @@index([organizationId, status, createdAt])
   @@index([organizationId, archivedAt, createdAt])
@@ -703,6 +744,7 @@ model Contact {
   leads           Lead[]
   deals           Deal[]
   quotations      Quotation[]
+  customerCases   CustomerCase[]
 
   @@unique([companyId], map: "contacts_one_primary_per_company", where: raw("\"is_primary\" = true AND \"archived_at\" IS NULL"))
   @@index([organizationId, companyId, archivedAt])
@@ -793,6 +835,7 @@ model Lead {
   project         Project?
   quotations      Quotation[]
   convertedDeal   Deal?
+  customerCases   CustomerCase[]
 
   @@index([organizationId, stageId, archivedAt])
   @@index([organizationId, ownerId, archivedAt])
@@ -839,6 +882,7 @@ model Deal {
   quotations        Quotation[]
   project           Project?
   items             DealItem[]
+  customerCases     CustomerCase[]
 
   @@index([organizationId, stageId, archivedAt])
   @@index([organizationId, ownerId, archivedAt])
@@ -1064,6 +1108,7 @@ model EmailThread {
   messages            EmailMessage[]
   notes               ConversationNote[]
   events              ConversationEvent[]
+  sourceCases         CustomerCase[]
 
   @@index([organizationId, mailboxConnectionId, lastMessageAt])
   @@index([organizationId, relatedEntityType, relatedEntityId, lastMessageAt])
@@ -1184,6 +1229,7 @@ model Task {
   id               String        @id @default(uuid()) @db.Uuid
   organizationId   String        @map("organization_id") @db.Uuid
   projectId        String?       @map("project_id") @db.Uuid
+  caseId           String?       @map("case_id") @db.Uuid
   title            String
   description      String?
   assigneeId       String?       @map("assignee_id") @db.Uuid
@@ -1200,6 +1246,7 @@ model Task {
   archivedAt       DateTime?     @map("archived_at")
   organization     Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project          Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  customerCase     CustomerCase? @relation(fields: [caseId], references: [id], onDelete: SetNull)
   assignee         User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   reporter         User          @relation("TaskReporter", fields: [reporterId], references: [id], onDelete: Restrict)
   createdBy        User          @relation("TaskCreator", fields: [createdById], references: [id], onDelete: Restrict)
@@ -1207,6 +1254,7 @@ model Task {
   attachments      Attachment[]
 
   @@index([organizationId, projectId, archivedAt])
+  @@index([organizationId, caseId, archivedAt])
   @@index([organizationId, assigneeId, status, dueDate])
   @@index([organizationId, status, dueDate])
   @@index([organizationId, priority, archivedAt])
@@ -1235,6 +1283,7 @@ model Attachment {
   organizationId String       @map("organization_id") @db.Uuid
   projectId      String?      @map("project_id") @db.Uuid
   taskId         String?      @map("task_id") @db.Uuid
+  caseId         String?      @map("case_id") @db.Uuid
   fileName       String       @map("file_name")
   mimeType       String       @map("mime_type")
   size           Int
@@ -1244,11 +1293,83 @@ model Attachment {
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   project        Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
   task           Task?        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  customerCase   CustomerCase? @relation(fields: [caseId], references: [id], onDelete: Cascade)
   uploadedBy     User         @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
 
   @@index([organizationId, projectId, createdAt])
   @@index([organizationId, taskId, createdAt])
+  @@index([organizationId, caseId, createdAt])
   @@map("attachments")
+}
+
+model CustomerCaseNumberCounter {
+  organizationId String       @id @map("organization_id") @db.Uuid
+  nextNumber     Int          @default(1) @map("next_number")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("customer_case_number_counters")
+}
+
+model CustomerCase {
+  id             String               @id @default(uuid()) @db.Uuid
+  organizationId String               @map("organization_id") @db.Uuid
+  caseNumber     String               @map("case_number") @db.VarChar(32)
+  title          String               @db.VarChar(220)
+  description    String?              @db.Text
+  type           CustomerCaseType     @default(GENERAL_INQUIRY)
+  status         CustomerCaseStatus   @default(OPEN)
+  priority       CustomerCasePriority @default(NORMAL)
+  contactId      String?              @map("contact_id") @db.Uuid
+  companyId      String?              @map("company_id") @db.Uuid
+  leadId         String?              @map("lead_id") @db.Uuid
+  dealId         String?              @map("deal_id") @db.Uuid
+  sourceThreadId String?              @map("source_thread_id") @db.Uuid
+  assignedUserId String?              @map("assigned_user_id") @db.Uuid
+  dueAt          DateTime?            @map("due_at")
+  resolvedAt     DateTime?            @map("resolved_at")
+  closedAt       DateTime?            @map("closed_at")
+  createdById    String               @map("created_by_id") @db.Uuid
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  archivedAt     DateTime?            @map("archived_at")
+  organization   Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  contact        Contact?             @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  company        Company?             @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  lead           Lead?                @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  deal           Deal?                @relation(fields: [dealId], references: [id], onDelete: SetNull)
+  sourceThread   EmailThread?         @relation(fields: [sourceThreadId], references: [id], onDelete: SetNull)
+  assignedUser   User?                @relation("CustomerCaseAssignee", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdBy      User                 @relation("CustomerCaseCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  comments       CustomerCaseComment[]
+  tasks          Task[]
+  attachments    Attachment[]
+
+  @@unique([organizationId, caseNumber])
+  @@index([organizationId, status, priority, updatedAt])
+  @@index([organizationId, assignedUserId, status, dueAt])
+  @@index([organizationId, contactId, archivedAt])
+  @@index([organizationId, companyId, archivedAt])
+  @@index([organizationId, leadId, archivedAt])
+  @@index([organizationId, dealId, archivedAt])
+  @@index([organizationId, sourceThreadId])
+  @@map("customer_cases")
+}
+
+model CustomerCaseComment {
+  id             String       @id @default(uuid()) @db.Uuid
+  organizationId String       @map("organization_id") @db.Uuid
+  caseId         String       @map("case_id") @db.Uuid
+  authorUserId   String       @map("author_user_id") @db.Uuid
+  content        String       @db.Text
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  customerCase   CustomerCase @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  author         User         @relation("CustomerCaseCommentAuthor", fields: [authorUserId], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, caseId, createdAt])
+  @@map("customer_case_comments")
 }
 
 model QuotationNumberCounter {

@@ -42,6 +42,7 @@ import { DealsModule } from './deals/deals.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { ForecastModule } from './forecast/forecast.module';
 import { CatalogModule } from './catalog/catalog.module';
+import { CasesModule } from './cases/cases.module';
 
 @Module({
   imports: [
@@ -74,6 +75,7 @@ import { CatalogModule } from './catalog/catalog.module';
     DealsModule,
     ForecastModule,
     CatalogModule,
+    CasesModule,
     TasksModule,
     ProjectsModule,
     AttachmentsModule,

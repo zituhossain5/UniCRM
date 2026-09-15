@@ -58,6 +58,13 @@ const triggers: Record<AutomationEntityType, AutomationTriggerType[]> = {
   TASK: ['TASK_CREATED', 'TASK_STATUS_CHANGED', 'TASK_OVERDUE'],
   QUOTATION: ['QUOTATION_CREATED', 'QUOTATION_STATUS_CHANGED'],
   PAYMENT: ['PAYMENT_CREATED'],
+  CASE: [
+    'CASE_CREATED',
+    'CASE_ASSIGNED',
+    'CASE_STATUS_CHANGED',
+    'CASE_PRIORITY_CHANGED',
+    'CASE_RESOLVED',
+  ],
 };
 const fields: Record<AutomationEntityType, string[]> = {
   LEAD: ['stageId', 'ownerId', 'priority', 'tagIds', 'pipelineId', 'estimatedValue', 'customField'],
@@ -66,6 +73,7 @@ const fields: Record<AutomationEntityType, string[]> = {
   TASK: ['status', 'ownerId', 'priority'],
   QUOTATION: ['status', 'ownerId', 'amount'],
   PAYMENT: ['ownerId', 'amount'],
+  CASE: ['status', 'ownerId', 'priority'],
 };
 const actionTypes = [
   'CREATE_TASK',
@@ -79,7 +87,7 @@ const actionTypes = [
   'TRIGGER_WEBHOOK',
   'SEND_EMAIL',
 ];
-const priorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
+const workPriorities = ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 const emptyReferences: AutomationReferences = {
   users: [],
   tags: [],
@@ -132,10 +140,24 @@ function userOptions(references: AutomationReferences) {
   }));
 }
 function statusValues(entityType: AutomationEntityType) {
+  if (entityType === 'CASE')
+    return [
+      'OPEN',
+      'IN_PROGRESS',
+      'WAITING_FOR_CUSTOMER',
+      'WAITING_INTERNAL',
+      'RESOLVED',
+      'CLOSED',
+    ];
   if (entityType === 'PROJECT')
     return ['PLANNED', 'IN_PROGRESS', 'ON_HOLD', 'IN_REVIEW', 'COMPLETED', 'CANCELLED'];
   if (entityType === 'TASK') return ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'COMPLETED', 'BLOCKED'];
   return ['DRAFT', 'SENT', 'ACCEPTED', 'REJECTED', 'EXPIRED'];
+}
+function priorityValues(entityType: AutomationEntityType) {
+  return entityType === 'CASE'
+    ? ['LOW', 'NORMAL', 'HIGH', 'URGENT']
+    : ['LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 }
 function blankCondition(entityType: AutomationEntityType): AutomationCondition {
   return { field: fields[entityType][0]!, operator: 'EQUALS', value: '' };
@@ -490,7 +512,7 @@ function ConditionValue({
   if (condition.field === 'tagIds') choices = referenceOptions(references.tags);
   if (condition.field === 'pipelineId') choices = referenceOptions(references.pipelines);
   if (condition.field === 'stageId') choices = referenceOptions(stages);
-  if (condition.field === 'priority') choices = options(priorities);
+  if (condition.field === 'priority') choices = options(priorityValues(entityType));
   if (condition.field === 'status') choices = options(statusValues(entityType));
   if (customField?.fieldType === 'BOOLEAN')
     choices = [
@@ -627,11 +649,13 @@ function OwnerSelect({
 
 function ActionConfiguration({
   action,
+  entityType,
   index,
   references,
   update,
 }: {
   action: AutomationAction;
+  entityType: AutomationEntityType;
   index: number;
   references: AutomationReferences;
   update: (patch: Partial<AutomationAction>) => void;
@@ -655,7 +679,7 @@ function ActionConfiguration({
       <AutomationSelect
         label={`Action ${index + 1} priority`}
         onValueChange={(priority) => update({ priority })}
-        options={options(priorities)}
+        options={options(priorityValues(entityType))}
         value={action.priority ?? 'HIGH'}
       />
     );
@@ -684,7 +708,9 @@ function ActionConfiguration({
           onValueChange={(recipientSource) =>
             update({ recipientSource: recipientSource as AutomationAction['recipientSource'] })
           }
-          options={options(['LEAD_EMAIL', 'PRIMARY_CONTACT'])}
+          options={options(
+            entityType === 'CASE' ? ['CONTACT_EMAIL'] : ['LEAD_EMAIL', 'PRIMARY_CONTACT'],
+          )}
           placeholder="Select recipient"
           value={action.recipientSource ?? null}
         />
@@ -759,7 +785,7 @@ function ActionConfiguration({
         <AutomationSelect
           label={`Action ${index + 1} priority`}
           onValueChange={(priority) => update({ priority })}
-          options={options(priorities)}
+          options={options(workPriorities)}
           value={action.priority ?? 'MEDIUM'}
         />
         <OwnerSelect action={action} index={index} references={references} update={update} />
@@ -780,12 +806,14 @@ function ActionConfiguration({
 
 function ActionRow({
   action,
+  entityType,
   index,
   onRemove,
   onUpdate,
   references,
 }: {
   action: AutomationAction;
+  entityType: AutomationEntityType;
   index: number;
   onRemove: () => void;
   onUpdate: (action: AutomationAction) => void;
@@ -801,6 +829,7 @@ function ActionRow({
       />
       <ActionConfiguration
         action={action}
+        entityType={entityType}
         index={index}
         references={references}
         update={(patch) => onUpdate({ ...action, ...patch })}
@@ -1041,6 +1070,7 @@ function AutomationVisualBuilder({
           {selectedNode?.data.nodeType === 'action' ? (
             <ActionRow
               action={selectedAction}
+              entityType={entityType}
               index={selectedIndex}
               onRemove={deleteSelectedNode}
               onUpdate={(action) => updateSelectedNode({ action })}
@@ -1576,6 +1606,7 @@ export function AutomationsSettings({
                 {actions.map((action, index) => (
                   <ActionRow
                     action={action}
+                    entityType={entityType}
                     index={index}
                     key={index}
                     onRemove={() =>
