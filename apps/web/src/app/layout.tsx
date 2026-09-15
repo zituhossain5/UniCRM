@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { Providers } from '@/components/providers';
 import '@xyflow/react/dist/style.css';
+import 'react-big-calendar/lib/css/react-big-calendar.css';
 import './globals.css';
 
 export const metadata: Metadata = {

@@ -4,6 +4,7 @@ import { PERMISSIONS } from '../auth/auth.constants';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { addUtcDays, utcToday } from '../common/date-range';
 import { PrismaService } from '../database/prisma.service';
+import { dayBounds } from '../activities/activities.service';
 
 const incomplete = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'BLOCKED'] as const;
 
@@ -13,6 +14,11 @@ export class DashboardService {
 
   async summary(principal: AuthenticatedPrincipal) {
     const organizationId = principal.organizationId;
+    const organization = await this.prisma.organization.findUniqueOrThrow({
+      where: { id: organizationId },
+      select: { timezone: true },
+    });
+    const zonedToday = dayBounds(new Date(), organization.timezone);
     const today = utcToday();
     const tomorrow = addUtcDays(today, 1);
     const inSevenDays = addUtcDays(today, 8);
@@ -23,8 +29,20 @@ export class DashboardService {
     const leadScope = organizationWide ? {} : { ownerId: principal.userId };
     const taskScope = organizationWide ? {} : { assigneeId: principal.userId };
     const followUpScope = organizationWide ? {} : { assignedToId: principal.userId };
+    const activityScope = organizationWide ? {} : { ownerId: principal.userId };
 
-    const [openLeads, activeProjects, dueToday, overdue, followUps, balances] = await Promise.all([
+    const [
+      openLeads,
+      activeProjects,
+      dueToday,
+      overdue,
+      followUps,
+      balances,
+      todaysActivities,
+      upcomingMeetings,
+      overdueScheduledFollowUps,
+      overdueLegacyFollowUps,
+    ] = await Promise.all([
       can(PERMISSIONS.leadRead)
         ? this.prisma.lead.count({
             where: {
@@ -79,6 +97,48 @@ export class DashboardService {
       can(PERMISSIONS.paymentRead)
         ? this.outstandingByCurrency(organizationId)
         : Promise.resolve(null),
+      can(PERMISSIONS.activityRead)
+        ? this.prisma.scheduledActivity.count({
+            where: {
+              organizationId,
+              status: 'PLANNED',
+              startAt: { gte: zonedToday.start, lt: zonedToday.end },
+              ...activityScope,
+            },
+          })
+        : Promise.resolve(null),
+      can(PERMISSIONS.activityRead)
+        ? this.prisma.scheduledActivity.count({
+            where: {
+              organizationId,
+              type: 'MEETING',
+              status: 'PLANNED',
+              startAt: { gte: zonedToday.end, lt: inSevenDays },
+              ...(organizationWide ? {} : { ownerId: principal.userId }),
+            },
+          })
+        : Promise.resolve(null),
+      can(PERMISSIONS.activityRead)
+        ? this.prisma.scheduledActivity.count({
+            where: {
+              organizationId,
+              type: 'FOLLOW_UP',
+              status: 'PLANNED',
+              startAt: { lt: new Date() },
+              ...(organizationWide ? {} : { ownerId: principal.userId }),
+            },
+          })
+        : Promise.resolve(null),
+      can(PERMISSIONS.activityRead)
+        ? this.prisma.followUp.count({
+            where: {
+              organizationId,
+              status: 'PENDING',
+              dueAt: { lt: new Date() },
+              ...followUpScope,
+            },
+          })
+        : Promise.resolve(null),
     ]);
 
     return {
@@ -89,6 +149,12 @@ export class DashboardService {
         overdueTasks: overdue,
         upcomingFollowUps: followUps,
         outstandingBalances: balances,
+        todaysActivities,
+        upcomingMeetings,
+        overdueFollowUps:
+          overdueScheduledFollowUps === null || overdueLegacyFollowUps === null
+            ? null
+            : overdueScheduledFollowUps + overdueLegacyFollowUps,
       },
       meta: { dateStrategy: 'UTC date-only boundaries', generatedAt: new Date().toISOString() },
     };

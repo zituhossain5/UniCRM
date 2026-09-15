@@ -31,10 +31,12 @@ import {
   Sheet,
   Textarea,
 } from '@unicrm/ui';
-import { Archive, ArrowLeft, BriefcaseBusiness, FileText } from 'lucide-react';
+import { Archive, ArrowLeft, BriefcaseBusiness, CalendarClock, FileText } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
+import { ActivitySheet } from '@/components/activities/activity-sheet';
+import { RelatedActivities } from '@/components/activities/related-activities';
 
 const EDIT_FORM_ID = 'edit-deal-form';
 
@@ -47,6 +49,7 @@ export function DealDetail({ id }: { id: string }) {
   const [contacts, setContacts] = useState<ContactRecord[]>([]);
   const [users, setUsers] = useState<PersonRef[]>([]);
   const [editOpen, setEditOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const configuration = useRecordConfiguration('DEAL');
@@ -145,6 +148,19 @@ export function DealDetail({ id }: { id: string }) {
         description={deal.company.name}
         actions={
           <div className="record-actions">
+            {current.permissions.includes('activity.create') ? (
+              <ActivitySheet
+                onOpenChange={setScheduleOpen}
+                onSaved={() => void load()}
+                open={scheduleOpen}
+                related={{ type: 'DEAL', id: deal.id, name: deal.name }}
+                trigger={
+                  <Button variant="secondary">
+                    <CalendarClock size={15} /> Schedule
+                  </Button>
+                }
+              />
+            ) : null}
             {current.permissions.includes('quotation.create') ? (
               <Link
                 className="ui-button ui-button--secondary"
@@ -365,6 +381,7 @@ export function DealDetail({ id }: { id: string }) {
           ))}
         </section>
       ) : null}
+      <RelatedActivities entityId={deal.id} entityType="DEAL" />
       <section className="record-section">
         <h2>Activity</h2>
         {deal.activities?.length ? (

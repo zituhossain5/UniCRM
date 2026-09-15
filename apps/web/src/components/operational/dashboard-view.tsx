@@ -94,6 +94,24 @@ export function DashboardView() {
       href: '/app/leads?view=followUpDue',
       icon: ListChecks,
     },
+    {
+      label: "Today's activities",
+      value: data.todaysActivities,
+      href: '/app/activities?view=today',
+      icon: CalendarClock,
+    },
+    {
+      label: 'Upcoming meetings',
+      value: data.upcomingMeetings,
+      href: '/app/activities?view=upcoming&type=MEETING',
+      icon: UsersRound,
+    },
+    {
+      label: 'Overdue follow-ups',
+      value: data.overdueFollowUps,
+      href: '/app/activities?view=overdue&type=FOLLOW_UP',
+      icon: AlertTriangle,
+    },
   ].filter((metric) => metric.value !== null);
   return (
     <section className="operational-page">

@@ -27,10 +27,11 @@ import {
   Sheet,
   Textarea,
 } from '@unicrm/ui';
-import { Archive, ArrowLeft, ExternalLink, Pencil, Plus } from 'lucide-react';
+import { Archive, ArrowLeft, CalendarClock, ExternalLink, Pencil, Plus } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { RecordEmail } from './record-email';
+import { ActivitySheet } from '@/components/activities/activity-sheet';
 
 const EDIT_COMPANY_FORM_ID = 'edit-company-form';
 
@@ -40,6 +41,7 @@ export function CompanyDetail({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const configuration = useRecordConfiguration('COMPANY');
   const load = useCallback(async () => {
     try {
@@ -107,8 +109,22 @@ export function CompanyDetail({ id }: { id: string }) {
             current.permissions.includes('quotation.create') ||
             current.permissions.includes('payment.create') ||
             current.permissions.includes('email.read') ||
-            current.permissions.includes('email.send')) ? (
+            current.permissions.includes('email.send') ||
+            current.permissions.includes('activity.create')) ? (
             <div className="record-actions">
+              {current.permissions.includes('activity.create') ? (
+                <ActivitySheet
+                  onOpenChange={setScheduleOpen}
+                  onSaved={() => void load()}
+                  open={scheduleOpen}
+                  related={{ type: 'COMPANY', id: company.id, name: company.name }}
+                  trigger={
+                    <Button variant="secondary">
+                      <CalendarClock size={15} /> Schedule
+                    </Button>
+                  }
+                />
+              ) : null}
               <RecordEmail
                 entityId={company.id}
                 entityType="COMPANY"

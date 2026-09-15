@@ -2429,6 +2429,547 @@ kbd {
   }
 }
 
+.activity-header-actions,
+.activity-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.activity-toolbar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) repeat(3, minmax(140px, 170px)) 150px 150px;
+}
+.activity-toolbar .crm-search {
+  width: 100%;
+}
+.activity-filter {
+  display: block;
+  min-width: 0;
+}
+.activity-filter .ui-field-label {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+.activity-filter .ui-input,
+.activity-filter .ui-select-trigger {
+  min-width: 0;
+  min-height: 36px;
+}
+.activity-list {
+  min-width: 0;
+}
+.activity-table-shell {
+  min-width: 0;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+.activity-table-shell:focus-visible {
+  outline-offset: 2px;
+}
+.activity-table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+.activity-column-main {
+  width: 31%;
+}
+.activity-column-type {
+  width: 12%;
+}
+.activity-column-when {
+  width: 15%;
+}
+.activity-column-related {
+  width: 20%;
+}
+.activity-column-owner {
+  width: 12%;
+}
+.activity-column-status {
+  width: 10%;
+}
+.activity-table th,
+.activity-table td {
+  min-width: 0;
+  padding: 12px 14px;
+  text-align: left;
+  vertical-align: middle;
+}
+.activity-table th {
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-subtle);
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+.activity-table td {
+  border-bottom: 1px solid var(--border);
+  color: var(--subtle-foreground);
+  font-size: 13px;
+}
+.activity-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.activity-table-row {
+  cursor: pointer;
+  transition: background-color 140ms ease;
+}
+.activity-table-row:hover,
+.activity-table-row:focus-visible {
+  background: var(--surface-subtle);
+}
+.activity-table-row:focus-visible {
+  outline-offset: -2px;
+}
+.activity-title,
+.activity-description,
+.activity-related-name,
+.activity-owner > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.activity-title {
+  display: -webkit-box;
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.activity-description {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+.activity-type-label,
+.activity-owner,
+.activity-when {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+.activity-type-label {
+  overflow: hidden;
+  gap: 6px;
+  color: var(--subtle-foreground);
+  text-overflow: ellipsis;
+}
+.activity-type-label svg {
+  flex: none;
+  color: var(--muted-foreground);
+}
+.activity-when {
+  overflow: hidden;
+  color: var(--subtle-foreground);
+  text-overflow: ellipsis;
+}
+.activity-related-name {
+  display: -webkit-box;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.activity-related-link {
+  color: var(--foreground);
+  font-weight: 550;
+}
+.activity-related-link:hover {
+  color: var(--primary-text);
+  text-decoration: underline;
+}
+.activity-owner {
+  gap: 7px;
+}
+.activity-owner .ui-avatar {
+  flex: none;
+}
+.activity-owner > span:last-child {
+  display: block;
+  white-space: nowrap;
+}
+.activity-table td:last-child .ui-badge {
+  max-width: 100%;
+  white-space: nowrap;
+}
+.activity-mobile-list {
+  display: none;
+}
+.activity-timezone {
+  align-items: center;
+  color: var(--muted-foreground);
+  display: flex;
+  font-size: 12px;
+  gap: 6px;
+  margin: -4px 0 4px;
+}
+.activity-related-context {
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  margin: 0;
+  padding: 10px 12px;
+}
+.activity-sheet {
+  width: min(100vw, 500px);
+}
+.activity-form {
+  gap: 16px;
+}
+.activity-form-field,
+.activity-form .form-grid.two-columns {
+  min-width: 0;
+}
+.activity-form-field {
+  display: grid;
+  gap: 7px;
+}
+.activity-form-field .ui-field-label {
+  margin: 0;
+}
+.activity-form .form-grid.two-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.activity-form .ui-input,
+.activity-form .ui-select-trigger {
+  min-height: 38px;
+}
+.activity-form .ui-textarea {
+  min-height: 112px;
+}
+.activity-detail dl {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 20px;
+}
+.activity-detail dl > div {
+  display: grid;
+  gap: 4px;
+}
+.activity-detail dt {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.activity-detail dd {
+  margin: 0;
+}
+.activity-detail-actions {
+  border-top: 1px solid var(--border);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.related-activities {
+  display: grid;
+  gap: 24px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.related-activities h2 {
+  margin-top: 0;
+}
+.related-activities ul {
+  display: grid;
+  gap: 8px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.related-activities li {
+  align-items: center;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  padding-top: 8px;
+}
+.related-activities li span {
+  display: grid;
+  gap: 2px;
+}
+.related-activities li small {
+  color: var(--muted-foreground);
+}
+.calendar-shell {
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--border) 82%, transparent);
+  border-radius: var(--radius-lg);
+  min-width: 0;
+  overflow: hidden;
+  padding: 14px;
+}
+.calendar-page {
+  gap: 22px;
+}
+.calendar-shell .rbc-calendar {
+  color: var(--foreground);
+  font: inherit;
+}
+.calendar-toolbar {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.calendar-toolbar-group,
+.calendar-view-switch {
+  display: flex;
+  align-items: center;
+}
+.calendar-toolbar-group {
+  gap: 6px;
+}
+.calendar-toolbar-group .ui-button,
+.calendar-toolbar-group .ui-icon-button,
+.calendar-view-switch .ui-button {
+  min-height: 34px;
+  height: 34px;
+}
+.calendar-toolbar-label {
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 15px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.calendar-view-switch {
+  justify-self: end;
+}
+.calendar-view-switch .ui-button {
+  border-radius: 0;
+  margin-left: -1px;
+}
+.calendar-view-switch .ui-button:first-child {
+  border-radius: var(--radius-sm) 0 0 var(--radius-sm);
+  margin-left: 0;
+}
+.calendar-view-switch .ui-button:last-child {
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+}
+.calendar-view-switch .ui-button.is-active {
+  position: relative;
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus) 24%, transparent);
+  color: var(--primary-text);
+}
+.calendar-shell .rbc-header,
+.calendar-shell .rbc-month-view,
+.calendar-shell .rbc-time-view,
+.calendar-shell .rbc-agenda-view table,
+.calendar-shell .rbc-day-bg,
+.calendar-shell .rbc-time-content,
+.calendar-shell .rbc-timeslot-group,
+.calendar-shell .rbc-time-header-content {
+  border-color: color-mix(in srgb, var(--border) 72%, transparent);
+}
+.calendar-shell .rbc-off-range-bg,
+.calendar-shell .rbc-today {
+  background: var(--surface-subtle);
+}
+.calendar-shell .calendar-event {
+  min-height: 23px;
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: var(--surface-subtle);
+  color: var(--subtle-foreground);
+  font-size: 12px;
+}
+.calendar-shell .calendar-event--call {
+  border-color: color-mix(in srgb, var(--primary) 34%, transparent);
+  background: var(--primary-soft);
+  color: var(--primary-text);
+}
+.calendar-shell .calendar-event--meeting {
+  border-color: var(--border-strong);
+  background: color-mix(in srgb, var(--primary) 7%, var(--surface-subtle));
+  color: var(--foreground);
+}
+.calendar-shell .calendar-event--follow-up {
+  border-color: color-mix(in srgb, var(--warning) 30%, transparent);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.calendar-shell .calendar-event--project-deadline {
+  border-color: color-mix(in srgb, var(--danger) 28%, transparent);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+.calendar-shell .calendar-event--task,
+.calendar-shell .calendar-event--other {
+  border-color: var(--border);
+  background: var(--surface-subtle);
+  color: var(--subtle-foreground);
+}
+.calendar-event-content {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 5px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.calendar-event-content svg {
+  flex: none;
+}
+.calendar-event-content time {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+.calendar-event-content > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.calendar-shell .rbc-row-segment {
+  padding: 0 3px 3px;
+}
+.calendar-shell .rbc-event:focus {
+  outline: 2px solid var(--focus);
+  outline-offset: 1px;
+}
+
+@media (max-width: 1100px) {
+  .activity-toolbar {
+    grid-template-columns: minmax(220px, 1fr) repeat(2, minmax(140px, 1fr));
+  }
+  .activity-table {
+    min-width: 720px;
+  }
+  .activity-table th,
+  .activity-table td {
+    padding-inline: 8px;
+  }
+  .activity-table td:last-child .ui-badge {
+    padding-inline: 6px;
+    font-size: 11px;
+  }
+  .calendar-toolbar {
+    grid-template-columns: 1fr auto;
+  }
+  .calendar-toolbar-label {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .calendar-toolbar-group,
+  .calendar-view-switch {
+    grid-row: 2;
+  }
+}
+@media (max-width: 700px) {
+  .activity-toolbar,
+  .related-activities {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .calendar-shell {
+    padding: 8px;
+  }
+  .calendar-shell .rbc-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .calendar-toolbar {
+    display: flex;
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .calendar-toolbar-label {
+    order: -1;
+  }
+  .calendar-toolbar-group,
+  .calendar-view-switch {
+    justify-content: center;
+  }
+  .calendar-view-switch {
+    overflow-x: auto;
+  }
+  .activity-form .form-grid.two-columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .calendar-shell .rbc-calendar {
+    min-width: 680px;
+  }
+  .calendar-shell {
+    overflow-x: auto;
+  }
+  .activity-table-shell {
+    display: none;
+  }
+  .activity-mobile-list {
+    display: grid;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+  }
+  .activity-mobile-row {
+    display: grid;
+    min-width: 0;
+    gap: 5px;
+    padding: 13px 14px;
+    cursor: pointer;
+  }
+  .activity-mobile-row + .activity-mobile-row {
+    border-top: 1px solid var(--border);
+  }
+  .activity-mobile-row:hover,
+  .activity-mobile-row:focus-visible {
+    background: var(--surface-subtle);
+  }
+  .activity-mobile-row .activity-title {
+    -webkit-line-clamp: 2;
+  }
+  .activity-mobile-row .activity-description,
+  .activity-mobile-row .activity-related-name {
+    white-space: nowrap;
+    -webkit-line-clamp: 1;
+  }
+  .activity-mobile-meta {
+    align-items: center;
+    display: flex;
+    min-width: 0;
+    gap: 6px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .activity-mobile-meta > span:last-child {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .activity-mobile-footer {
+    align-items: center;
+    display: flex;
+    min-width: 0;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 3px;
+  }
+  .activity-mobile-footer .activity-owner {
+    overflow: hidden;
+    font-size: 12px;
+  }
+}
+
 /* Milestone 6: operational dashboard, reports, search and notifications */
 .operational-page {
   display: grid;

@@ -4,6 +4,9 @@ export interface DashboardSummary {
   tasksDueToday: number | null;
   overdueTasks: number | null;
   upcomingFollowUps: number | null;
+  todaysActivities: number | null;
+  upcomingMeetings: number | null;
+  overdueFollowUps: number | null;
   outstandingBalances: Array<{ currency: string; amount: string }> | null;
 }
 export interface DashboardTask {

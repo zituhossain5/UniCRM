@@ -560,6 +560,37 @@ export class AutomationsService {
       });
       return this.result(index, action.type, `Created follow-up ${followUp.id}`, completedAt);
     }
+    if (action.type === 'CREATE_SCHEDULED_ACTIVITY') {
+      const startAt = this.addDays(new Date(), action.dueInDays ?? 1);
+      const reminderAt = action.reminderMinutesBefore
+        ? new Date(startAt.getTime() - action.reminderMinutesBefore * 60_000)
+        : null;
+      const activity = await this.prisma.scheduledActivity.upsert({
+        where: { automationKey: `${run.id}:${index}` },
+        create: {
+          organizationId: run.organizationId,
+          type: action.activityType ?? 'FOLLOW_UP',
+          subject: action.title ?? `Automation: ${run.automationRule.name}`,
+          description: action.notes,
+          relatedEntityType: run.entityType as 'LEAD' | 'DEAL',
+          relatedEntityId: run.entityId,
+          ownerId:
+            action.ownerId ?? (snapshot.ownerId as string | null) ?? run.automationRule.createdById,
+          startAt,
+          reminderAt,
+          priority: action.priority ?? 'MEDIUM',
+          createdById: run.automationRule.createdById,
+          automationKey: `${run.id}:${index}`,
+        },
+        update: {},
+      });
+      return this.result(
+        index,
+        action.type,
+        `Created scheduled activity ${activity.id}`,
+        completedAt,
+      );
+    }
     if (action.type === 'CREATE_TASK') {
       const projectId = this.projectId(run.entityType, run.entityId, snapshot);
       if (!projectId)
@@ -1056,6 +1087,16 @@ export class AutomationsService {
     const allowed: Record<string, string[]> = {
       CREATE_TASK: ['type', 'title', 'notes', 'ownerId', 'priority', 'dueInDays'],
       CREATE_FOLLOW_UP: ['type', 'notes', 'ownerId', 'followUpType', 'dueInDays'],
+      CREATE_SCHEDULED_ACTIVITY: [
+        'type',
+        'title',
+        'notes',
+        'ownerId',
+        'priority',
+        'activityType',
+        'dueInDays',
+        'reminderMinutesBefore',
+      ],
       ADD_TAG: ['type', 'tagId'],
       REMOVE_TAG: ['type', 'tagId'],
       ASSIGN_OWNER: ['type', 'ownerId'],
@@ -1071,6 +1112,15 @@ export class AutomationsService {
       throw new BadRequestException(`${unexpected[0]} is not valid for ${action.type}`);
     if (action.type === 'CREATE_FOLLOW_UP' && entityType !== AutomationEntityType.LEAD)
       throw new BadRequestException('Follow-ups can only be created for leads');
+    if (
+      action.type === 'CREATE_SCHEDULED_ACTIVITY' &&
+      entityType !== AutomationEntityType.LEAD &&
+      entityType !== AutomationEntityType.DEAL
+    )
+      throw new BadRequestException('Scheduled activities can only be linked to leads or deals');
+    if (action.type === 'CREATE_SCHEDULED_ACTIVITY' && action.ownerId)
+      if (!(await this.activeUser(organizationId, action.ownerId)))
+        throw new BadRequestException('Scheduled activity owner is invalid');
     if (['ADD_TAG', 'REMOVE_TAG'].includes(action.type)) {
       if (
         entityType !== AutomationEntityType.LEAD &&
@@ -1431,6 +1481,8 @@ export class AutomationsService {
       return `Change priority - ${this.valueLabel(action.priority)}`;
     if (action.type === 'CREATE_FOLLOW_UP')
       return `Create follow-up - +${action.dueInDays ?? 1} days - ${this.valueLabel(action.followUpType ?? 'CALL')} - ${action.ownerId ? await this.userValueLabel(organizationId, action.ownerId) : 'Entity owner'}`;
+    if (action.type === 'CREATE_SCHEDULED_ACTIVITY')
+      return `Create scheduled activity - ${this.valueLabel(action.activityType ?? 'FOLLOW_UP')} - +${action.dueInDays ?? 1} days`;
     if (action.type === 'CREATE_TASK')
       return `Create task - ${action.title?.trim() || 'Automation task'}`;
     if (action.type === 'CREATE_NOTIFICATION')

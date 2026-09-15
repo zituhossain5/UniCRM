@@ -37,6 +37,8 @@ export type AutomationAction = {
   recipientSource?: 'LEAD_EMAIL' | 'CONTACT_EMAIL' | 'PRIMARY_CONTACT';
   priority?: string;
   followUpType?: string;
+  activityType?: string;
+  reminderMinutesBefore?: number;
   dueInDays?: number;
 };
 

@@ -88,68 +88,79 @@ export class NotificationsService {
     const today = utcToday(now),
       tomorrow = addUtcDays(today, 1),
       dayAfter = addUtcDays(today, 2);
-    const [overdueTasks, dueSoonTasks, followUps, projects, inboxDue] = await Promise.all([
-      this.prisma.task.findMany({
-        where: {
-          archivedAt: null,
-          assigneeId: { not: null },
-          status: { not: 'COMPLETED' },
-          dueDate: { lt: today },
-        },
-        select: { id: true, organizationId: true, assigneeId: true, title: true, dueDate: true },
-      }),
-      this.prisma.task.findMany({
-        where: {
-          archivedAt: null,
-          assigneeId: { not: null },
-          status: { not: 'COMPLETED' },
-          dueDate: { gte: tomorrow, lt: dayAfter },
-        },
-        select: { id: true, organizationId: true, assigneeId: true, title: true, dueDate: true },
-      }),
-      this.prisma.followUp.findMany({
-        where: {
-          status: 'PENDING',
-          assignedToId: { not: null },
-          dueAt: { lte: addUtcDays(today, 1) },
-        },
-        select: {
-          id: true,
-          organizationId: true,
-          assignedToId: true,
-          lead: { select: { id: true, title: true } },
-        },
-      }),
-      this.prisma.project.findMany({
-        where: {
-          archivedAt: null,
-          projectManagerId: { not: null },
-          status: { in: ['PLANNED', 'IN_PROGRESS', 'IN_REVIEW'] },
-          deadline: { gte: today, lt: dayAfter },
-        },
-        select: {
-          id: true,
-          organizationId: true,
-          projectManagerId: true,
-          name: true,
-          deadline: true,
-        },
-      }),
-      this.prisma.emailThread.findMany({
-        where: {
-          assignedUserId: { not: null },
-          inboxStatus: { notIn: ['RESOLVED', 'CLOSED'] },
-          dueAt: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
-        },
-        select: {
-          id: true,
-          organizationId: true,
-          assignedUserId: true,
-          subject: true,
-          dueAt: true,
-        },
-      }),
-    ]);
+    const [overdueTasks, dueSoonTasks, followUps, projects, inboxDue, activityReminders] =
+      await Promise.all([
+        this.prisma.task.findMany({
+          where: {
+            archivedAt: null,
+            assigneeId: { not: null },
+            status: { not: 'COMPLETED' },
+            dueDate: { lt: today },
+          },
+          select: { id: true, organizationId: true, assigneeId: true, title: true, dueDate: true },
+        }),
+        this.prisma.task.findMany({
+          where: {
+            archivedAt: null,
+            assigneeId: { not: null },
+            status: { not: 'COMPLETED' },
+            dueDate: { gte: tomorrow, lt: dayAfter },
+          },
+          select: { id: true, organizationId: true, assigneeId: true, title: true, dueDate: true },
+        }),
+        this.prisma.followUp.findMany({
+          where: {
+            status: 'PENDING',
+            assignedToId: { not: null },
+            dueAt: { lte: addUtcDays(today, 1) },
+          },
+          select: {
+            id: true,
+            organizationId: true,
+            assignedToId: true,
+            lead: { select: { id: true, title: true } },
+          },
+        }),
+        this.prisma.project.findMany({
+          where: {
+            archivedAt: null,
+            projectManagerId: { not: null },
+            status: { in: ['PLANNED', 'IN_PROGRESS', 'IN_REVIEW'] },
+            deadline: { gte: today, lt: dayAfter },
+          },
+          select: {
+            id: true,
+            organizationId: true,
+            projectManagerId: true,
+            name: true,
+            deadline: true,
+          },
+        }),
+        this.prisma.emailThread.findMany({
+          where: {
+            assignedUserId: { not: null },
+            inboxStatus: { notIn: ['RESOLVED', 'CLOSED'] },
+            dueAt: { lte: new Date(now.getTime() + 24 * 60 * 60 * 1000) },
+          },
+          select: {
+            id: true,
+            organizationId: true,
+            assignedUserId: true,
+            subject: true,
+            dueAt: true,
+          },
+        }),
+        this.prisma.scheduledActivity.findMany({
+          where: { status: 'PLANNED', reminderAt: { lte: now } },
+          select: {
+            id: true,
+            organizationId: true,
+            ownerId: true,
+            subject: true,
+            reminderAt: true,
+          },
+        }),
+      ]);
     const work: Promise<unknown>[] = [];
     for (const task of overdueTasks) {
       work.push(
@@ -229,6 +240,19 @@ export class NotificationsService {
         }),
       );
     }
+    for (const activity of activityReminders)
+      work.push(
+        this.create({
+          organizationId: activity.organizationId,
+          userId: activity.ownerId,
+          type: 'ACTIVITY_REMINDER',
+          title: 'Activity reminder',
+          message: activity.subject,
+          entityType: 'SCHEDULED_ACTIVITY',
+          entityId: activity.id,
+          dedupeKey: `activity:${activity.id}:reminder:${activity.reminderAt!.toISOString()}`,
+        }),
+      );
     await Promise.all(work);
     return work.length;
   }

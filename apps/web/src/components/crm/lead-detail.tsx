@@ -51,6 +51,8 @@ import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { ProjectCreateSheet } from '@/components/work/create-sheets';
 import { RecordEmail } from './record-email';
+import { ActivitySheet } from '@/components/activities/activity-sheet';
+import { RelatedActivities } from '@/components/activities/related-activities';
 
 const EDIT_LEAD_FORM_ID = 'edit-lead-form';
 
@@ -70,6 +72,7 @@ export function LeadDetail({ id }: { id: string }) {
   const [editOpen, setEditOpen] = useState(false);
   const [projectOpen, setProjectOpen] = useState(false);
   const [convertOpen, setConvertOpen] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const [reschedule, setReschedule] = useState<FollowUp>();
   const configuration = useRecordConfiguration('LEAD');
   const load = useCallback(async () => {
@@ -217,6 +220,19 @@ export function LeadDetail({ id }: { id: string }) {
         actions={
           !lead.archivedAt ? (
             <div className="record-actions">
+              {canActivity ? (
+                <ActivitySheet
+                  onOpenChange={setScheduleOpen}
+                  onSaved={() => void load()}
+                  open={scheduleOpen}
+                  related={{ type: 'LEAD', id: lead.id, name: lead.title }}
+                  trigger={
+                    <Button variant="secondary">
+                      <CalendarClock size={15} /> Schedule
+                    </Button>
+                  }
+                />
+              ) : null}
               {!lead.convertedAt && current.permissions.includes('deal.convert') ? (
                 <Button onClick={() => setConvertOpen(true)}>
                   <Check size={15} /> Convert lead
@@ -498,6 +514,7 @@ export function LeadDetail({ id }: { id: string }) {
           </Button>
         ) : null}
       </div>
+      <RelatedActivities entityId={lead.id} entityType="LEAD" />
       <div className="record-grid">
         <section className="record-section">
           <h2>Overview</h2>

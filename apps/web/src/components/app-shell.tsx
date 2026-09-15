@@ -28,6 +28,7 @@ import {
   ChevronRight,
   CircleDollarSign,
   ClipboardList,
+  CalendarDays,
   ContactRound,
   FileText,
   LayoutDashboard,
@@ -51,6 +52,7 @@ import { apiRequest } from '@/lib/api';
 import { useQuery } from '@tanstack/react-query';
 import type { SearchResults } from '@/lib/operational-types';
 import { NotificationBellContent, UnreadBadge } from './operational/notification-center';
+import { ActivitySheet } from './activities/activity-sheet';
 
 interface NavItem {
   href: string;
@@ -89,6 +91,13 @@ const navSections: readonly NavSection[] = [
     items: [
       { href: '/app/projects', icon: ClipboardList, label: 'Projects' },
       { href: '/app/tasks', icon: ListChecks, label: 'Tasks' },
+      {
+        href: '/app/activities',
+        icon: CalendarDays,
+        label: 'Activities',
+        permission: 'activity.read',
+      },
+      { href: '/app/calendar', icon: CalendarDays, label: 'Calendar', permission: 'calendar.read' },
     ],
   },
   {
@@ -114,7 +123,8 @@ const commandItems = navSections
   .flatMap((section) => section.items)
   .concat({ href: '/app/settings', icon: Settings, label: 'Settings' });
 
-type GlobalCreateTarget = 'lead' | 'deal' | 'company' | 'contact' | 'project' | 'task';
+type GlobalCreateTarget =
+  'lead' | 'deal' | 'company' | 'contact' | 'project' | 'task' | 'call' | 'meeting' | 'follow-up';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -174,6 +184,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         { label: 'Create Project', permission: 'project.create', target: 'project' as const },
         { label: 'Create Deal', permission: 'deal.create', target: 'deal' as const },
         { label: 'Create Task', permission: 'task.create', target: 'task' as const },
+        { label: 'Schedule Call', permission: 'activity.create', target: 'call' as const },
+        { label: 'Schedule Meeting', permission: 'activity.create', target: 'meeting' as const },
+        { label: 'Create Follow-up', permission: 'activity.create', target: 'follow-up' as const },
       ].filter(
         (item) =>
           user.permissions.includes(item.permission) &&
@@ -195,6 +208,11 @@ export function AppShell({ children }: { children: ReactNode }) {
       items.push({ label: 'New Project', onClick: () => setCreateTarget('project') });
     if (user.permissions.includes('task.create'))
       items.push({ label: 'New Task', onClick: () => setCreateTarget('task') });
+    if (user.permissions.includes('activity.create')) {
+      items.push({ label: 'Schedule Call', onClick: () => setCreateTarget('call') });
+      items.push({ label: 'Schedule Meeting', onClick: () => setCreateTarget('meeting') });
+      items.push({ label: 'Create Follow-up', onClick: () => setCreateTarget('follow-up') });
+    }
     if (user.permissions.includes('quotation.create'))
       items.push({ label: 'New Quotation', onClick: () => router.push('/app/quotations/new') });
     if (user.permissions.includes('payment.create'))
@@ -425,6 +443,25 @@ export function AppShell({ children }: { children: ReactNode }) {
           trigger={
             <button className="visually-hidden" type="button">
               New task
+            </button>
+          }
+        />
+      ) : null}
+      {user.permissions.includes('activity.create') &&
+      ['call', 'meeting', 'follow-up'].includes(createTarget ?? '') ? (
+        <ActivitySheet
+          defaultType={
+            createTarget === 'meeting'
+              ? 'MEETING'
+              : createTarget === 'follow-up'
+                ? 'FOLLOW_UP'
+                : 'CALL'
+          }
+          open
+          onOpenChange={(open) => setCreateTarget(open ? createTarget : null)}
+          trigger={
+            <button className="visually-hidden" type="button">
+              Schedule activity
             </button>
           }
         />

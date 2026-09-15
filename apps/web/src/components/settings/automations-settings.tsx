@@ -70,6 +70,7 @@ const fields: Record<AutomationEntityType, string[]> = {
 const actionTypes = [
   'CREATE_TASK',
   'CREATE_FOLLOW_UP',
+  'CREATE_SCHEDULED_ACTIVITY',
   'ADD_TAG',
   'REMOVE_TAG',
   'ASSIGN_OWNER',
@@ -142,6 +143,14 @@ function blankCondition(entityType: AutomationEntityType): AutomationCondition {
 function blankAction(type = 'CREATE_NOTIFICATION'): AutomationAction {
   if (type === 'CHANGE_PRIORITY') return { type, priority: 'HIGH' };
   if (type === 'CREATE_FOLLOW_UP') return { type, dueInDays: 2, followUpType: 'CALL' };
+  if (type === 'CREATE_SCHEDULED_ACTIVITY')
+    return {
+      type,
+      dueInDays: 2,
+      activityType: 'FOLLOW_UP',
+      priority: 'MEDIUM',
+      reminderMinutesBefore: 30,
+    };
   if (type === 'CREATE_TASK') return { type, dueInDays: 1, priority: 'MEDIUM' };
   if (type === 'CREATE_NOTIFICATION') return { type, title: 'Automation notification' };
   return { type };
@@ -314,6 +323,8 @@ function actionDetail(action?: AutomationAction) {
     return action.tagId ? 'Tag selected' : 'Select tag';
   if (action.type === 'CHANGE_PRIORITY') return label(action.priority ?? 'HIGH');
   if (action.type === 'CREATE_FOLLOW_UP') return `+${action.dueInDays ?? 2} days`;
+  if (action.type === 'CREATE_SCHEDULED_ACTIVITY')
+    return `${label(action.activityType ?? 'FOLLOW_UP')} · +${action.dueInDays ?? 2} days`;
   if (action.type === 'CREATE_NOTIFICATION') return action.title ?? 'Automation notification';
   if (action.type === 'CREATE_TASK') return action.title ?? 'Automation task';
   if (action.type === 'ASSIGN_OWNER') return action.ownerId ? 'Owner selected' : 'Select owner';
@@ -698,6 +709,33 @@ function ActionConfiguration({
           options={options(['CALL', 'MEETING', 'EMAIL', 'OTHER'])}
           value={action.followUpType ?? 'CALL'}
         />
+        <OwnerSelect action={action} index={index} references={references} update={update} />
+      </div>
+    );
+  if (action.type === 'CREATE_SCHEDULED_ACTIVITY')
+    return (
+      <div className="automation-action-config automation-action-config--task">
+        <Input
+          aria-label={`Action ${index + 1} activity subject`}
+          onChange={(event) => update({ title: event.target.value || undefined })}
+          placeholder="Activity subject"
+          value={action.title ?? ''}
+        />
+        <AutomationSelect
+          label={`Action ${index + 1} activity type`}
+          onValueChange={(activityType) => update({ activityType })}
+          options={options(['CALL', 'MEETING', 'FOLLOW_UP', 'OTHER'])}
+          value={action.activityType ?? 'FOLLOW_UP'}
+        />
+        <label className="automation-compact-input">
+          <span>Due in days</span>
+          <Input
+            min="0"
+            onChange={(event) => update({ dueInDays: Number(event.target.value) })}
+            type="number"
+            value={action.dueInDays ?? 2}
+          />
+        </label>
         <OwnerSelect action={action} index={index} references={references} update={update} />
       </div>
     );

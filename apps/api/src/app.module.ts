@@ -39,6 +39,7 @@ import { IntegrationsModule } from './integrations/integrations.module';
 import { AutomationsModule } from './automations/automations.module';
 import { MailboxesModule } from './mailboxes/mailboxes.module';
 import { DealsModule } from './deals/deals.module';
+import { ActivitiesModule } from './activities/activities.module';
 
 @Module({
   imports: [
@@ -66,6 +67,7 @@ import { DealsModule } from './deals/deals.module';
     DataManagementModule,
     IntegrationsModule,
     AutomationsModule,
+    ActivitiesModule,
     LeadsModule,
     DealsModule,
     TasksModule,

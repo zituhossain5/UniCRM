@@ -208,6 +208,27 @@ enum NotificationType {
   PAYMENT_RECORDED
   INBOX_ASSIGNED
   INBOX_DUE
+  ACTIVITY_REMINDER
+}
+
+enum ScheduledActivityType {
+  CALL
+  MEETING
+  FOLLOW_UP
+  OTHER
+}
+
+enum ScheduledActivityStatus {
+  PLANNED
+  COMPLETED
+  CANCELLED
+}
+
+enum ScheduledActivityRelatedEntityType {
+  LEAD
+  DEAL
+  CONTACT
+  COMPANY
 }
 
 enum ConfigurableEntityType {
@@ -421,61 +442,64 @@ model Organization {
   emailAttachments       EmailAttachment[]
   conversationNotes      ConversationNote[]
   conversationEvents     ConversationEvent[]
+  scheduledActivities    ScheduledActivity[]
 
   @@map("organizations")
 }
 
 model User {
-  id                     String               @id @default(uuid()) @db.Uuid
-  organizationId         String               @map("organization_id") @db.Uuid
-  firstName              String               @map("first_name")
-  lastName               String               @map("last_name")
-  email                  String
-  normalizedEmail        String               @unique @map("normalized_email")
-  passwordHash           String?              @map("password_hash")
-  status                 UserStatus           @default(INVITED)
-  emailVerifiedAt        DateTime?            @map("email_verified_at")
-  lastLoginAt            DateTime?            @map("last_login_at")
-  createdAt              DateTime             @default(now()) @map("created_at")
-  updatedAt              DateTime             @updatedAt @map("updated_at")
-  organization           Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  sessions               AuthSession[]
-  userRoles              UserRole[]
-  invitationsSent        UserInvitation[]     @relation("InvitationSender")
-  passwordResetTokens    PasswordResetToken[]
-  securityEvents         SecurityEvent[]
-  companiesOwned         Company[]            @relation("CompanyOwner")
-  companiesCreated       Company[]            @relation("CompanyCreator")
-  contactsCreated        Contact[]            @relation("ContactCreator")
-  leadsOwned             Lead[]               @relation("LeadOwner")
-  leadsCreated           Lead[]               @relation("LeadCreator")
-  dealsOwned             Deal[]               @relation("DealOwner")
-  dealsCreated           Deal[]               @relation("DealCreator")
-  leadActivities         LeadActivity[]       @relation("LeadActivityCreator")
-  followUpsAssigned      FollowUp[]           @relation("FollowUpAssignee")
-  followUpsCreated       FollowUp[]           @relation("FollowUpCreator")
-  activityLogs           ActivityLog[]        @relation("ActivityLogActor")
-  projectsManaged        Project[]            @relation("ProjectManager")
-  projectsCreated        Project[]            @relation("ProjectCreator")
-  projectMemberships     ProjectMember[]
-  tasksAssigned          Task[]               @relation("TaskAssignee")
-  tasksReported          Task[]               @relation("TaskReporter")
-  tasksCreated           Task[]               @relation("TaskCreator")
-  taskComments           TaskComment[]
-  attachmentsUploaded    Attachment[]
-  quotationsCreated      Quotation[]          @relation("QuotationCreator")
-  paymentsRecorded       Payment[]            @relation("PaymentRecorder")
-  notifications          Notification[]
-  savedViews             SavedView[]
-  importJobsCreated      DataImportJob[]      @relation("ImportJobCreator")
-  exportJobsCreated      DataExportJob[]      @relation("ExportJobCreator")
-  mergeRecordsCreated    DataMergeRecord[]    @relation("MergeRecordCreator")
-  automationRulesCreated AutomationRule[]     @relation("AutomationRuleCreator")
-  emailTemplatesCreated  EmailTemplate[]      @relation("EmailTemplateCreator")
-  emailMessagesSent      EmailMessage[]       @relation("EmailMessageSender")
-  inboxThreadsAssigned   EmailThread[]        @relation("InboxThreadAssignee")
-  conversationNotes      ConversationNote[]   @relation("ConversationNoteAuthor")
-  conversationEvents     ConversationEvent[]  @relation("ConversationEventActor")
+  id                         String               @id @default(uuid()) @db.Uuid
+  organizationId             String               @map("organization_id") @db.Uuid
+  firstName                  String               @map("first_name")
+  lastName                   String               @map("last_name")
+  email                      String
+  normalizedEmail            String               @unique @map("normalized_email")
+  passwordHash               String?              @map("password_hash")
+  status                     UserStatus           @default(INVITED)
+  emailVerifiedAt            DateTime?            @map("email_verified_at")
+  lastLoginAt                DateTime?            @map("last_login_at")
+  createdAt                  DateTime             @default(now()) @map("created_at")
+  updatedAt                  DateTime             @updatedAt @map("updated_at")
+  organization               Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sessions                   AuthSession[]
+  userRoles                  UserRole[]
+  invitationsSent            UserInvitation[]     @relation("InvitationSender")
+  passwordResetTokens        PasswordResetToken[]
+  securityEvents             SecurityEvent[]
+  companiesOwned             Company[]            @relation("CompanyOwner")
+  companiesCreated           Company[]            @relation("CompanyCreator")
+  contactsCreated            Contact[]            @relation("ContactCreator")
+  leadsOwned                 Lead[]               @relation("LeadOwner")
+  leadsCreated               Lead[]               @relation("LeadCreator")
+  dealsOwned                 Deal[]               @relation("DealOwner")
+  dealsCreated               Deal[]               @relation("DealCreator")
+  leadActivities             LeadActivity[]       @relation("LeadActivityCreator")
+  followUpsAssigned          FollowUp[]           @relation("FollowUpAssignee")
+  followUpsCreated           FollowUp[]           @relation("FollowUpCreator")
+  activityLogs               ActivityLog[]        @relation("ActivityLogActor")
+  projectsManaged            Project[]            @relation("ProjectManager")
+  projectsCreated            Project[]            @relation("ProjectCreator")
+  projectMemberships         ProjectMember[]
+  tasksAssigned              Task[]               @relation("TaskAssignee")
+  tasksReported              Task[]               @relation("TaskReporter")
+  tasksCreated               Task[]               @relation("TaskCreator")
+  taskComments               TaskComment[]
+  attachmentsUploaded        Attachment[]
+  quotationsCreated          Quotation[]          @relation("QuotationCreator")
+  paymentsRecorded           Payment[]            @relation("PaymentRecorder")
+  notifications              Notification[]
+  savedViews                 SavedView[]
+  importJobsCreated          DataImportJob[]      @relation("ImportJobCreator")
+  exportJobsCreated          DataExportJob[]      @relation("ExportJobCreator")
+  mergeRecordsCreated        DataMergeRecord[]    @relation("MergeRecordCreator")
+  automationRulesCreated     AutomationRule[]     @relation("AutomationRuleCreator")
+  emailTemplatesCreated      EmailTemplate[]      @relation("EmailTemplateCreator")
+  emailMessagesSent          EmailMessage[]       @relation("EmailMessageSender")
+  inboxThreadsAssigned       EmailThread[]        @relation("InboxThreadAssignee")
+  conversationNotes          ConversationNote[]   @relation("ConversationNoteAuthor")
+  conversationEvents         ConversationEvent[]  @relation("ConversationEventActor")
+  scheduledActivitiesOwned   ScheduledActivity[]  @relation("ScheduledActivityOwner")
+  scheduledActivitiesCreated ScheduledActivity[]  @relation("ScheduledActivityCreator")
 
   @@index([organizationId, status])
   @@map("users")
@@ -873,6 +897,36 @@ model ActivityLog {
   @@index([organizationId, entityType, entityId, createdAt])
   @@index([organizationId, action, createdAt])
   @@map("activity_logs")
+}
+
+model ScheduledActivity {
+  id                String                             @id @default(uuid()) @db.Uuid
+  organizationId    String                             @map("organization_id") @db.Uuid
+  type              ScheduledActivityType
+  subject           String                             @db.VarChar(220)
+  description       String?
+  relatedEntityType ScheduledActivityRelatedEntityType @map("related_entity_type")
+  relatedEntityId   String                             @map("related_entity_id") @db.Uuid
+  ownerId           String                             @map("owner_id") @db.Uuid
+  startAt           DateTime                           @map("start_at")
+  endAt             DateTime?                          @map("end_at")
+  status            ScheduledActivityStatus            @default(PLANNED)
+  priority          WorkPriority                       @default(MEDIUM)
+  reminderAt        DateTime?                          @map("reminder_at")
+  completedAt       DateTime?                          @map("completed_at")
+  automationKey     String?                            @unique @map("automation_key") @db.VarChar(220)
+  createdById       String                             @map("created_by_id") @db.Uuid
+  createdAt         DateTime                           @default(now()) @map("created_at")
+  updatedAt         DateTime                           @updatedAt @map("updated_at")
+  organization      Organization                       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner             User                               @relation("ScheduledActivityOwner", fields: [ownerId], references: [id], onDelete: Restrict)
+  createdBy         User                               @relation("ScheduledActivityCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([organizationId, status, startAt])
+  @@index([organizationId, ownerId, status, startAt])
+  @@index([organizationId, relatedEntityType, relatedEntityId, startAt])
+  @@index([organizationId, reminderAt, status])
+  @@map("scheduled_activities")
 }
 
 model EmailTemplate {

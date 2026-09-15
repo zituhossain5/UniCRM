@@ -95,6 +95,16 @@ export class AutomationActionDto {
   @IsOptional()
   followUpType?: 'CALL' | 'MEETING' | 'EMAIL' | 'OTHER';
 
+  @IsIn(['CALL', 'MEETING', 'FOLLOW_UP', 'OTHER'])
+  @IsOptional()
+  activityType?: 'CALL' | 'MEETING' | 'FOLLOW_UP' | 'OTHER';
+
+  @IsInt()
+  @Min(0)
+  @Max(10080)
+  @IsOptional()
+  reminderMinutesBefore?: number;
+
   @IsInt()
   @Min(0)
   @Max(365)

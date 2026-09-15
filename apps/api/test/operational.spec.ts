@@ -23,6 +23,9 @@ describe('Milestone 6 operational services', () => {
     const taskCount = vi.fn().mockResolvedValueOnce(1).mockResolvedValueOnce(2);
     const service = new DashboardService(
       prisma({
+        organization: {
+          findUniqueOrThrow: vi.fn().mockResolvedValue({ timezone: 'UTC' }),
+        },
         lead: { count: leadCount },
         project: { count: vi.fn() },
         task: { count: taskCount },

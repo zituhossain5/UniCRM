@@ -21,11 +21,12 @@ import {
   Sheet,
   Textarea,
 } from '@unicrm/ui';
-import { Archive, ArrowLeft, Pencil } from 'lucide-react';
+import { Archive, ArrowLeft, CalendarClock, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { RecordEmail } from './record-email';
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { ActivitySheet } from '@/components/activities/activity-sheet';
 
 const EDIT_CONTACT_FORM_ID = 'edit-contact-form';
 
@@ -37,6 +38,7 @@ export function ContactDetail({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const configuration = useRecordConfiguration('CONTACT');
   const load = useCallback(async () => {
     try {
@@ -108,8 +110,26 @@ export function ContactDetail({ id }: { id: string }) {
           (current.permissions.includes('contact.update') ||
             current.permissions.includes('contact.delete') ||
             current.permissions.includes('email.read') ||
-            current.permissions.includes('email.send')) ? (
+            current.permissions.includes('email.send') ||
+            current.permissions.includes('activity.create')) ? (
             <div className="record-actions">
+              {current.permissions.includes('activity.create') ? (
+                <ActivitySheet
+                  onOpenChange={setScheduleOpen}
+                  onSaved={() => void load()}
+                  open={scheduleOpen}
+                  related={{
+                    type: 'CONTACT',
+                    id: contact.id,
+                    name: `${contact.firstName} ${contact.lastName}`,
+                  }}
+                  trigger={
+                    <Button variant="secondary">
+                      <CalendarClock size={15} /> Schedule
+                    </Button>
+                  }
+                />
+              ) : null}
               <RecordEmail entityId={contact.id} entityType="CONTACT" />
               {current.permissions.includes('contact.update') ? (
                 <Sheet
