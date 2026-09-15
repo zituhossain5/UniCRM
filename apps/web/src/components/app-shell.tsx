@@ -42,6 +42,7 @@ import {
   Sun,
   UsersRound,
   Handshake,
+  TrendingUp,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -103,6 +104,7 @@ const navSections: readonly NavSection[] = [
   {
     label: 'Sales',
     items: [
+      { href: '/app/forecast', icon: TrendingUp, label: 'Forecast', permission: 'forecast.read' },
       { href: '/app/quotations', icon: FileText, label: 'Quotations' },
       { href: '/app/payments', icon: CircleDollarSign, label: 'Payments' },
     ],

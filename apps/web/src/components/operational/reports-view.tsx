@@ -11,6 +11,8 @@ const reports = [
   ['lead-to-deal', 'Lead to deal'],
   ['deal-pipeline', 'Deal pipeline'],
   ['deal-conversion', 'Deal win rate'],
+  ['forecast-by-owner', 'Forecast by owner'],
+  ['forecast-by-stage', 'Forecast by stage'],
   ['leads-by-source', 'Leads by source'],
   ['projects-by-status', 'Projects by status'],
   ['tasks-by-status', 'Tasks by status'],
@@ -171,6 +173,40 @@ function ReportResult({ id, payload }: { id: ReportId; payload: ReportPayload })
       <Table
         columns={['Stage', id === 'deal-pipeline' ? 'Deals' : 'Leads', 'Value']}
         rows={rows.map((row) => [row.name, row.count, values(row.values)])}
+      />
+    );
+  if (id === 'forecast-by-owner')
+    return (
+      <Table
+        columns={[
+          'Owner',
+          'Open deals',
+          'Pipeline value',
+          'Weighted value',
+          'Won value',
+          'Win rate',
+        ]}
+        rows={rows.map((row) => [
+          row.id ? `${text(row.firstName)} ${text(row.lastName)}` : 'Unassigned',
+          row.openDeals,
+          money(row.pipelineValue, row.currency),
+          money(row.weightedValue, row.currency),
+          money(row.wonValue, row.currency),
+          row.winRate == null ? '—' : `${text(row.winRate)}%`,
+        ])}
+      />
+    );
+  if (id === 'forecast-by-stage')
+    return (
+      <Table
+        columns={['Pipeline', 'Stage', 'Deals', 'Total value', 'Weighted value']}
+        rows={rows.map((row) => [
+          row.pipelineName,
+          row.name,
+          row.dealCount,
+          money(row.totalValue, row.currency),
+          money(row.weightedValue, row.currency),
+        ])}
       />
     );
   if (id === 'leads-by-source')

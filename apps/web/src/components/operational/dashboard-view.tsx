@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   BriefcaseBusiness,
   CalendarClock,
   CircleDollarSign,
@@ -111,6 +112,33 @@ export function DashboardView() {
       value: data.overdueFollowUps,
       href: '/app/activities?view=overdue&type=FOLLOW_UP',
       icon: AlertTriangle,
+    },
+    {
+      label: 'Weighted pipeline',
+      value:
+        data.forecast?.currencies
+          .map((entry) => money(entry.weightedPipeline, entry.currency))
+          .join(' · ') ?? null,
+      href: '/app/forecast',
+      icon: CircleDollarSign,
+    },
+    {
+      label: 'Expected this month',
+      value:
+        data.forecast?.currencies
+          .map((entry) => money(entry.expectedThisMonth, entry.currency))
+          .join(' · ') ?? null,
+      href: '/app/forecast',
+      icon: CalendarClock,
+    },
+    {
+      label: 'Win rate',
+      value:
+        data.forecast?.winRate === null || data.forecast?.winRate === undefined
+          ? null
+          : `${data.forecast.winRate}%`,
+      href: '/app/forecast',
+      icon: BarChart3,
     },
   ].filter((metric) => metric.value !== null);
   return (

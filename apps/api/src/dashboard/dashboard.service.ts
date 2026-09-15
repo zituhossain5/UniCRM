@@ -5,12 +5,16 @@ import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { addUtcDays, utcToday } from '../common/date-range';
 import { PrismaService } from '../database/prisma.service';
 import { dayBounds } from '../activities/activities.service';
+import { ForecastService } from '../forecast/forecast.service';
 
 const incomplete = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'BLOCKED'] as const;
 
 @Injectable()
 export class DashboardService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ForecastService) private readonly forecast: ForecastService,
+  ) {}
 
   async summary(principal: AuthenticatedPrincipal) {
     const organizationId = principal.organizationId;
@@ -42,6 +46,7 @@ export class DashboardService {
       upcomingMeetings,
       overdueScheduledFollowUps,
       overdueLegacyFollowUps,
+      forecast,
     ] = await Promise.all([
       can(PERMISSIONS.leadRead)
         ? this.prisma.lead.count({
@@ -139,6 +144,7 @@ export class DashboardService {
             },
           })
         : Promise.resolve(null),
+      this.forecast.dashboard(principal),
     ]);
 
     return {
@@ -155,6 +161,7 @@ export class DashboardService {
           overdueScheduledFollowUps === null || overdueLegacyFollowUps === null
             ? null
             : overdueScheduledFollowUps + overdueLegacyFollowUps,
+        forecast,
       },
       meta: { dateStrategy: 'UTC date-only boundaries', generatedAt: new Date().toISOString() },
     };

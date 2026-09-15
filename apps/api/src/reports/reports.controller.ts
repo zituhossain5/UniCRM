@@ -30,6 +30,16 @@ export class ReportsController {
   dealConversion(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {
     return this.reports.dealConversion(p, q);
   }
+  @RequirePermission(PERMISSIONS.forecastRead)
+  @Get('forecast-by-owner')
+  forecastByOwner(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {
+    return this.reports.forecastByOwner(p, q);
+  }
+  @RequirePermission(PERMISSIONS.forecastRead)
+  @Get('forecast-by-stage')
+  forecastByStage(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {
+    return this.reports.forecastByStage(p, q);
+  }
   @RequirePermission(PERMISSIONS.dealRead)
   @Get('lead-to-deal')
   leadToDeal(@CurrentPrincipal() p: AuthenticatedPrincipal, @Query() q: ReportFilterDto) {

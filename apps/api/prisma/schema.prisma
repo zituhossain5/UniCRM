@@ -832,6 +832,10 @@ model Deal {
   @@index([organizationId, ownerId, archivedAt])
   @@index([organizationId, companyId, archivedAt])
   @@index([organizationId, expectedCloseDate, archivedAt])
+  @@index([organizationId, pipelineId, archivedAt])
+  @@index([organizationId, wonAt])
+  @@index([organizationId, lostAt])
+  @@index([organizationId, createdAt])
   @@index([organizationId, priority, archivedAt])
   @@map("deals")
 }

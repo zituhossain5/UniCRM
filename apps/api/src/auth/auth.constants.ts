@@ -4,6 +4,8 @@ export const REQUIRED_PERMISSIONS = 'unicrm:required-permissions';
 export const PERMISSIONS = {
   dashboardRead: 'dashboard.read',
   reportsRead: 'reports.read',
+  forecastRead: 'forecast.read',
+  forecastReadAll: 'forecast.read_all',
   notificationsRead: 'notifications.read',
   activityCreate: 'activity.create',
   activityRead: 'activity.read',
@@ -118,6 +120,8 @@ export type PermissionKey = (typeof PERMISSIONS)[keyof typeof PERMISSIONS];
 export const PERMISSION_CATALOG: ReadonlyArray<{ key: PermissionKey; description: string }> = [
   { key: PERMISSIONS.dashboardRead, description: 'View the operational dashboard' },
   { key: PERMISSIONS.reportsRead, description: 'View operational reports' },
+  { key: PERMISSIONS.forecastRead, description: 'View sales forecasts for permitted deals' },
+  { key: PERMISSIONS.forecastReadAll, description: 'View organization-wide sales forecasts' },
   { key: PERMISSIONS.notificationsRead, description: 'View personal notifications' },
   { key: PERMISSIONS.automationRead, description: 'View automation rules' },
   { key: PERMISSIONS.automationManage, description: 'Create and manage automation rules' },
@@ -253,6 +257,8 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<(typeof DEFAULT_ROLES)[number], Pe
   Manager: [
     PERMISSIONS.dashboardRead,
     PERMISSIONS.reportsRead,
+    PERMISSIONS.forecastRead,
+    PERMISSIONS.forecastReadAll,
     PERMISSIONS.notificationsRead,
     PERMISSIONS.automationRead,
     PERMISSIONS.automationRunsRead,
@@ -347,6 +353,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<(typeof DEFAULT_ROLES)[number], Pe
   Staff: [
     PERMISSIONS.dashboardRead,
     PERMISSIONS.reportsRead,
+    PERMISSIONS.forecastRead,
     PERMISSIONS.notificationsRead,
     PERMISSIONS.emailRead,
     PERMISSIONS.emailSend,
@@ -412,6 +419,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<(typeof DEFAULT_ROLES)[number], Pe
   Viewer: [
     PERMISSIONS.dashboardRead,
     PERMISSIONS.reportsRead,
+    PERMISSIONS.forecastRead,
     PERMISSIONS.notificationsRead,
     PERMISSIONS.emailRead,
     PERMISSIONS.mailRead,

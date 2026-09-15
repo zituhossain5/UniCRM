@@ -5,12 +5,35 @@ import { parseDateOnly, utcToday } from '../common/date-range';
 import { paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import type { ReportFilterDto } from './dto/reports.dto';
+import { ForecastService } from '../forecast/forecast.service';
+import { ForecastQueryDto } from '../forecast/dto/forecast.dto';
 
 const incomplete = ['TODO', 'IN_PROGRESS', 'IN_REVIEW', 'BLOCKED'] as const;
 
 @Injectable()
 export class ReportsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(ForecastService) private readonly forecast: ForecastService,
+  ) {}
+
+  async forecastByOwner(principal: AuthenticatedPrincipal, query: ReportFilterDto) {
+    const forecastQuery = new ForecastQueryDto();
+    forecastQuery.period = 'quarter';
+    forecastQuery.owner = query.owner;
+    forecastQuery.limit = 1;
+    const result = await this.forecast.get(principal, forecastQuery);
+    return { data: result.data.byOwner, meta: result.meta };
+  }
+
+  async forecastByStage(principal: AuthenticatedPrincipal, query: ReportFilterDto) {
+    const forecastQuery = new ForecastQueryDto();
+    forecastQuery.period = 'quarter';
+    forecastQuery.owner = query.owner;
+    forecastQuery.limit = 1;
+    const result = await this.forecast.get(principal, forecastQuery);
+    return { data: result.data.byStage, meta: result.meta };
+  }
 
   leadPipeline(principal: AuthenticatedPrincipal, query: ReportFilterDto) {
     const where = {

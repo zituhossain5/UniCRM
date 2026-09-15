@@ -8,6 +8,10 @@ export interface DashboardSummary {
   upcomingMeetings: number | null;
   overdueFollowUps: number | null;
   outstandingBalances: Array<{ currency: string; amount: string }> | null;
+  forecast: {
+    currencies: Array<{ currency: string; weightedPipeline: string; expectedThisMonth: string }>;
+    winRate: number | null;
+  } | null;
 }
 export interface DashboardTask {
   id: string;

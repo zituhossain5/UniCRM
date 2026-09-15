@@ -40,6 +40,7 @@ import { AutomationsModule } from './automations/automations.module';
 import { MailboxesModule } from './mailboxes/mailboxes.module';
 import { DealsModule } from './deals/deals.module';
 import { ActivitiesModule } from './activities/activities.module';
+import { ForecastModule } from './forecast/forecast.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { ActivitiesModule } from './activities/activities.module';
     ActivitiesModule,
     LeadsModule,
     DealsModule,
+    ForecastModule,
     TasksModule,
     ProjectsModule,
     AttachmentsModule,

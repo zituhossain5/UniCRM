@@ -6,6 +6,7 @@ import { ReportsService } from '../src/reports/reports.service';
 import { SearchService } from '../src/search/search.service';
 import type { AuthenticatedPrincipal } from '../src/auth/auth.types';
 import type { PrismaService } from '../src/database/prisma.service';
+import type { ForecastService } from '../src/forecast/forecast.service';
 
 const principal = (permissions: string[] = []): AuthenticatedPrincipal => ({
   userId: '11111111-1111-4111-8111-111111111111',
@@ -16,6 +17,7 @@ const principal = (permissions: string[] = []): AuthenticatedPrincipal => ({
   permissions,
 });
 const prisma = (value: object) => value as unknown as PrismaService;
+const forecast = (value: object) => value as unknown as ForecastService;
 
 describe('Milestone 6 operational services', () => {
   it('builds permission-aware dashboard metrics using tenant and responsibility scopes', async () => {
@@ -31,6 +33,7 @@ describe('Milestone 6 operational services', () => {
         task: { count: taskCount },
         followUp: { count: vi.fn() },
       }),
+      forecast({ dashboard: vi.fn().mockResolvedValue(null) }),
     );
     const response = await service.summary(principal(['lead.read', 'task.read']));
     expect(response.data.openLeads).toBe(4);
@@ -49,12 +52,14 @@ describe('Milestone 6 operational services', () => {
   it('defines lead conversion as won divided by all closed leads and handles zero', async () => {
     const service = new ReportsService(
       prisma({ $transaction: vi.fn().mockResolvedValue([12, 8]), lead: { count: vi.fn() } }),
+      forecast({}),
     );
     const result = await service.leadConversion(principal(), { page: 1, limit: 25 });
     expect(result.data.conversionPercent).toBe(60);
     expect(result.meta.formula).toContain('Won leads');
     const empty = new ReportsService(
       prisma({ $transaction: vi.fn().mockResolvedValue([0, 0]), lead: { count: vi.fn() } }),
+      forecast({}),
     );
     expect(
       (await empty.leadConversion(principal(), { page: 1, limit: 25 })).data.conversionPercent,
