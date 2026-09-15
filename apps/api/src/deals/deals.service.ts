@@ -6,7 +6,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '../generated/prisma/client';
+import { Prisma } from '../generated/prisma/client';
 import { PERMISSIONS } from '../auth/auth.constants';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { AutomationsService } from '../automations/automations.service';
@@ -21,6 +21,7 @@ import type {
   DealListQueryDto,
   UpdateDealDto,
   UpdateDealOwnerDto,
+  UpdateDealItemsDto,
   UpdateDealStageDto,
 } from './dto/deals.dto';
 
@@ -129,6 +130,12 @@ export class DealsService {
           orderBy: { createdAt: 'desc' },
         },
         project: { select: { id: true, name: true, status: true, archivedAt: true } },
+        items: {
+          orderBy: { position: 'asc' },
+          include: {
+            catalogItem: { select: { id: true, name: true, active: true, archivedAt: true } },
+          },
+        },
       },
     });
     if (!deal) throw new NotFoundException('Deal not found');
@@ -202,6 +209,64 @@ export class DealsService {
       this.eventData(deal),
     );
     return (await this.decorate(principal.organizationId, [deal]))[0];
+  }
+
+  async updateItems(principal: AuthenticatedPrincipal, id: string, dto: UpdateDealItemsDto) {
+    const deal = await this.prisma.deal.findFirst({
+      where: { id, organizationId: principal.organizationId, archivedAt: null },
+      select: { id: true, currency: true },
+    });
+    if (!deal) throw new NotFoundException('Deal not found');
+    const ids = [...new Set(dto.items.map((item) => item.catalogItemId))];
+    const catalogItems = ids.length
+      ? await this.prisma.catalogItem.findMany({
+          where: {
+            id: { in: ids },
+            organizationId: principal.organizationId,
+            active: true,
+            archivedAt: null,
+          },
+          select: { id: true, name: true, currency: true },
+        })
+      : [];
+    if (catalogItems.length !== ids.length)
+      throw new BadRequestException('One or more catalog items are unavailable');
+    if (catalogItems.some((item) => item.currency !== deal.currency))
+      throw new BadRequestException('Catalog item currency must match deal currency');
+    const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+    const normalized = dto.items.map((item, position) => {
+      const quantity = new Prisma.Decimal(item.quantity);
+      const unitPrice = new Prisma.Decimal(item.unitPrice);
+      if (quantity.lessThanOrEqualTo(0))
+        throw new BadRequestException('Deal item quantity must be greater than zero');
+      return {
+        organizationId: principal.organizationId,
+        dealId: id,
+        catalogItemId: item.catalogItemId,
+        itemName: catalogById.get(item.catalogItemId)!.name,
+        quantity,
+        unitPrice,
+        amount: quantity.times(unitPrice).toDecimalPlaces(2),
+        position,
+      };
+    });
+    await this.prisma.$transaction(async (tx) => {
+      await tx.dealItem.deleteMany({
+        where: { dealId: id, organizationId: principal.organizationId },
+      });
+      if (normalized.length) await tx.dealItem.createMany({ data: normalized });
+      await tx.activityLog.create({
+        data: {
+          organizationId: principal.organizationId,
+          actorId: principal.userId,
+          entityType: 'DEAL',
+          entityId: id,
+          action: 'DEAL_ITEMS_UPDATED',
+          metadata: { itemCount: normalized.length },
+        },
+      });
+    });
+    return this.get(principal, id);
   }
 
   async update(principal: AuthenticatedPrincipal, id: string, dto: UpdateDealDto) {

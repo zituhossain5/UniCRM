@@ -196,6 +196,16 @@ export interface DealRecord extends ConfigurableRecordMetadata {
     total: string;
     currency: string;
   }>;
+  items?: Array<{
+    id: string;
+    catalogItemId: string | null;
+    itemName: string;
+    quantity: string;
+    unitPrice: string;
+    amount: string;
+    position: number;
+    catalogItem: { id: string; name: string; active: boolean; archivedAt: string | null } | null;
+  }>;
   activities?: Array<{ id: string; action: string; createdAt: string; actor: PersonRef | null }>;
 }
 

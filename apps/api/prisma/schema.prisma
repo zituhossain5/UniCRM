@@ -271,6 +271,7 @@ enum DataImportEntityType {
   COMPANY
   CONTACT
   LEAD
+  CATALOG
 }
 
 enum DataExportEntityType {
@@ -279,6 +280,12 @@ enum DataExportEntityType {
   LEAD
   PROJECT
   TASK
+  CATALOG
+}
+
+enum CatalogItemType {
+  PRODUCT
+  SERVICE
 }
 
 enum DataJobStatus {
@@ -443,6 +450,9 @@ model Organization {
   conversationNotes      ConversationNote[]
   conversationEvents     ConversationEvent[]
   scheduledActivities    ScheduledActivity[]
+  catalogCategories      CatalogCategory[]
+  catalogItems           CatalogItem[]
+  dealItems              DealItem[]
 
   @@map("organizations")
 }
@@ -500,6 +510,7 @@ model User {
   conversationEvents         ConversationEvent[]  @relation("ConversationEventActor")
   scheduledActivitiesOwned   ScheduledActivity[]  @relation("ScheduledActivityOwner")
   scheduledActivitiesCreated ScheduledActivity[]  @relation("ScheduledActivityCreator")
+  catalogItemsCreated        CatalogItem[]        @relation("CatalogItemCreator")
 
   @@index([organizationId, status])
   @@map("users")
@@ -827,6 +838,7 @@ model Deal {
   createdBy         User          @relation("DealCreator", fields: [createdById], references: [id], onDelete: Restrict)
   quotations        Quotation[]
   project           Project?
+  items             DealItem[]
 
   @@index([organizationId, stageId, archivedAt])
   @@index([organizationId, ownerId, archivedAt])
@@ -1302,10 +1314,80 @@ model Quotation {
 }
 
 model QuotationItem {
+  id                     String       @id @default(uuid()) @db.Uuid
+  organizationId         String       @map("organization_id") @db.Uuid
+  quotationId            String       @map("quotation_id") @db.Uuid
+  catalogItemId          String?      @map("catalog_item_id") @db.Uuid
+  catalogItemName        String?      @map("catalog_item_name") @db.VarChar(180)
+  catalogItemDescription String?      @map("catalog_item_description")
+  catalogTaxRate         Decimal?     @map("catalog_tax_rate") @db.Decimal(9, 4)
+  description            String
+  quantity               Decimal      @db.Decimal(12, 4)
+  unitPrice              Decimal      @map("unit_price") @db.Decimal(19, 2)
+  amount                 Decimal      @db.Decimal(19, 2)
+  position               Int
+  createdAt              DateTime     @default(now()) @map("created_at")
+  updatedAt              DateTime     @updatedAt @map("updated_at")
+  organization           Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  quotation              Quotation    @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  catalogItem            CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
+
+  @@unique([quotationId, position])
+  @@index([organizationId, quotationId])
+  @@index([organizationId, catalogItemId])
+  @@map("quotation_items")
+}
+
+model CatalogCategory {
+  id             String        @id @default(uuid()) @db.Uuid
+  organizationId String        @map("organization_id") @db.Uuid
+  name           String        @db.VarChar(120)
+  active         Boolean       @default(true)
+  archivedAt     DateTime?     @map("archived_at")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  items          CatalogItem[]
+
+  @@unique([organizationId, name])
+  @@index([organizationId, active, name])
+  @@map("catalog_categories")
+}
+
+model CatalogItem {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  categoryId     String?          @map("category_id") @db.Uuid
+  type           CatalogItemType
+  name           String           @db.VarChar(180)
+  sku            String?          @db.VarChar(80)
+  description    String?
+  unitPrice      Decimal          @map("unit_price") @db.Decimal(19, 2)
+  currency       String           @db.VarChar(3)
+  taxRate        Decimal?         @map("tax_rate") @db.Decimal(9, 4)
+  active         Boolean          @default(true)
+  createdById    String           @map("created_by_id") @db.Uuid
+  archivedAt     DateTime?        @map("archived_at")
+  createdAt      DateTime         @default(now()) @map("created_at")
+  updatedAt      DateTime         @updatedAt @map("updated_at")
+  organization   Organization     @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  category       CatalogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  createdBy      User             @relation("CatalogItemCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  quotationItems QuotationItem[]
+  dealItems      DealItem[]
+
+  @@unique([organizationId, sku])
+  @@index([organizationId, archivedAt, active, name])
+  @@index([organizationId, type, categoryId])
+  @@map("catalog_items")
+}
+
+model DealItem {
   id             String       @id @default(uuid()) @db.Uuid
   organizationId String       @map("organization_id") @db.Uuid
-  quotationId    String       @map("quotation_id") @db.Uuid
-  description    String
+  dealId         String       @map("deal_id") @db.Uuid
+  catalogItemId  String?      @map("catalog_item_id") @db.Uuid
+  itemName       String       @map("item_name") @db.VarChar(180)
   quantity       Decimal      @db.Decimal(12, 4)
   unitPrice      Decimal      @map("unit_price") @db.Decimal(19, 2)
   amount         Decimal      @db.Decimal(19, 2)
@@ -1313,11 +1395,13 @@ model QuotationItem {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
   organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  quotation      Quotation    @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  deal           Deal         @relation(fields: [dealId], references: [id], onDelete: Cascade)
+  catalogItem    CatalogItem? @relation(fields: [catalogItemId], references: [id], onDelete: SetNull)
 
-  @@unique([quotationId, position])
-  @@index([organizationId, quotationId])
-  @@map("quotation_items")
+  @@unique([dealId, position])
+  @@index([organizationId, dealId])
+  @@index([organizationId, catalogItemId])
+  @@map("deal_items")
 }
 
 model Payment {

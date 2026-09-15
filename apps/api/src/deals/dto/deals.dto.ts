@@ -17,6 +17,7 @@ import {
   Min,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
 import { ListQueryDto } from '../../common/dto/list-query.dto';
 import { LeadPriority, ProjectStatus, WorkPriority } from '../../generated/prisma/enums';
@@ -83,6 +84,21 @@ export class UpdateDealStageDto {
 
 export class UpdateDealOwnerDto {
   @ValidateIf((_object, value) => value !== null) @IsUUID() ownerId!: string | null;
+}
+
+export class DealItemDto {
+  @IsUUID() catalogItemId!: string;
+  @Transform(trim)
+  @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  quantity!: string;
+  @Transform(trim)
+  @IsDecimal({ decimal_digits: '0,2', force_decimal: false })
+  @Matches(/^\d{1,17}(?:\.\d{1,2})?$/)
+  unitPrice!: string;
+}
+
+export class UpdateDealItemsDto {
+  @IsArray() @ValidateNested({ each: true }) @Type(() => DealItemDto) items!: DealItemDto[];
 }
 
 export class CreateDealProjectDto {

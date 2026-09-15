@@ -36,6 +36,10 @@ export interface QuotationRecord {
   pdfSnapshotAt: string | null;
   items: Array<{
     id: string;
+    catalogItemId: string | null;
+    catalogItemName: string | null;
+    catalogItemDescription: string | null;
+    catalogTaxRate: string | null;
     description: string;
     quantity: string;
     unitPrice: string;

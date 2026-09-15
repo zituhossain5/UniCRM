@@ -41,6 +41,7 @@ import { MailboxesModule } from './mailboxes/mailboxes.module';
 import { DealsModule } from './deals/deals.module';
 import { ActivitiesModule } from './activities/activities.module';
 import { ForecastModule } from './forecast/forecast.module';
+import { CatalogModule } from './catalog/catalog.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { ForecastModule } from './forecast/forecast.module';
     LeadsModule,
     DealsModule,
     ForecastModule,
+    CatalogModule,
     TasksModule,
     ProjectsModule,
     AttachmentsModule,

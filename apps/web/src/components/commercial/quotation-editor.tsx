@@ -2,6 +2,7 @@
 
 import { AuthMessage } from '@/components/auth-screen';
 import { apiRequest } from '@/lib/api';
+import type { CatalogItem, CatalogListResponse } from '@/lib/catalog-types';
 import {
   formatMoney,
   type CommercialReferences,
@@ -12,7 +13,12 @@ import { Plus, Save, Trash2 } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 
-type Item = { description: string; quantity: string; unitPrice: string };
+type Item = {
+  catalogItemId?: string | null;
+  description: string;
+  quantity: string;
+  unitPrice: string;
+};
 const emptyItem = (): Item => ({ description: '', quantity: '1', unitPrice: '0' });
 
 export function QuotationEditor({ quotationId }: { quotationId?: string }) {
@@ -20,6 +26,8 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
   const search = useSearchParams();
   const [refs, setRefs] = useState<CommercialReferences>();
   const [quotation, setQuotation] = useState<QuotationRecord>();
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [catalogItemId, setCatalogItemId] = useState('');
   const [companyId, setCompanyId] = useState(search.get('companyId') ?? '');
   const [contactId, setContactId] = useState(search.get('contactId') ?? '');
   const [leadId, setLeadId] = useState(search.get('leadId') ?? '');
@@ -36,12 +44,16 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
   useEffect(() => {
     void Promise.all([
       apiRequest<{ data: CommercialReferences }>('/quotations/reference-data'),
+      apiRequest<CatalogListResponse>('/catalog?active=true&limit=100&sort=name&order=asc').catch(
+        () => ({ data: [], meta: { page: 1, limit: 100, total: 0, totalPages: 1 } }),
+      ),
       quotationId
         ? apiRequest<{ data: QuotationRecord }>(`/quotations/${quotationId}`)
         : Promise.resolve(undefined),
     ])
-      .then(([referenceResult, quotationResult]) => {
+      .then(([referenceResult, catalogResult, quotationResult]) => {
         setRefs(referenceResult.data);
+        setCatalog(catalogResult.data);
         if (quotationResult) {
           const value = quotationResult.data;
           setQuotation(value);
@@ -56,6 +68,7 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
           setTaxRate(value.taxRate ?? '0');
           setItems(
             value.items.map((item) => ({
+              catalogItemId: item.catalogItemId,
               description: item.description,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
@@ -67,6 +80,31 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
         setError(cause instanceof Error ? cause.message : 'Could not load quotation editor.'),
       );
   }, [quotationId]);
+
+  function addFromCatalog() {
+    const selected = catalog.find((item) => item.id === catalogItemId);
+    if (!selected) return;
+    const onlyBlank = items.length === 1 && !items[0]?.description;
+    if (!onlyBlank && selected.currency !== currency) {
+      setError(
+        `Catalog item currency ${selected.currency} does not match quotation currency ${currency}.`,
+      );
+      return;
+    }
+    const item: Item = {
+      catalogItemId: selected.id,
+      description: selected.description
+        ? `${selected.name} — ${selected.description}`
+        : selected.name,
+      quantity: '1',
+      unitPrice: selected.unitPrice,
+    };
+    setItems((current) => (onlyBlank ? [item] : [...current, item]));
+    if (onlyBlank) setCurrency(selected.currency);
+    if (selected.taxRate) setTaxRate(selected.taxRate);
+    setCatalogItemId('');
+    setError('');
+  }
 
   const contacts = useMemo(
     () => (refs?.contacts ?? []).filter((item) => item.companyId === companyId),
@@ -242,6 +280,28 @@ export function QuotationEditor({ quotationId }: { quotationId?: string }) {
               <Plus size={15} /> Add item
             </Button>
           </div>
+          {catalog.length ? (
+            <div className="catalog-picker-row">
+              <Select
+                label="Add from Catalog"
+                onValueChange={(value) => setCatalogItemId(value ?? '')}
+                options={catalog.map((item) => ({
+                  label: `${item.name}${item.sku ? ` (${item.sku})` : ''} · ${formatMoney(item.unitPrice, item.currency)}`,
+                  value: item.id,
+                }))}
+                placeholder="Choose a product or service"
+                value={catalogItemId}
+              />
+              <Button
+                disabled={!catalogItemId}
+                onClick={addFromCatalog}
+                type="button"
+                variant="outline"
+              >
+                Add selection
+              </Button>
+            </div>
+          ) : null}
           <div className="quotation-item-head">
             <span>Description</span>
             <span>Quantity</span>

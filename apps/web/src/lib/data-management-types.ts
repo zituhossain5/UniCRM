@@ -1,6 +1,6 @@
-export type DataImportEntityType = 'COMPANY' | 'CONTACT' | 'LEAD';
+export type DataImportEntityType = 'COMPANY' | 'CONTACT' | 'LEAD' | 'CATALOG';
 export type DataExportEntityType = DataImportEntityType | 'PROJECT' | 'TASK';
-export type DuplicateEntityType = DataImportEntityType;
+export type DuplicateEntityType = Exclude<DataImportEntityType, 'CATALOG'>;
 export type MergeEntityType = 'COMPANY' | 'CONTACT';
 
 export interface DataImportJob {

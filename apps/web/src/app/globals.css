@@ -232,6 +232,76 @@
   gap: 20px;
 }
 
+.catalog-picker-row,
+.catalog-add-row {
+  align-items: end;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr) auto;
+  margin-bottom: 1rem;
+}
+
+.catalog-toolbar .ui-input.catalog-currency-filter {
+  width: 7rem;
+}
+
+.catalog-row-button {
+  align-items: flex-start;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  font: inherit;
+  gap: 0.2rem;
+  padding: 0;
+  text-align: left;
+}
+
+.catalog-row-button span,
+.deal-items-list small {
+  color: var(--muted-foreground);
+  display: block;
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.deal-items-list {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.deal-items-total {
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  padding-top: 0.85rem;
+}
+
+.deal-item-editor {
+  align-items: end;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(8rem, 1fr) 7rem 9rem auto;
+  padding: 0.75rem 0;
+}
+
+@media (max-width: 720px) {
+  .catalog-picker-row,
+  .catalog-add-row,
+  .deal-item-editor {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .catalog-toolbar .ui-input.catalog-currency-filter {
+    width: 100%;
+  }
+}
+
 .quotation-metadata,
 .quotation-items,
 .quotation-bottom,

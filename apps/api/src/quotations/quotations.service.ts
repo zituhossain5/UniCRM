@@ -199,7 +199,17 @@ export class QuotationsService {
       dto.projectId,
     );
     this.validateDates(dto.issueDate, dto.expiryDate);
-    const calculated = this.calculate(dto.items, dto.discountType, dto.discountValue, dto.taxRate);
+    const preparedItems = await this.prepareCatalogItems(
+      principal.organizationId,
+      dto.currency,
+      dto.items,
+    );
+    const calculated = this.calculate(
+      preparedItems,
+      dto.discountType,
+      dto.discountValue,
+      dto.taxRate,
+    );
     const quotation = await this.prisma.$transaction(async (tx) => {
       const counter = await tx.quotationNumberCounter.upsert({
         where: { organizationId: principal.organizationId },
@@ -288,6 +298,7 @@ export class QuotationsService {
     const items =
       dto.items ??
       existing.items.map((item) => ({
+        catalogItemId: item.catalogItemId,
         description: item.description,
         quantity: item.quantity.toString(),
         unitPrice: item.unitPrice.toString(),
@@ -296,7 +307,28 @@ export class QuotationsService {
     const discountValue =
       dto.discountValue === undefined ? existing.discountValue?.toString() : dto.discountValue;
     const taxRate = dto.taxRate === undefined ? existing.taxRate?.toString() : dto.taxRate;
-    const calculated = this.calculate(items, discountType, discountValue, taxRate);
+    const preparedItems = await this.prepareCatalogItems(
+      principal.organizationId,
+      dto.currency ?? existing.currency,
+      items,
+      new Map(
+        existing.items.flatMap((item) =>
+          item.catalogItemId
+            ? [
+                [
+                  item.catalogItemId,
+                  {
+                    name: item.catalogItemName,
+                    description: item.catalogItemDescription,
+                    taxRate: item.catalogTaxRate,
+                  },
+                ] as const,
+              ]
+            : [],
+        ),
+      ),
+    );
+    const calculated = this.calculate(preparedItems, discountType, discountValue, taxRate);
     return this.prisma.$transaction(async (tx) => {
       await tx.quotationItem.deleteMany({
         where: { quotationId: id, organizationId: principal.organizationId },
@@ -475,7 +507,13 @@ export class QuotationsService {
   }
 
   private calculate(
-    items: CreateQuotationDto['items'],
+    items: Array<
+      CreateQuotationDto['items'][number] & {
+        catalogItemName?: string;
+        catalogItemDescription?: string | null;
+        catalogTaxRate?: Prisma.Decimal | null;
+      }
+    >,
     discountType?: string | null,
     discountValue?: string | null,
     taxRate?: string | null,
@@ -488,6 +526,10 @@ export class QuotationsService {
           'Item quantity must be greater than zero and unit price cannot be negative',
         );
       return {
+        catalogItemId: item.catalogItemId,
+        catalogItemName: item.catalogItemName,
+        catalogItemDescription: item.catalogItemDescription,
+        catalogTaxRate: item.catalogTaxRate,
         description: item.description,
         quantity,
         unitPrice,
@@ -524,6 +566,46 @@ export class QuotationsService {
       taxAmount,
       total: taxable.plus(taxAmount).toDecimalPlaces(2),
     };
+  }
+
+  private async prepareCatalogItems(
+    organizationId: string,
+    currency: string,
+    items: CreateQuotationDto['items'],
+    existingSnapshots = new Map<
+      string,
+      { name: string | null; description: string | null; taxRate: Prisma.Decimal | null }
+    >(),
+  ) {
+    const ids = [
+      ...new Set(items.flatMap((item) => (item.catalogItemId ? [item.catalogItemId] : []))),
+    ];
+    if (!ids.length) return items;
+    const newIds = ids.filter((id) => !existingSnapshots.has(id));
+    const catalogItems = await this.prisma.catalogItem.findMany({
+      where: {
+        organizationId,
+        id: { in: newIds },
+        active: true,
+        archivedAt: null,
+      },
+      select: { id: true, name: true, description: true, taxRate: true, currency: true },
+    });
+    if (catalogItems.length !== newIds.length)
+      throw new BadRequestException('One or more catalog items are unavailable');
+    if (catalogItems.some((item) => item.currency !== currency.toUpperCase()))
+      throw new BadRequestException('Catalog item currency must match quotation currency');
+    const byId = new Map(catalogItems.map((item) => [item.id, item]));
+    return items.map((item) => {
+      if (!item.catalogItemId) return item;
+      const catalog = existingSnapshots.get(item.catalogItemId) ?? byId.get(item.catalogItemId)!;
+      return {
+        ...item,
+        catalogItemName: catalog.name ?? undefined,
+        catalogItemDescription: catalog.description,
+        catalogTaxRate: catalog.taxRate,
+      };
+    });
   }
 
   private async validateAssociations(

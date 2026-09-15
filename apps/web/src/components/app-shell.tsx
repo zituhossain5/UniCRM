@@ -43,6 +43,7 @@ import {
   UsersRound,
   Handshake,
   TrendingUp,
+  Package,
 } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
@@ -104,6 +105,7 @@ const navSections: readonly NavSection[] = [
   {
     label: 'Sales',
     items: [
+      { href: '/app/catalog', icon: Package, label: 'Catalog', permission: 'catalog.read' },
       { href: '/app/forecast', icon: TrendingUp, label: 'Forecast', permission: 'forecast.read' },
       { href: '/app/quotations', icon: FileText, label: 'Quotations' },
       { href: '/app/payments', icon: CircleDollarSign, label: 'Payments' },
@@ -217,6 +219,16 @@ export function AppShell({ children }: { children: ReactNode }) {
     }
     if (user.permissions.includes('quotation.create'))
       items.push({ label: 'New Quotation', onClick: () => router.push('/app/quotations/new') });
+    if (user.permissions.includes('catalog.create')) {
+      items.push({
+        label: 'New Product',
+        onClick: () => router.push('/app/catalog?create=product'),
+      });
+      items.push({
+        label: 'New Service',
+        onClick: () => router.push('/app/catalog?create=service'),
+      });
+    }
     if (user.permissions.includes('payment.create'))
       items.push({ label: 'Record Payment', onClick: () => router.push('/app/payments?record=1') });
     return items;

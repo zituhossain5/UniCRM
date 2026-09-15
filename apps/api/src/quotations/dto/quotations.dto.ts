@@ -21,6 +21,10 @@ import { DiscountType, QuotationStatus } from '../../generated/prisma/enums';
 const trim = ({ value }: { value: unknown }) => (typeof value === 'string' ? value.trim() : value);
 
 export class QuotationItemDto {
+  @ValidateIf((_object, value) => value !== null && value !== undefined)
+  @IsUUID()
+  catalogItemId?: string | null;
+
   @Transform(trim)
   @IsString()
   @MinLength(1)

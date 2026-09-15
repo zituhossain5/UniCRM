@@ -8,6 +8,7 @@ import {
   useRecordConfiguration,
 } from '@/components/configuration/record-configuration';
 import { apiRequest } from '@/lib/api';
+import type { CatalogItem, CatalogListResponse } from '@/lib/catalog-types';
 import {
   formatMoney,
   labelize,
@@ -31,7 +32,16 @@ import {
   Sheet,
   Textarea,
 } from '@unicrm/ui';
-import { Archive, ArrowLeft, BriefcaseBusiness, CalendarClock, FileText } from 'lucide-react';
+import {
+  Archive,
+  ArrowLeft,
+  BriefcaseBusiness,
+  CalendarClock,
+  FileText,
+  Package,
+  Plus,
+  Trash2,
+} from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
@@ -50,6 +60,12 @@ export function DealDetail({ id }: { id: string }) {
   const [users, setUsers] = useState<PersonRef[]>([]);
   const [editOpen, setEditOpen] = useState(false);
   const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [itemsOpen, setItemsOpen] = useState(false);
+  const [catalog, setCatalog] = useState<CatalogItem[]>([]);
+  const [catalogChoice, setCatalogChoice] = useState('');
+  const [dealItems, setDealItems] = useState<
+    Array<{ catalogItemId: string; itemName: string; quantity: string; unitPrice: string }>
+  >([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const configuration = useRecordConfiguration('DEAL');
@@ -67,11 +83,15 @@ export function DealDetail({ id }: { id: string }) {
       apiRequest<{ data: Pipeline[] }>('/pipelines?entityType=DEAL'),
       apiRequest<{ data: CompanyRecord[] }>('/companies?limit=100&sort=name&order=asc'),
       apiRequest<{ data: ContactRecord[] }>('/contacts?limit=100&sort=lastName&order=asc'),
+      current.permissions.includes('catalog.read')
+        ? apiRequest<CatalogListResponse>('/catalog?active=true&limit=100&sort=name&order=asc')
+        : Promise.resolve({ data: [] }),
     ])
-      .then(([p, c, contactsResult]) => {
+      .then(([p, c, contactsResult, catalogResult]) => {
         setPipelines(p.data);
         setCompanies(c.data);
         setContacts(contactsResult.data);
+        setCatalog(catalogResult.data);
       })
       .catch(() => undefined);
     if (current.permissions.includes('user.read'))
@@ -122,6 +142,47 @@ export function DealDetail({ id }: { id: string }) {
   }
   async function archive() {
     if (await mutate(`/deals/${id}`, { method: 'DELETE' })) router.push('/app/deals');
+  }
+  function openItems() {
+    setDealItems(
+      (deal?.items ?? []).flatMap((item) =>
+        item.catalogItemId
+          ? [
+              {
+                catalogItemId: item.catalogItemId,
+                itemName: item.itemName,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+              },
+            ]
+          : [],
+      ),
+    );
+    setItemsOpen(true);
+  }
+  function addDealItem() {
+    const item = catalog.find(({ id: catalogId }) => catalogId === catalogChoice);
+    if (!item) return;
+    setDealItems((currentItems) => [
+      ...currentItems,
+      { catalogItemId: item.id, itemName: item.name, quantity: '1', unitPrice: item.unitPrice },
+    ]);
+    setCatalogChoice('');
+  }
+  async function saveItems() {
+    if (
+      await mutate(`/deals/${id}/items`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          items: dealItems.map(({ catalogItemId, quantity, unitPrice }) => ({
+            catalogItemId,
+            quantity,
+            unitPrice,
+          })),
+        }),
+      })
+    )
+      setItemsOpen(false);
   }
   if (!deal && !error) return <LoadingState label="Loading deal" />;
   if (!deal)
@@ -359,6 +420,46 @@ export function DealDetail({ id }: { id: string }) {
         </dl>
       </section>
       <RecordMetadataSummary entries={deal.customFields} tags={deal.tags} />
+      <section className="record-section">
+        <div className="record-section-heading">
+          <div>
+            <h2>Expected products & services</h2>
+            <p>Informational only; this total does not overwrite the Deal value.</p>
+          </div>
+          {current.permissions.includes('deal.update') &&
+          current.permissions.includes('catalog.read') ? (
+            <Button onClick={openItems} variant="outline">
+              <Package size={15} /> Manage items
+            </Button>
+          ) : null}
+        </div>
+        {deal.items?.length ? (
+          <div className="deal-items-list">
+            {deal.items.map((item) => (
+              <div className="related-record-row" key={item.id}>
+                <span>
+                  <strong>{item.itemName}</strong>
+                  <small>
+                    {item.quantity} × {formatMoney(item.unitPrice, deal.currency)}
+                  </small>
+                </span>
+                <strong>{formatMoney(item.amount, deal.currency)}</strong>
+              </div>
+            ))}
+            <div className="deal-items-total">
+              <span>Expected item total</span>
+              <strong>
+                {formatMoney(
+                  String(deal.items.reduce((sum, item) => sum + Number(item.amount), 0)),
+                  deal.currency,
+                )}
+              </strong>
+            </div>
+          </div>
+        ) : (
+          <p>No catalog items associated with this deal.</p>
+        )}
+      </section>
       {deal.project ? (
         <section className="record-section">
           <h2>Project</h2>
@@ -400,6 +501,88 @@ export function DealDetail({ id }: { id: string }) {
           <p>No activity yet.</p>
         )}
       </section>
+      <Sheet
+        open={itemsOpen}
+        onOpenChange={setItemsOpen}
+        title="Deal products & services"
+        trigger={<span hidden />}
+        footer={
+          <>
+            <Button disabled={busy} onClick={() => setItemsOpen(false)} variant="secondary">
+              Cancel
+            </Button>
+            <Button loading={busy} onClick={() => void saveItems()}>
+              Save items
+            </Button>
+          </>
+        }
+      >
+        <div className="dialog-form">
+          <div className="catalog-add-row">
+            <Select
+              label="Catalog item"
+              value={catalogChoice}
+              onValueChange={(value) => setCatalogChoice(value ?? '')}
+              options={catalog
+                .filter((item) => item.currency === deal.currency)
+                .map((item) => ({
+                  label: `${item.name} · ${formatMoney(item.unitPrice, item.currency)}`,
+                  value: item.id,
+                }))}
+              placeholder="Choose product or service"
+            />
+            <Button disabled={!catalogChoice} onClick={addDealItem} variant="outline">
+              <Plus size={15} /> Add
+            </Button>
+          </div>
+          {dealItems.map((item, index) => (
+            <div className="deal-item-editor" key={`${item.catalogItemId}-${index}`}>
+              <strong>{item.itemName}</strong>
+              <label>
+                <span>Quantity</span>
+                <Input
+                  min="0.0001"
+                  step="0.0001"
+                  type="number"
+                  value={item.quantity}
+                  onChange={(event) =>
+                    setDealItems((rows) =>
+                      rows.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, quantity: event.target.value } : row,
+                      ),
+                    )
+                  }
+                />
+              </label>
+              <label>
+                <span>Unit price</span>
+                <Input
+                  min="0"
+                  step="0.01"
+                  type="number"
+                  value={item.unitPrice}
+                  onChange={(event) =>
+                    setDealItems((rows) =>
+                      rows.map((row, rowIndex) =>
+                        rowIndex === index ? { ...row, unitPrice: event.target.value } : row,
+                      ),
+                    )
+                  }
+                />
+              </label>
+              <Button
+                aria-label={`Remove ${item.itemName}`}
+                onClick={() =>
+                  setDealItems((rows) => rows.filter((_row, rowIndex) => rowIndex !== index))
+                }
+                variant="ghost"
+              >
+                <Trash2 size={16} />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </Sheet>
     </div>
   );
 }

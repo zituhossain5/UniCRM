@@ -16,9 +16,23 @@ import { Button, LoadingState, Select, Textarea } from '@unicrm/ui';
 import { Download, Search, Upload } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
-const importEntities: DataImportEntityType[] = ['COMPANY', 'CONTACT', 'LEAD'];
-const exportEntities: DataExportEntityType[] = ['COMPANY', 'CONTACT', 'LEAD', 'PROJECT', 'TASK'];
+const importEntities: DataImportEntityType[] = ['COMPANY', 'CONTACT', 'LEAD', 'CATALOG'];
+const exportEntities: DataExportEntityType[] = [
+  'COMPANY',
+  'CONTACT',
+  'LEAD',
+  'PROJECT',
+  'TASK',
+  'CATALOG',
+];
 const duplicateEntities: DuplicateEntityType[] = ['COMPANY', 'CONTACT', 'LEAD'];
+
+const importTemplates: Record<DataImportEntityType, string> = {
+  COMPANY: 'name,website,email,phone,status\n',
+  CONTACT: 'firstName,lastName,companyId,jobTitle,email,phone,isPrimary\n',
+  LEAD: 'title,firstName,lastName,email,phone,source,priority,companyId,contactId,estimatedValue,currency\n',
+  CATALOG: 'name,type,sku,category,description,unitPrice,currency,taxRate,active\n',
+};
 
 function entityOptions(values: string[]) {
   return values.map((value) => ({ label: value[0] + value.slice(1).toLowerCase(), value }));
@@ -39,7 +53,7 @@ export function DataManagementSettings() {
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [importEntity, setImportEntity] = useState<DataImportEntityType>('COMPANY');
-  const [importCsv, setImportCsv] = useState('name,website,email,phone,status\n');
+  const [importCsv, setImportCsv] = useState(importTemplates.COMPANY);
   const [preview, setPreview] = useState<ImportPreview>();
   const [exportEntity, setExportEntity] = useState<DataExportEntityType>('COMPANY');
   const [duplicateEntity, setDuplicateEntity] = useState<DuplicateEntityType>('COMPANY');
@@ -162,7 +176,12 @@ export function DataManagementSettings() {
             <Select
               label="Entity"
               value={importEntity}
-              onValueChange={(value) => setImportEntity(value as DataImportEntityType)}
+              onValueChange={(value) => {
+                const entity = value as DataImportEntityType;
+                setImportEntity(entity);
+                setImportCsv(importTemplates[entity]);
+                setPreview(undefined);
+              }}
               options={entityOptions(importEntities)}
             />
             <Textarea

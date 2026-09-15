@@ -51,6 +51,17 @@ const importHeaders: Record<DataImportEntityType, string[]> = {
     'estimatedValue',
     'currency',
   ],
+  CATALOG: [
+    'name',
+    'type',
+    'sku',
+    'category',
+    'description',
+    'unitPrice',
+    'currency',
+    'taxRate',
+    'active',
+  ],
 };
 
 const exportHeaders: Record<DataExportEntityType, string[]> = {
@@ -59,6 +70,18 @@ const exportHeaders: Record<DataExportEntityType, string[]> = {
   LEAD: ['id', 'title', 'email', 'phone', 'source', 'priority', 'estimatedValue', 'currency'],
   PROJECT: ['id', 'name', 'companyId', 'status', 'priority', 'projectValue', 'currency'],
   TASK: ['id', 'title', 'projectId', 'assigneeId', 'status', 'priority', 'dueDate'],
+  CATALOG: [
+    'id',
+    'name',
+    'type',
+    'sku',
+    'category',
+    'description',
+    'unitPrice',
+    'currency',
+    'taxRate',
+    'active',
+  ],
 };
 
 const auditEntityType: Record<DataEntity, string> = {
@@ -111,6 +134,23 @@ function parseBoolean(value: string | undefined, rowNumber: number) {
   if (['true', 'yes', '1'].includes(normalized)) return true;
   if (['false', 'no', '0'].includes(normalized)) return false;
   throw new BadRequestException(`Row ${rowNumber}: isPrimary must be true or false`);
+}
+
+function parseActive(value: string | undefined, rowNumber: number) {
+  const normalized = normalize(value)?.toLowerCase();
+  if (!normalized) return undefined;
+  if (['true', 'yes', '1', 'active'].includes(normalized)) return true;
+  if (['false', 'no', '0', 'inactive'].includes(normalized)) return false;
+  throw new BadRequestException(`Row ${rowNumber}: active must be true or false`);
+}
+
+function optionalRate(value: string | undefined, name: string, rowNumber: number) {
+  const rate = normalize(value);
+  if (rate && !/^\d{1,3}(?:\.\d{1,4})?$/.test(rate))
+    throw new BadRequestException(`Row ${rowNumber}: ${name} is invalid`);
+  if (rate && new Prisma.Decimal(rate).greaterThan(100))
+    throw new BadRequestException(`Row ${rowNumber}: ${name} must not exceed 100`);
+  return rate;
 }
 
 function enumValue<T extends string>(
@@ -188,7 +228,8 @@ function csvEscape(value: unknown) {
           : typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint'
             ? value.toString()
             : '';
-  return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  const safe = typeof value === 'string' && /^[\t\r ]*[=+\-@]/.test(text) ? `'${text}` : text;
+  return /[",\n\r]/.test(safe) ? `"${safe.replace(/"/g, '""')}"` : safe;
 }
 
 function toCsv(headers: string[], rows: Record<string, unknown>[]) {
@@ -437,6 +478,18 @@ export class DataManagementService {
       parseBoolean(row.isPrimary, rowNumber);
       return;
     }
+    if (entityType === 'CATALOG') {
+      required(row, 'name', rowNumber);
+      required(row, 'unitPrice', rowNumber);
+      optionalMoney(row.unitPrice, 'unitPrice', rowNumber);
+      optionalRate(row.taxRate, 'taxRate', rowNumber);
+      parseActive(row.active, rowNumber);
+      enumValue(['PRODUCT', 'SERVICE'] as const, row.type, 'type', rowNumber);
+      const currency = required(row, 'currency', rowNumber).toUpperCase();
+      if (!/^[A-Z]{3}$/.test(currency))
+        throw new BadRequestException(`Row ${rowNumber}: currency is invalid`);
+      return;
+    }
     required(row, 'title', rowNumber);
     optionalEmail(row.email, rowNumber);
     optionalUuid(row.companyId, 'companyId', rowNumber);
@@ -504,6 +557,57 @@ export class DataManagementService {
           isPrimary: parseBoolean(row.isPrimary, rowNumber) ?? false,
         },
       });
+    }
+    if (entityType === 'CATALOG') {
+      const categoryName = normalize(row.category);
+      try {
+        return await this.prisma.$transaction(async (tx) => {
+          const category = categoryName
+            ? await tx.catalogCategory.upsert({
+                where: {
+                  organizationId_name: {
+                    organizationId: principal.organizationId,
+                    name: categoryName,
+                  },
+                },
+                create: { organizationId: principal.organizationId, name: categoryName },
+                update: {},
+              })
+            : undefined;
+          const item = await tx.catalogItem.create({
+            data: {
+              organizationId: principal.organizationId,
+              createdById: principal.userId,
+              name: required(row, 'name', rowNumber),
+              type:
+                enumValue(['PRODUCT', 'SERVICE'] as const, row.type, 'type', rowNumber) ??
+                'SERVICE',
+              sku: normalize(row.sku)?.toUpperCase(),
+              categoryId: category?.id,
+              description: normalize(row.description),
+              unitPrice: required(row, 'unitPrice', rowNumber),
+              currency: required(row, 'currency', rowNumber).toUpperCase(),
+              taxRate: optionalRate(row.taxRate, 'taxRate', rowNumber),
+              active: parseActive(row.active, rowNumber) ?? true,
+            },
+          });
+          await tx.activityLog.create({
+            data: {
+              organizationId: principal.organizationId,
+              actorId: principal.userId,
+              entityType: 'CATALOG',
+              entityId: item.id,
+              action: 'CATALOG_ITEM_CREATED',
+              metadata: { source: 'CSV_IMPORT' },
+            },
+          });
+          return item;
+        });
+      } catch (cause) {
+        if (cause instanceof Prisma.PrismaClientKnownRequestError && cause.code === 'P2002')
+          throw new ConflictException(`Row ${rowNumber}: SKU already exists`);
+        throw cause;
+      }
     }
     const pipeline = await this.pipelines.ensureDefault(principal.organizationId);
     const firstStage = pipeline.stages[0];
@@ -621,6 +725,25 @@ export class DataManagementService {
         },
         orderBy: { createdAt: 'desc' },
       });
+    if (entityType === 'CATALOG') {
+      const items = await this.prisma.catalogItem.findMany({
+        where: { organizationId: principal.organizationId, archivedAt: null },
+        include: { category: { select: { name: true } } },
+        orderBy: { name: 'asc' },
+      });
+      return items.map((item) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        sku: item.sku,
+        category: item.category?.name,
+        description: item.description,
+        unitPrice: item.unitPrice,
+        currency: item.currency,
+        taxRate: item.taxRate,
+        active: item.active,
+      }));
+    }
     return this.prisma.task.findMany({
       where: { organizationId: principal.organizationId, archivedAt: null },
       select: {

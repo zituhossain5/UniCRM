@@ -20,6 +20,7 @@ import {
   DealListQueryDto,
   UpdateDealDto,
   UpdateDealOwnerDto,
+  UpdateDealItemsDto,
   UpdateDealStageDto,
 } from './dto/deals.dto';
 
@@ -95,5 +96,15 @@ export class DealsController {
     @Body() dto: CreateDealProjectDto,
   ) {
     return { data: await this.deals.createProject(principal, id, dto) };
+  }
+
+  @RequirePermission(PERMISSIONS.dealUpdate)
+  @Patch(':id/items')
+  async items(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: UpdateDealItemsDto,
+  ) {
+    return { data: await this.deals.updateItems(principal, id, dto) };
   }
 }
