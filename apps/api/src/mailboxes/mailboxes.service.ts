@@ -10,6 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { simpleParser, type ParsedMail } from 'mailparser';
 import { basename } from 'node:path';
 import { AuditService } from '../audit/audit.service';
+import { PERMISSIONS } from '../auth/auth.constants';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { ATTACHMENT_STORAGE, type AttachmentStorage } from '../attachments/storage.service';
 import type { EnvironmentVariables } from '../config/environment';
@@ -421,6 +422,13 @@ export class MailboxesService {
           },
           orderBy: { createdAt: 'asc' },
         },
+        sourceCases: principal.permissions.includes(PERMISSIONS.caseRead)
+          ? {
+              where: { archivedAt: null },
+              select: { id: true, caseNumber: true, title: true, status: true },
+              orderBy: { createdAt: 'desc' },
+            }
+          : false,
       },
     });
     if (!thread) throw new NotFoundException('Email thread not found');

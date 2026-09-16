@@ -103,6 +103,12 @@ export interface EmailThread {
     createdAt: string;
     actor: InboxUser | null;
   }>;
+  sourceCases?: Array<{
+    id: string;
+    caseNumber: string;
+    title: string;
+    status: string;
+  }>;
 }
 
 export interface InboxConversationSummary {

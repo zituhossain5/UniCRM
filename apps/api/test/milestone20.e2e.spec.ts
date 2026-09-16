@@ -388,6 +388,13 @@ describe('Milestone 20 customer cases', () => {
         .expect(201),
     ).data;
     expect(created).toMatchObject({ sourceThreadId: thread.id, contactId: contactA });
+    const refreshedThread = body<{
+      data: { sourceCases: Array<{ id: string; caseNumber: string; status: string }> };
+    }>(await agentA.get(`/api/v1/mail/threads/${thread.id}`).expect(200)).data;
+    expect(refreshedThread.sourceCases).toHaveLength(1);
+    expect(refreshedThread.sourceCases[0]?.id).toBe(created.id);
+    expect(refreshedThread.sourceCases[0]?.caseNumber).toMatch(/^CS-/);
+    expect(refreshedThread.sourceCases[0]?.status).toBe('OPEN');
     const unchangedThread = await prisma.emailThread.findUniqueOrThrow({
       where: { id: thread.id },
     });

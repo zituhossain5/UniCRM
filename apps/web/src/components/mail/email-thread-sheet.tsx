@@ -6,9 +6,19 @@ import { apiBaseUrl, apiRequest } from '@/lib/api';
 import { splitEmailReplyBody } from '@/lib/email-reply';
 import { hasActiveEmailDelivery, shouldRefreshRelatedCrmActivity } from '@/lib/email-status';
 import type { EmailThread, InboxUser, MailMessageSummary } from '@/lib/mailbox-types';
+import type { CustomerCase } from '@/lib/case-types';
 import type { ProjectRecord, TaskRecord } from '@/lib/work-types';
 import type { SearchResults } from '@/lib/operational-types';
-import { Badge, Button, Input, LoadingState, Select, Sheet, Textarea } from '@unicrm/ui';
+import {
+  Badge,
+  Button,
+  Input,
+  LoadingState,
+  Select,
+  Sheet,
+  Textarea,
+  useToastManager,
+} from '@unicrm/ui';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   ArrowDownLeft,
@@ -34,6 +44,7 @@ export function EmailThreadSheet({
 }) {
   const user = useCurrentUser();
   const queryClient = useQueryClient();
+  const toast = useToastManager();
   const [error, setError] = useState('');
   const [search, setSearch] = useState('');
   const [replyOpen, setReplyOpen] = useState(false);
@@ -211,13 +222,35 @@ export function EmailThreadSheet({
   });
   const createCase = useMutation({
     mutationFn: (payload: Record<string, string>) =>
-      apiRequest(`/mail/threads/${threadId}/create-case`, {
+      apiRequest<{ data: CustomerCase }>(`/mail/threads/${threadId}/create-case`, {
         method: 'POST',
         body: JSON.stringify(payload),
       }),
-    onSuccess: async () => {
+    onSuccess: async ({ data: created }) => {
       setConversionMode(null);
-      await refreshConversation();
+      queryClient.setQueryData<{ data: EmailThread }>(['mail', 'thread', threadId], (cached) =>
+        cached
+          ? {
+              data: {
+                ...cached.data,
+                sourceCases: [
+                  {
+                    id: created.id,
+                    caseNumber: created.caseNumber,
+                    title: created.title,
+                    status: created.status,
+                  },
+                  ...(cached.data.sourceCases ?? []).filter((item) => item.id !== created.id),
+                ],
+              },
+            }
+          : cached,
+      );
+      toast.add({ title: `Case ${created.caseNumber} created` });
+      await Promise.all([
+        refreshConversation(),
+        queryClient.invalidateQueries({ queryKey: ['cases'], exact: false }),
+      ]);
     },
     onError: (cause) => setError(messageFor(cause, 'Could not create case.')),
   });
@@ -320,7 +353,7 @@ export function EmailThreadSheet({
       'dueAt',
     ]);
     if (payload.assignedUserId === 'unassigned') delete payload.assignedUserId;
-    createCase.mutate(payload);
+    if (!createCase.isPending) createCase.mutate(payload);
   }
 
   const canReply =
@@ -436,6 +469,19 @@ export function EmailThreadSheet({
                 </dd>
               </div>
             </dl>
+            {current.sourceCases?.length ? (
+              <div className="thread-linked-cases" aria-label="Cases created from conversation">
+                <span>Case</span>
+                {current.sourceCases.map((item) => (
+                  <Link href={`/app/cases/${item.id}`} key={item.id}>
+                    <strong>{item.caseNumber}</strong>
+                    <span>
+                      {labelize(item.status)} · {item.title}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            ) : null}
           </section>
           {!current.relatedEntityId && user.permissions.includes('mail.link') ? (
             <div className="thread-linker">

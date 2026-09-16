@@ -12,6 +12,7 @@ import {
 import { useCrmReferenceData, userOptions } from '@/lib/crm-reference-data';
 import type { PaginationMeta } from '@/lib/crm-types';
 import {
+  Avatar,
   Badge,
   Button,
   EmptyState,
@@ -22,9 +23,10 @@ import {
   Pagination,
   Select,
 } from '@unicrm/ui';
+import { useQuery } from '@tanstack/react-query';
 import { Plus, Search } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { CaseCreateSheet } from './case-create-sheet';
 
 const views = ['all', 'mine', 'unassigned', 'open', 'waiting', 'overdue', 'resolved'] as const;
@@ -32,8 +34,6 @@ const views = ['all', 'mine', 'unassigned', 'open', 'waiting', 'overdue', 'resol
 export function CasesView({ initialView = 'all' }: { initialView?: string }) {
   const current = useCurrentUser();
   const { users } = useCrmReferenceData({ users: current.permissions.includes('user.read') });
-  const [records, setRecords] = useState<CustomerCase[]>();
-  const [meta, setMeta] = useState<PaginationMeta>({ page: 1, limit: 25, total: 0, totalPages: 1 });
   const [view, setView] = useState(initialView);
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState('');
@@ -50,9 +50,8 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
   }>({ companies: [], contacts: [] });
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
-  const [error, setError] = useState('');
 
-  const load = useCallback(async () => {
+  const queryString = useMemo(() => {
     const params = new URLSearchParams({ view, page: String(page), limit: '25' });
     if (search.trim()) params.set('search', search.trim());
     if (status) params.set('status', status);
@@ -63,22 +62,16 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
     if (contact) params.set('contact', contact);
     if (dueFrom) params.set('dueFrom', new Date(`${dueFrom}T00:00:00`).toISOString());
     if (dueTo) params.set('dueTo', new Date(`${dueTo}T23:59:59.999`).toISOString());
-    try {
-      setError('');
-      const result = await apiRequest<{ data: CustomerCase[]; meta: PaginationMeta }>(
-        `/cases?${params}`,
-      );
-      setRecords(result.data);
-      setMeta(result.meta);
-    } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Could not load cases.');
-    }
+    return params.toString();
   }, [assignee, company, contact, dueFrom, dueTo, page, priority, search, status, type, view]);
+  const list = useQuery({
+    queryKey: ['cases', 'list', queryString],
+    queryFn: () =>
+      apiRequest<{ data: CustomerCase[]; meta: PaginationMeta }>(`/cases?${queryString}`),
+  });
+  const records = list.data?.data;
+  const meta = list.data?.meta ?? { page: 1, limit: 25, total: 0, totalPages: 1 };
 
-  useEffect(() => {
-    const timer = window.setTimeout(() => void load(), 250);
-    return () => window.clearTimeout(timer);
-  }, [load]);
   useEffect(() => {
     void Promise.all([
       apiRequest<{ data: Array<{ id: string; name: string }> }>('/companies?limit=100'),
@@ -106,7 +99,6 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
             <CaseCreateSheet
               open={createOpen}
               onOpenChange={setCreateOpen}
-              onCreated={() => void load()}
               trigger={
                 <Button>
                   <Plus size={15} />
@@ -156,6 +148,7 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
           ]}
         />
         <Select
+          aria-label="Priority"
           value={priority}
           onValueChange={filter(setPriority)}
           options={[
@@ -164,6 +157,7 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
           ]}
         />
         <Select
+          aria-label="Type"
           value={type}
           onValueChange={filter(setType)}
           options={[
@@ -173,12 +167,14 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
         />
         {users.length ? (
           <Select
+            aria-label="Assignee"
             value={assignee}
             onValueChange={filter(setAssignee)}
             options={[{ value: '', label: 'All assignees' }, ...userOptions(users)]}
           />
         ) : null}
         <Select
+          aria-label="Company"
           value={company}
           onValueChange={filter(setCompany)}
           options={[
@@ -187,6 +183,7 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
           ]}
         />
         <Select
+          aria-label="Contact"
           value={contact}
           onValueChange={filter(setContact)}
           options={[
@@ -216,11 +213,11 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
           value={dueTo}
         />
       </div>
-      {error ? (
+      {list.isError ? (
         <ErrorState
           title="Cases unavailable"
-          description={error}
-          action={<Button onClick={() => void load()}>Retry</Button>}
+          description={list.error.message}
+          action={<Button onClick={() => void list.refetch()}>Retry</Button>}
         />
       ) : !records ? (
         <LoadingState label="Loading cases" />
@@ -230,84 +227,132 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
           description="Create a case or adjust the current filters."
         />
       ) : (
-        <div className="data-table-shell">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Case</th>
-                <th>Customer</th>
-                <th>Status</th>
-                <th>Priority</th>
-                <th>Assignee</th>
-                <th>Due</th>
-                <th>Updated</th>
-              </tr>
-            </thead>
-            <tbody>
-              {records.map((record) => (
-                <tr key={record.id}>
-                  <td>
-                    <Link className="record-link" href={`/app/cases/${record.id}`}>
-                      <strong>{record.caseNumber}</strong>
-                      <span>{record.title}</span>
-                    </Link>
-                  </td>
-                  <td>
-                    {record.company?.name ??
-                      (record.contact
-                        ? `${record.contact.firstName} ${record.contact.lastName}`
-                        : '—')}
-                  </td>
-                  <td>
-                    <Badge
-                      tone={
-                        ['RESOLVED', 'CLOSED'].includes(record.status)
-                          ? 'success'
-                          : record.status.startsWith('WAITING')
-                            ? 'warning'
-                            : 'neutral'
-                      }
-                    >
-                      {caseLabel(record.status)}
-                    </Badge>
-                  </td>
-                  <td>
-                    <Badge
-                      tone={
-                        record.priority === 'URGENT'
-                          ? 'danger'
-                          : record.priority === 'HIGH'
-                            ? 'warning'
-                            : 'neutral'
-                      }
-                    >
-                      {caseLabel(record.priority)}
-                    </Badge>
-                  </td>
-                  <td>
-                    {record.assignedUser
-                      ? `${record.assignedUser.firstName} ${record.assignedUser.lastName}`
-                      : 'Unassigned'}
-                  </td>
-                  <td
-                    className={
-                      record.dueAt &&
-                      new Date(record.dueAt) < new Date() &&
-                      !['RESOLVED', 'CLOSED'].includes(record.status)
-                        ? 'overdue-text'
-                        : ''
-                    }
-                  >
-                    {record.dueAt ? new Date(record.dueAt).toLocaleString() : '—'}
-                  </td>
-                  <td>{new Date(record.updatedAt).toLocaleDateString()}</td>
+        <>
+          <div className="cases-table-shell">
+            <table className="cases-table">
+              <colgroup>
+                <col className="cases-column-case" />
+                <col className="cases-column-customer" />
+                <col className="cases-column-status" />
+                <col className="cases-column-priority" />
+                <col className="cases-column-assignee" />
+                <col className="cases-column-due" />
+                <col className="cases-column-updated" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Case</th>
+                  <th>Customer</th>
+                  <th>Status</th>
+                  <th>Priority</th>
+                  <th>Assignee</th>
+                  <th>Due</th>
+                  <th>Updated</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {records.map((record) => (
+                  <tr key={record.id}>
+                    <td className="cases-primary-cell">
+                      <Link className="record-link" href={`/app/cases/${record.id}`}>
+                        <strong>{record.caseNumber}</strong>
+                        <span title={record.title}>{record.title}</span>
+                      </Link>
+                    </td>
+                    <td className="cases-customer-cell">
+                      {record.contact ? (
+                        <strong>{`${record.contact.firstName} ${record.contact.lastName}`}</strong>
+                      ) : null}
+                      {record.company ? <span>{record.company.name}</span> : null}
+                      {!record.contact && !record.company ? '—' : null}
+                    </td>
+                    <td>
+                      <Badge tone={statusTone(record.status)}>{caseLabel(record.status)}</Badge>
+                    </td>
+                    <td>
+                      <Badge tone={priorityTone(record.priority)}>
+                        {caseLabel(record.priority)}
+                      </Badge>
+                    </td>
+                    <td>
+                      <span className="cases-assignee" title={personName(record.assignedUser)}>
+                        {record.assignedUser ? (
+                          <Avatar
+                            fallback={initials(record.assignedUser)}
+                            label={personName(record.assignedUser)}
+                            size="sm"
+                          />
+                        ) : null}
+                        <span>{personName(record.assignedUser)}</span>
+                      </span>
+                    </td>
+                    <td className={isOverdue(record) ? 'overdue-text' : ''}>
+                      {record.dueAt ? formatDateTime(record.dueAt) : '—'}
+                    </td>
+                    <td>{formatDate(record.updatedAt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div className="cases-mobile-list" aria-label="Cases">
+            {records.map((record) => (
+              <article key={record.id}>
+                <Link href={`/app/cases/${record.id}`}>
+                  <strong>{record.caseNumber}</strong>
+                  <span>{record.title}</span>
+                </Link>
+                <div>
+                  <Badge tone={statusTone(record.status)}>{caseLabel(record.status)}</Badge>
+                  <Badge tone={priorityTone(record.priority)}>{caseLabel(record.priority)}</Badge>
+                </div>
+                <small>
+                  {customerName(record)} · {personName(record.assignedUser)}
+                </small>
+                <small className={isOverdue(record) ? 'overdue-text' : ''}>
+                  {record.dueAt ? `Due ${formatDateTime(record.dueAt)}` : 'No due date'}
+                </small>
+              </article>
+            ))}
+          </div>
+        </>
       )}
       <Pagination currentPage={meta.page} totalPages={meta.totalPages} onPageChange={setPage} />
     </div>
   );
+}
+
+function statusTone(status: CustomerCase['status']) {
+  if (status === 'RESOLVED' || status === 'CLOSED') return 'success' as const;
+  if (status.startsWith('WAITING')) return 'warning' as const;
+  return 'neutral' as const;
+}
+function priorityTone(priority: CustomerCase['priority']) {
+  if (priority === 'URGENT') return 'danger' as const;
+  if (priority === 'HIGH') return 'warning' as const;
+  return 'neutral' as const;
+}
+function personName(person: CustomerCase['assignedUser']) {
+  return person ? `${person.firstName} ${person.lastName}` : 'Unassigned';
+}
+function initials(person: NonNullable<CustomerCase['assignedUser']>) {
+  return `${person.firstName[0] ?? ''}${person.lastName[0] ?? ''}`.toUpperCase();
+}
+function customerName(record: CustomerCase) {
+  return record.contact
+    ? `${record.contact.firstName} ${record.contact.lastName}`
+    : (record.company?.name ?? 'No customer');
+}
+function isOverdue(record: CustomerCase) {
+  return Boolean(
+    record.dueAt &&
+    new Date(record.dueAt) < new Date() &&
+    !['RESOLVED', 'CLOSED'].includes(record.status),
+  );
+}
+function formatDate(value: string) {
+  return new Date(value).toLocaleDateString([], { dateStyle: 'medium' });
+}
+function formatDateTime(value: string) {
+  return new Date(value).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }

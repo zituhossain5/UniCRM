@@ -3,7 +3,8 @@
 import { apiRequest } from '@/lib/api';
 import { casePriorities, caseTypes, caseLabel, type CustomerCase } from '@/lib/case-types';
 import { useCrmReferenceData, userOptions } from '@/lib/crm-reference-data';
-import { Button, Input, Select, Sheet, Textarea } from '@unicrm/ui';
+import { Button, Input, Select, Sheet, Textarea, useToastManager } from '@unicrm/ui';
+import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
 import { useCurrentUser } from '../auth-provider';
 
@@ -29,6 +30,8 @@ export function CaseCreateSheet({
   initial?: InitialCase;
 }) {
   const current = useCurrentUser();
+  const queryClient = useQueryClient();
+  const toast = useToastManager();
   const { users } = useCrmReferenceData({ users: current.permissions.includes('user.read') });
   const [references, setReferences] = useState<{
     companies: Option[];
@@ -74,6 +77,8 @@ export function CaseCreateSheet({
       form.reset();
       onCreated?.(result.data);
       onOpenChange(false);
+      toast.add({ title: `Case ${result.data.caseNumber} created` });
+      await queryClient.invalidateQueries({ queryKey: ['cases'], exact: false });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Could not create case.');
     } finally {

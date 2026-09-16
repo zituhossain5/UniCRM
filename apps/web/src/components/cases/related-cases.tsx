@@ -4,9 +4,10 @@ import { useCurrentUser } from '@/components/auth-provider';
 import { apiRequest } from '@/lib/api';
 import { caseLabel, type CustomerCase } from '@/lib/case-types';
 import { Badge, Button, EmptyState } from '@unicrm/ui';
+import { useQuery } from '@tanstack/react-query';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CaseCreateSheet } from './case-create-sheet';
 
 export function RelatedCases({
@@ -19,15 +20,14 @@ export function RelatedCases({
   companyId?: string | null;
 }) {
   const current = useCurrentUser();
-  const [records, setRecords] = useState<CustomerCase[]>([]);
   const [open, setOpen] = useState(false);
-  const load = () =>
-    apiRequest<{ data: CustomerCase[] }>(`/cases?${entityType}=${entityId}&limit=20`)
-      .then((result) => setRecords(result.data))
-      .catch(() => undefined);
-  useEffect(() => {
-    if (current.permissions.includes('case.read')) void load();
-  }, [current.permissions, entityId, entityType]);
+  const related = useQuery({
+    queryKey: ['cases', 'related', entityType, entityId],
+    queryFn: () =>
+      apiRequest<{ data: CustomerCase[] }>(`/cases?${entityType}=${entityId}&limit=20`),
+    enabled: current.permissions.includes('case.read'),
+  });
+  const records = related.data?.data ?? [];
   if (!current.permissions.includes('case.read')) return null;
   const initial = { [`${entityType}Id`]: entityId, ...(companyId ? { companyId } : {}) };
   return (
@@ -38,7 +38,6 @@ export function RelatedCases({
           <CaseCreateSheet
             open={open}
             onOpenChange={setOpen}
-            onCreated={() => void load()}
             initial={initial}
             trigger={
               <Button variant="outline">

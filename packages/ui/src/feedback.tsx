@@ -75,6 +75,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 
+export function useToastManager() {
+  return BaseToast.useToastManager();
+}
+
 function ToastList() {
   const { toasts } = BaseToast.useToastManager();
   return toasts.map((toast) => (
