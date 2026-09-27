@@ -7,6 +7,10 @@ import './globals.css';
 
 export const metadata: Metadata = {
   description: 'UniCRM by UnicodeIT',
+  icons: {
+    icon: '/logo.png',
+    apple: '/logo.png',
+  },
   title: 'UniCRM',
 };
 

@@ -18,6 +18,7 @@ import {
   ContactCreateSheet,
   LeadCreateSheet,
 } from '@/components/crm/create-sheets';
+import { BrandLogo } from '@/components/brand-logo';
 import { DealCreateSheet } from '@/components/crm/deals-view';
 import { ProjectCreateSheet, TaskCreateSheet } from '@/components/work/create-sheets';
 import {
@@ -259,7 +260,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className={`app-frame${collapsed ? ' app-frame--collapsed' : ''}`}>
       <aside className="app-sidebar">
         <div className="sidebar-brand">
-          <span className="brand-symbol">U</span>
+          <BrandLogo />
           <span className="brand-copy">
             <strong>UniCRM</strong>
             <small>UnicodeIT</small>

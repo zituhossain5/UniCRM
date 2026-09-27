@@ -1,4 +1,5 @@
 import { getHealth } from '@/lib/health';
+import { BrandLogo } from '@/components/brand-logo';
 import Link from 'next/link';
 
 export default async function StatusPage() {
@@ -12,7 +13,7 @@ export default async function StatusPage() {
   return (
     <main className="status-shell">
       <section className="status-panel">
-        <div className="brand-symbol">U</div>
+        <BrandLogo />
         <div>
           <p className="eyebrow">Development</p>
           <h1>System status</h1>

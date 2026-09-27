@@ -1315,17 +1315,20 @@ kbd {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-.brand-symbol {
-  display: grid;
-  width: 30px;
-  height: 30px;
+.brand-logo {
+  position: relative;
+  display: block;
   flex: none;
-  place-items: center;
-  border-radius: 7px;
-  background: var(--primary);
-  color: var(--primary-foreground);
-  font-size: 14px;
-  font-weight: 750;
+  overflow: hidden;
+  border-radius: 22%;
+  background: var(--surface);
+}
+.brand-logo img {
+  position: absolute;
+  width: 190%;
+  max-width: none;
+  height: auto;
+  transform: translate(-23.4%, -12.6%);
 }
 .brand-copy {
   display: grid;
@@ -4126,11 +4129,6 @@ kbd {
   font-weight: 750;
   letter-spacing: -0.01em;
   text-decoration: none;
-}
-.auth-brand .brand-symbol {
-  width: 34px;
-  height: 34px;
-  border-radius: var(--radius-md);
 }
 .auth-panel header {
   display: grid;

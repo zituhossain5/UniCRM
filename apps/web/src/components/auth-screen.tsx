@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { BrandLogo } from '@/components/brand-logo';
 
 export function AuthScreen({
   children,
@@ -15,7 +16,7 @@ export function AuthScreen({
       <main className="auth-main">
         <section className="auth-panel">
           <Link className="auth-brand" href="/login">
-            <span className="brand-symbol">U</span>
+            <BrandLogo size={34} />
             <span>UniCRM</span>
           </Link>
           <header>
