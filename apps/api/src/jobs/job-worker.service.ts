@@ -22,7 +22,7 @@ import { JobsService } from './jobs.service';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 import { MailboxesService } from '../mailboxes/mailboxes.service';
 import { MAILBOX_RECOVERY_JOB, MAILBOX_SYNC_JOB } from '../mailboxes/mailbox.constants';
-import { safeMailboxError } from '../mailboxes/mailbox.helpers';
+import { safeMailboxError, safeMailboxErrorDetails } from '../mailboxes/mailbox.helpers';
 
 @Injectable()
 export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
@@ -87,7 +87,22 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     );
     this.worker.on('failed', (job, error) => {
       if (job?.name === MAILBOX_SYNC_JOB || job?.name === MAILBOX_RECOVERY_JOB) {
-        this.logger.error(`Job failed: ${job.name} ${safeMailboxError(error)}`);
+        const details = safeMailboxErrorDetails(error);
+        this.logger.error(
+          `Job failed ${JSON.stringify({
+            job: job.name,
+            jobId: job.id,
+            mailboxId:
+              job.name === MAILBOX_SYNC_JOB
+                ? (job.data as { mailboxId?: string }).mailboxId
+                : undefined,
+            stage: details.stage,
+            errorName: details.name,
+            ...(details.code ? { errorCode: details.code } : {}),
+            errorMessage: details.message,
+            safeErrorSummary: safeMailboxError(error),
+          })}`,
+        );
         return;
       }
       this.logger.error(`Job failed: ${job?.name ?? 'unknown'} ${error.message}`, error.stack);

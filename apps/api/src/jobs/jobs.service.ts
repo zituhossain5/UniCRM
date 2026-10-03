@@ -12,7 +12,12 @@ import {
 } from '../automations/automation.constants';
 import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 import { CRM_EMAIL_DELIVERY_JOB, CRM_EMAIL_RECOVERY_JOB } from '../email/email.constants';
-import { MAILBOX_RECOVERY_JOB, MAILBOX_SYNC_JOB } from '../mailboxes/mailbox.constants';
+import {
+  MAILBOX_RECOVERY_JOB,
+  MAILBOX_SYNC_ATTEMPTS,
+  MAILBOX_SYNC_BACKOFF_MS,
+  MAILBOX_SYNC_JOB,
+} from '../mailboxes/mailbox.constants';
 
 @Injectable()
 export class JobsService implements OnModuleDestroy {
@@ -47,13 +52,14 @@ export class JobsService implements OnModuleDestroy {
   }
 
   async enqueueMailboxSync(mailboxId: string): Promise<void> {
+    const intervalMs = this.config.get('MAILBOX_SYNC_INTERVAL_SECONDS', { infer: true }) * 1000;
     await this.getQueue().add(
       MAILBOX_SYNC_JOB,
       { mailboxId },
       {
-        jobId: `mailbox-sync-${mailboxId}-${Date.now()}`,
-        attempts: 3,
-        backoff: { delay: 10_000, type: 'exponential' },
+        jobId: `mailbox-sync-${mailboxId}-${Math.floor(Date.now() / intervalMs)}`,
+        attempts: MAILBOX_SYNC_ATTEMPTS,
+        backoff: { delay: MAILBOX_SYNC_BACKOFF_MS, type: 'exponential' },
         removeOnComplete: { age: 86_400, count: 1000 },
         removeOnFail: { age: 604_800, count: 5000 },
       },

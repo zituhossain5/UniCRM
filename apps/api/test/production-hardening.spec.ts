@@ -2,9 +2,16 @@ import { describe, expect, it, vi } from 'vitest';
 import { validateEnvironment } from '../src/config/environment';
 import { HealthService } from '../src/health/health.service';
 import { JobsService } from '../src/jobs/jobs.service';
-import { MAILBOX_RECOVERY_JOB } from '../src/mailboxes/mailbox.constants';
+import {
+  MAILBOX_RECOVERY_JOB,
+  MAILBOX_SYNC_ATTEMPTS,
+  MAILBOX_SYNC_BACKOFF_MS,
+  MAILBOX_SYNC_JOB,
+} from '../src/mailboxes/mailbox.constants';
 
-const queueAdd = vi.fn();
+const queueAdd = vi
+  .fn<(name: string, data: unknown, options: Record<string, unknown>) => Promise<void>>()
+  .mockResolvedValue(undefined);
 const queueClose = vi.fn();
 
 vi.mock('bullmq', () => ({
@@ -111,5 +118,28 @@ describe('worker queue scheduling', () => {
         repeat: { every: 90_000 },
       }),
     );
+  });
+
+  it('uses bounded mailbox retries, exponential backoff, and time-bucket deduplication', async () => {
+    queueAdd.mockClear();
+    const service = new JobsService({
+      get: (key: string) => {
+        if (key === 'REDIS_URL') return 'redis://localhost:6379';
+        if (key === 'MAILBOX_SYNC_INTERVAL_SECONDS') return 90;
+        return 'unicrm';
+      },
+    } as never);
+
+    await service.enqueueMailboxSync('mailbox-id');
+
+    expect(queueAdd).toHaveBeenCalledOnce();
+    const [name, data, options] = queueAdd.mock.calls[0]!;
+    expect(name).toBe(MAILBOX_SYNC_JOB);
+    expect(data).toEqual({ mailboxId: 'mailbox-id' });
+    expect(options.jobId).toMatch(/^mailbox-sync-mailbox-id-\d+$/);
+    expect(options).toMatchObject({
+      attempts: MAILBOX_SYNC_ATTEMPTS,
+      backoff: { delay: MAILBOX_SYNC_BACKOFF_MS, type: 'exponential' },
+    });
   });
 });

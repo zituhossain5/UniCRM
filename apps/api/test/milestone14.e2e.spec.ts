@@ -3,16 +3,20 @@ import { Test } from '@nestjs/testing';
 import cookieParser from 'cookie-parser';
 import type { Server } from 'node:http';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { ATTACHMENT_STORAGE, type AttachmentStorage } from '../src/attachments/storage.service';
 import { IdentityBootstrapService } from '../src/bootstrap.service';
 import { PrismaService } from '../src/database/prisma.service';
 import { MailboxTransportService } from '../src/email/mailbox-transport.service';
+import { Prisma } from '../src/generated/prisma/client';
 import { IntegrationSecretService } from '../src/integrations/integration-secret.service';
 import { JobsService } from '../src/jobs/jobs.service';
 import {
+  mailboxSyncError,
   nextUidRange,
   normalizeReferences,
   safeMailboxError,
+  safeMailboxErrorDetails,
 } from '../src/mailboxes/mailbox.helpers';
 import { MailboxesService } from '../src/mailboxes/mailboxes.service';
 import { RateLimitService } from '../src/auth/rate-limit.service';
@@ -40,13 +44,21 @@ function mutate(
   return agent[method](path).set('origin', origin).set('x-csrf-token', csrf);
 }
 
-type FakeMessage = { uid: number; source: Buffer; internalDate: Date };
+type FakeMessage = {
+  uid: number;
+  source: Buffer;
+  internalDate: Date | string;
+  missingSource?: boolean;
+  size?: number;
+};
 
 class FakeMailboxTransport {
   inbox: FakeMessage[] = [];
   sent: FakeMessage[] = [];
   failImap = false;
   failSmtp = false;
+  failSyncStage?:
+    'connect' | 'list-folders' | 'open-inbox' | 'open-sent' | 'fetch-inbox' | 'fetch-sent';
   deliveries: Array<{ messageId: string; inReplyTo?: string; references?: string[] }> = [];
 
   verifyImap() {
@@ -63,11 +75,21 @@ class FakeMailboxTransport {
     const inbox = this.inbox;
     const sent = this.sent;
     let folder = 'INBOX';
+    const failSyncStage = this.failSyncStage;
     return {
       isClosed: false,
-      connect: () => Promise.resolve(),
-      list: () => Promise.resolve([{ path: 'Sent', specialUse: '\\Sent' }]),
+      on: () => undefined,
+      connect: () =>
+        failSyncStage === 'connect'
+          ? Promise.reject(Object.assign(new Error('connection timed out'), { code: 'ETIMEDOUT' }))
+          : Promise.resolve(),
+      list: () =>
+        failSyncStage === 'list-folders'
+          ? Promise.reject(new Error('LIST command rejected'))
+          : Promise.resolve([{ path: 'Sent', specialUse: '\\Sent' }]),
       mailboxOpen(path: string) {
+        if (failSyncStage === (path === 'INBOX' ? 'open-inbox' : 'open-sent'))
+          return Promise.reject(new Error('Mailbox folder is unavailable'));
         folder = path;
         const messages = path === 'INBOX' ? inbox : sent;
         return Promise.resolve({
@@ -77,10 +99,29 @@ class FakeMailboxTransport {
         });
       },
       *fetch(range: string | number | bigint) {
+        if (failSyncStage === (folder === 'INBOX' ? 'fetch-inbox' : 'fetch-sent'))
+          throw new Error('FETCH command rejected');
         const messages = folder === 'INBOX' ? inbox : sent;
         const first = Number(String(range).split(':')[0]);
         for (const message of messages.filter((item) => item.uid >= first))
-          yield { ...message, size: message.source.length };
+          yield {
+            uid: message.uid,
+            size: message.size ?? message.source.length,
+            internalDate: message.internalDate,
+          };
+      },
+      fetchOne(uid: string) {
+        const messages = folder === 'INBOX' ? inbox : sent;
+        const message = messages.find((item) => item.uid === Number(uid));
+        return Promise.resolve(
+          message
+            ? {
+                ...message,
+                source: message.missingSource ? undefined : message.source,
+                size: message.size ?? message.source.length,
+              }
+            : false,
+        );
       },
       logout() {
         this.isClosed = true;
@@ -144,6 +185,32 @@ function rawMail(input: { from: string; messageId: string; subject: string; refe
   );
 }
 
+function rawMailWithPngAttachment(input: { from: string; messageId: string; subject: string }) {
+  return Buffer.from(
+    [
+      `Message-ID: ${input.messageId}`,
+      `From: Customer <${input.from}>`,
+      'To: sales@example.test',
+      `Subject: ${input.subject}`,
+      'Date: Wed, 10 Sep 2026 12:00:00 +0000',
+      'Content-Type: multipart/mixed; boundary="unicrm-test"',
+      '',
+      '--unicrm-test',
+      'Content-Type: text/plain; charset=utf-8',
+      '',
+      'Attachment test.',
+      '--unicrm-test',
+      'Content-Type: image/png; name="test.png"',
+      'Content-Disposition: attachment; filename="test.png"',
+      'Content-Transfer-Encoding: base64',
+      '',
+      'iVBORw0KGgo=',
+      '--unicrm-test--',
+      '',
+    ].join('\r\n'),
+  );
+}
+
 describe('Milestone 14 mailbox integration', () => {
   let app: INestApplication;
   let server: Server;
@@ -152,6 +219,7 @@ describe('Milestone 14 mailbox integration', () => {
   let crmEmail: CrmEmailService;
   let transport: FakeMailboxTransport;
   let jobs: TestJobsService;
+  let storage: AttachmentStorage;
   let orgA: string;
   let orgB: string;
   let ownerA: string;
@@ -191,6 +259,7 @@ describe('Milestone 14 mailbox integration', () => {
     crmEmail = app.get(CrmEmailService);
     transport = app.get<FakeMailboxTransport>(MailboxTransportService);
     jobs = app.get<TestJobsService>(JobsService);
+    storage = app.get<AttachmentStorage>(ATTACHMENT_STORAGE);
     slugA = `m14-a-${crypto.randomUUID()}`;
     slugB = `m14-b-${crypto.randomUUID()}`;
     const bootstrap = app.get(IdentityBootstrapService);
@@ -473,6 +542,165 @@ describe('Milestone 14 mailbox integration', () => {
     ).toBe(contactId);
   });
 
+  it('reports the exact failing sync stage and recovers to CONNECTED', async () => {
+    const failures = [
+      ['connect', 'Connection timeout'],
+      ['list-folders', 'Mailbox folder error'],
+      ['open-inbox', 'Mailbox folder error'],
+      ['open-sent', 'Mailbox folder error'],
+      ['fetch-inbox', 'Message synchronization failed'],
+      ['fetch-sent', 'Message synchronization failed'],
+    ] as const;
+
+    for (const [stage, summary] of failures) {
+      await prisma.mailboxConnection.update({
+        where: { id: mailboxId },
+        data: { status: 'CONNECTED', syncState: Prisma.DbNull, safeErrorSummary: null },
+      });
+      transport.failSyncStage = stage;
+      await expect(mailboxes.syncMailbox(mailboxId)).rejects.toMatchObject({ stage });
+      expect(
+        await prisma.mailboxConnection.findUniqueOrThrow({ where: { id: mailboxId } }),
+      ).toMatchObject({ status: 'ERROR', safeErrorSummary: summary });
+    }
+
+    transport.failSyncStage = undefined;
+    await expect(mailboxes.syncMailbox(mailboxId)).resolves.toMatchObject({ skipped: false });
+    expect(
+      await prisma.mailboxConnection.findUniqueOrThrow({ where: { id: mailboxId } }),
+    ).toMatchObject({ status: 'CONNECTED', safeErrorSummary: null });
+  });
+
+  it('skips unavailable and oversized historical messages while advancing sync state', async () => {
+    const maxBytes = 10 * 1024 * 1024;
+    transport.inbox = [
+      {
+        uid: 101,
+        source: rawMail({
+          from: 'customer@example.test',
+          messageId: '<missing-source@example.test>',
+          subject: 'Unavailable source',
+        }),
+        internalDate: new Date(),
+        missingSource: true,
+      },
+      {
+        uid: 102,
+        source: rawMail({
+          from: 'customer@example.test',
+          messageId: '<oversized@example.test>',
+          subject: 'Oversized message',
+        }),
+        internalDate: new Date(),
+        size: maxBytes + 1,
+      },
+      {
+        uid: 103,
+        source: rawMail({
+          from: 'customer@example.test',
+          messageId: '<after-malformed@example.test>',
+          subject: 'Valid message after malformed history',
+        }),
+        internalDate: new Date(),
+      },
+      {
+        uid: 104,
+        source: Buffer.from(
+          rawMail({
+            from: 'customer@example.test',
+            messageId: '<invalid-date@example.test>',
+            subject: 'Malformed date fallback',
+          })
+            .toString()
+            .replace('Date: Wed, 10 Sep 2026 12:00:00 +0000\r\n', ''),
+        ),
+        internalDate: 'not-a-date',
+      },
+    ];
+    transport.sent = [];
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'CONNECTED', syncState: Prisma.DbNull, safeErrorSummary: null },
+    });
+
+    await expect(mailboxes.syncMailbox(mailboxId)).resolves.toMatchObject({
+      messages: 2,
+      skipped: false,
+      skippedMessages: 2,
+    });
+    const mailbox = await prisma.mailboxConnection.findUniqueOrThrow({ where: { id: mailboxId } });
+    expect(mailbox.status).toBe('CONNECTED');
+    expect(
+      (mailbox.syncState as { folders: { INBOX: { lastUid: number } } }).folders.INBOX.lastUid,
+    ).toBe(104);
+    expect(
+      await prisma.emailMessage.count({
+        where: {
+          mailboxConnectionId: mailboxId,
+          externalMessageId: '<after-malformed@example.test>',
+        },
+      }),
+    ).toBe(1);
+  });
+
+  it('classifies attachment-storage and message-persistence failures without hiding the stage', async () => {
+    transport.inbox = [
+      {
+        uid: 201,
+        source: rawMailWithPngAttachment({
+          from: 'customer@example.test',
+          messageId: '<attachment-failure@example.test>',
+          subject: 'Attachment failure',
+        }),
+        internalDate: new Date(),
+      },
+    ];
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'CONNECTED', syncState: Prisma.DbNull, safeErrorSummary: null },
+    });
+    const put = vi.spyOn(storage, 'put').mockRejectedValueOnce(new Error('S3 unavailable'));
+    await expect(mailboxes.syncMailbox(mailboxId)).rejects.toMatchObject({
+      stage: 'persist-attachment',
+    });
+    put.mockRestore();
+    expect(
+      await prisma.mailboxConnection.findUniqueOrThrow({ where: { id: mailboxId } }),
+    ).toMatchObject({
+      status: 'ERROR',
+      safeErrorSummary: 'Attachment synchronization failed',
+    });
+
+    transport.inbox = [
+      {
+        uid: 202,
+        source: rawMail({
+          from: 'customer@example.test',
+          messageId: '<persistence-failure@example.test>',
+          subject: 'Persistence failure',
+        }),
+        internalDate: new Date(),
+      },
+    ];
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'CONNECTED', syncState: Prisma.DbNull, safeErrorSummary: null },
+    });
+    const transaction = vi
+      .spyOn(prisma, '$transaction')
+      .mockRejectedValueOnce(Object.assign(new Error('database unavailable'), { code: 'P1001' }));
+    await expect(mailboxes.syncMailbox(mailboxId)).rejects.toMatchObject({
+      stage: 'persist-message',
+    });
+    transaction.mockRestore();
+    expect(
+      await prisma.mailboxConnection.findUniqueOrThrow({ where: { id: mailboxId } }),
+    ).toMatchObject({ status: 'ERROR', safeErrorSummary: 'Message synchronization failed' });
+
+    transport.inbox = [];
+    await expect(mailboxes.syncMailbox(mailboxId)).resolves.toMatchObject({ skipped: false });
+  });
+
   it('queues recovery jobs and prevents disabled mailbox synchronization', async () => {
     const recovered = await mailboxes.recoverMailboxes();
     expect(recovered.mailboxes).toBeGreaterThan(0);
@@ -486,6 +714,19 @@ describe('Milestone 14 mailbox integration', () => {
       where: { id: mailboxId },
       data: { status: 'CONNECTED' },
     });
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'ERROR' },
+    });
+    jobs.mailboxSyncs = [];
+    await mailboxes.recoverMailboxes();
+    expect(jobs.mailboxSyncs).not.toContain(mailboxId);
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'ERROR', updatedAt: new Date(Date.now() - 16 * 60_000) },
+    });
+    await mailboxes.recoverMailboxes();
+    expect(jobs.mailboxSyncs).toContain(mailboxId);
     await mutate(agentA, csrfA, 'patch', `/api/v1/mailboxes/${mailboxId}`)
       .send({ enabled: false })
       .expect(200);
@@ -512,6 +753,23 @@ describe('Milestone 14 mailbox integration', () => {
     expect(safeMailboxError(new Error('password=secret authentication rejected'))).toBe(
       'Authentication failed',
     );
+    const attachmentFailure = mailboxSyncError(
+      new Error('S3 request failed'),
+      'persist-attachment',
+    );
+    expect(safeMailboxError(attachmentFailure)).toBe('Attachment synchronization failed');
+    expect(safeMailboxErrorDetails(attachmentFailure)).toMatchObject({
+      stage: 'persist-attachment',
+      name: 'Error',
+      message: 'S3 request failed',
+    });
+    expect(safeMailboxError(mailboxSyncError(new Error('write failed'), 'persist-message'))).toBe(
+      'Message synchronization failed',
+    );
+    const prismaError = Object.assign(new Error('body: customer private content'), {
+      name: 'PrismaClientValidationError',
+    });
+    expect(safeMailboxErrorDetails(prismaError).message).toBe('Database operation failed');
   });
 
   async function createUser(roleName: 'Viewer') {

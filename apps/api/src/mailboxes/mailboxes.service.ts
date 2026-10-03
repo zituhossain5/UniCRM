@@ -3,6 +3,7 @@ import {
   ConflictException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -35,13 +36,17 @@ import type {
 } from './dto/mailboxes.dto';
 import {
   nextUidRange,
+  mailboxSyncError,
   normalizeEmail,
   normalizeMessageId,
   normalizeReferences,
   safeFileName,
   safeMailboxError,
+  safeMailboxErrorDetails,
+  type MailboxSyncStage,
   type MailboxSyncState,
 } from './mailbox.helpers';
+import { MAILBOX_ERROR_RECOVERY_DELAY_MS } from './mailbox.constants';
 
 const mailboxPublicSelect = {
   id: true,
@@ -74,6 +79,8 @@ const ALLOWED_ATTACHMENT_TYPES = new Set([
 
 @Injectable()
 export class MailboxesService {
+  private readonly logger = new Logger(MailboxesService.name);
+
   constructor(
     @Inject(AuditService) private readonly audit: AuditService,
     @Inject(ConfigService) private readonly config: ConfigService<EnvironmentVariables, true>,
@@ -237,9 +244,17 @@ export class MailboxesService {
   async recoverMailboxes() {
     let cursor: string | undefined;
     let count = 0;
+    const staleSyncAt = new Date(Date.now() - 5 * 60_000);
+    const retryErrorAt = new Date(Date.now() - MAILBOX_ERROR_RECOVERY_DELAY_MS);
     do {
       const mailboxes = await this.prisma.mailboxConnection.findMany({
-        where: { status: { not: MailboxConnectionStatus.DISABLED } },
+        where: {
+          OR: [
+            { status: MailboxConnectionStatus.CONNECTED },
+            { status: MailboxConnectionStatus.ERROR, updatedAt: { lt: retryErrorAt } },
+            { status: MailboxConnectionStatus.SYNCING, updatedAt: { lt: staleSyncAt } },
+          ],
+        },
         select: { id: true },
         orderBy: { id: 'asc' },
         take: 250,
@@ -265,16 +280,34 @@ export class MailboxesService {
     });
     if (!claimed.count) return { messages: 0, skipped: true };
     const mailbox = await this.prisma.mailboxConnection.findUniqueOrThrow({ where: { id } });
-    const client = this.transport.createImapClient(
-      mailbox,
-      this.secrets.decrypt(mailbox.encryptedCredential),
-    );
     const nextState: MailboxSyncState = { folders: {} };
     let imported = 0;
+    let skippedMessages = 0;
+    let stage: MailboxSyncStage = 'decrypt-credential';
+    let client: ReturnType<MailboxTransportService['createImapClient']> | undefined;
     try {
+      const credential = this.secrets.decrypt(mailbox.encryptedCredential);
+      client = this.transport.createImapClient(mailbox, credential);
+      client.on('error', (error) => {
+        const details = safeMailboxErrorDetails(error, stage);
+        this.logger.error(
+          `Mailbox IMAP client error ${JSON.stringify({
+            mailboxId: mailbox.id,
+            emailAddress: mailbox.emailAddress,
+            stage: details.stage,
+            errorName: details.name,
+            ...(details.code ? { errorCode: details.code } : {}),
+            errorMessage: details.message,
+          })}`,
+        );
+      });
+      stage = 'connect';
       await client.connect();
+      stage = 'list-folders';
       const available = await client.list();
-      const sent = available.find((folder) => folder.specialUse === '\\Sent');
+      const sent =
+        available.find((folder) => folder.specialUse?.toLowerCase() === '\\sent') ??
+        available.find((folder) => /(^|[./])sent(?: messages| items)?$/i.test(folder.path));
       const folders = [
         { path: 'INBOX', key: 'INBOX', direction: EmailDirection.INBOUND },
         ...(sent && sent.path !== 'INBOX'
@@ -283,47 +316,96 @@ export class MailboxesService {
       ];
       const previous = (mailbox.syncState ?? {}) as MailboxSyncState;
       for (const folder of folders) {
+        const isInbox = folder.key === 'INBOX';
+        stage = isInbox ? 'open-inbox' : 'open-sent';
         const selected = await client.mailboxOpen(folder.path, { readOnly: true });
         const uidValidity = selected.uidValidity.toString();
+        const previousFolder = previous.folders?.[folder.key];
         const range = nextUidRange({
           currentUidValidity: uidValidity,
           exists: selected.exists,
           uidNext: selected.uidNext,
-          previous: previous.folders?.[folder.key],
+          previous: previousFolder,
           batchSize: this.config.get('MAILBOX_SYNC_BATCH_SIZE', { infer: true }),
         });
-        let lastUid = previous.folders?.[folder.key]?.lastUid ?? 0;
+        let lastUid = previousFolder?.uidValidity === uidValidity ? previousFolder.lastUid : 0;
         if (range) {
-          for await (const fetched of client.fetch(
+          stage = isInbox ? 'fetch-inbox' : 'fetch-sent';
+          const messages: Array<{
+            uid: number;
+            size?: number;
+            internalDate?: Date | string;
+          }> = [];
+          for await (const metadata of client.fetch(
             range,
-            { uid: true, size: true, source: true, internalDate: true },
+            { uid: true, size: true, internalDate: true },
             { uid: true },
-          )) {
-            lastUid = Math.max(lastUid, fetched.uid);
-            if (!fetched.source) continue;
-            if (
-              (fetched.size ?? fetched.source.length) >
-              this.config.get('MAILBOX_MESSAGE_MAX_BYTES', { infer: true })
-            )
-              continue;
-            const parsed = await simpleParser(fetched.source, {
-              maxHtmlLengthToParse: this.config.get('MAILBOX_MESSAGE_MAX_BYTES', { infer: true }),
+          ))
+            messages.push({
+              uid: metadata.uid,
+              size: metadata.size,
+              internalDate: metadata.internalDate,
             });
+          for (const metadata of messages) {
+            const maxBytes = this.config.get('MAILBOX_MESSAGE_MAX_BYTES', { infer: true });
+            if ((metadata.size ?? 0) > maxBytes) {
+              skippedMessages += 1;
+              lastUid = Math.max(lastUid, metadata.uid);
+              this.logSkippedMessage(mailbox, folder.path, metadata.uid, 'MESSAGE_TOO_LARGE');
+              continue;
+            }
+            stage = isInbox ? 'fetch-inbox' : 'fetch-sent';
+            const fetched = await client.fetchOne(
+              String(metadata.uid),
+              { uid: true, size: true, source: true, internalDate: true },
+              { uid: true },
+            );
+            if (!fetched || !fetched.source) {
+              skippedMessages += 1;
+              lastUid = Math.max(lastUid, metadata.uid);
+              this.logSkippedMessage(mailbox, folder.path, metadata.uid, 'MESSAGE_SOURCE_MISSING');
+              continue;
+            }
+            if ((fetched.size ?? fetched.source.length) > maxBytes) {
+              skippedMessages += 1;
+              lastUid = Math.max(lastUid, metadata.uid);
+              this.logSkippedMessage(mailbox, folder.path, metadata.uid, 'MESSAGE_TOO_LARGE');
+              continue;
+            }
+            stage = 'parse-message';
+            let parsed: ParsedMail;
+            try {
+              parsed = await simpleParser(fetched.source, { maxHtmlLengthToParse: maxBytes });
+            } catch (error) {
+              skippedMessages += 1;
+              lastUid = Math.max(lastUid, metadata.uid);
+              this.logSkippedMessage(
+                mailbox,
+                folder.path,
+                metadata.uid,
+                'MESSAGE_PARSE_FAILED',
+                error,
+              );
+              continue;
+            }
+            stage = 'persist-message';
             if (
               await this.persistSynchronizedMessage(
                 mailbox,
                 folder.path,
                 folder.direction,
-                String(fetched.uid),
+                String(metadata.uid),
                 parsed,
-                fetched.internalDate,
+                fetched.internalDate ?? metadata.internalDate,
               )
             )
               imported += 1;
+            lastUid = Math.max(lastUid, metadata.uid);
           }
         }
         nextState.folders![folder.key] = { uidValidity, lastUid };
       }
+      stage = 'update-state';
       await this.prisma.mailboxConnection.update({
         where: { id },
         data: {
@@ -333,12 +415,25 @@ export class MailboxesService {
           safeErrorSummary: null,
         },
       });
-      return { messages: imported, skipped: false };
+      return { messages: imported, skipped: false, skippedMessages };
     } catch (error) {
-      await this.setConnectionError(id, safeMailboxError(error));
-      throw error;
+      const failure = mailboxSyncError(error, stage);
+      const details = safeMailboxErrorDetails(failure);
+      const summary = safeMailboxError(failure);
+      this.logger.error(
+        `Mailbox sync failed ${JSON.stringify({
+          mailboxId: mailbox.id,
+          emailAddress: mailbox.emailAddress,
+          stage: details.stage,
+          errorName: details.name,
+          ...(details.code ? { errorCode: details.code } : {}),
+          errorMessage: details.message,
+        })}`,
+      );
+      await this.setConnectionError(id, summary);
+      throw failure;
     } finally {
-      if (!client.isClosed) {
+      if (client && !client.isClosed) {
         try {
           await client.logout();
         } catch {
@@ -629,7 +724,8 @@ export class MailboxesService {
             relatedEntityId: relatedMessage?.relatedEntityId ?? null,
           }
         : await this.matchCrm(mailbox.organizationId, fromAddress);
-    const occurredAt = parsed.date ?? (internalDate ? new Date(internalDate) : new Date());
+    const dateCandidate = parsed.date ?? (internalDate ? new Date(internalDate) : new Date());
+    const occurredAt = Number.isNaN(dateCandidate.getTime()) ? new Date() : dateCandidate;
     const storedKeys: string[] = [];
     try {
       const attachmentData: Array<{
@@ -652,9 +748,13 @@ export class MailboxesService {
         )
           continue;
         const storageKey = crypto.randomUUID();
-        await this.storage.put(storageKey, attachment.content, {
-          contentType: attachment.contentType,
-        });
+        try {
+          await this.storage.put(storageKey, attachment.content, {
+            contentType: attachment.contentType,
+          });
+        } catch (error) {
+          throw mailboxSyncError(error, 'persist-attachment');
+        }
         storedKeys.push(storageKey);
         attachmentData.push({
           organizationId: mailbox.organizationId,
@@ -848,6 +948,26 @@ export class MailboxesService {
       where: { id },
       data: { status: MailboxConnectionStatus.ERROR, safeErrorSummary: summary },
     });
+  }
+
+  private logSkippedMessage(
+    mailbox: Pick<MailboxConnection, 'id' | 'emailAddress'>,
+    folder: string,
+    uid: number,
+    code: 'MESSAGE_PARSE_FAILED' | 'MESSAGE_SOURCE_MISSING' | 'MESSAGE_TOO_LARGE',
+    error?: unknown,
+  ) {
+    const details = error ? safeMailboxErrorDetails(error, 'parse-message') : undefined;
+    this.logger.warn(
+      `Mailbox message skipped ${JSON.stringify({
+        mailboxId: mailbox.id,
+        emailAddress: mailbox.emailAddress,
+        folder,
+        uid,
+        errorCode: code,
+        ...(details ? { errorName: details.name, errorMessage: details.message } : {}),
+      })}`,
+    );
   }
 
   private createMessageId(emailAddress: string) {
