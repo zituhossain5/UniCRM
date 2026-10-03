@@ -13,11 +13,19 @@ import type { AttachmentStorage } from './storage.service';
 export class S3StorageService implements AttachmentStorage {
   private readonly bucket: string;
   private readonly client: S3Client;
+  private readonly kmsKeyId: string | undefined;
   private readonly prefix: string;
+  private readonly serverSideEncryption: 'AES256' | 'aws:kms' | undefined;
 
   constructor(@Inject(ConfigService) config: ConfigService<EnvironmentVariables, true>) {
     this.bucket = config.get('STORAGE_S3_BUCKET', { infer: true }) ?? '';
     this.prefix = config.get('STORAGE_S3_PREFIX', { infer: true }).replace(/^\/+|\/+$/g, '');
+    const encryptionMode = config.get('STORAGE_S3_SERVER_SIDE_ENCRYPTION', { infer: true });
+    this.serverSideEncryption = encryptionMode === 'none' ? undefined : encryptionMode;
+    this.kmsKeyId =
+      encryptionMode === 'aws:kms'
+        ? config.get('STORAGE_S3_KMS_KEY_ID', { infer: true })
+        : undefined;
     this.client = new S3Client({
       credentials: {
         accessKeyId: config.get('STORAGE_S3_ACCESS_KEY_ID', { infer: true }) ?? '',
@@ -36,7 +44,10 @@ export class S3StorageService implements AttachmentStorage {
         Bucket: this.bucket,
         ContentType: metadata?.contentType,
         Key: this.objectKey(key),
-        ServerSideEncryption: 'AES256',
+        ...(this.serverSideEncryption
+          ? { ServerSideEncryption: this.serverSideEncryption }
+          : undefined),
+        ...(this.kmsKeyId ? { SSEKMSKeyId: this.kmsKeyId } : undefined),
       }),
     );
   }

@@ -643,6 +643,41 @@ describe('Milestone 14 mailbox integration', () => {
     ).toBe(1);
   });
 
+  it('stores an incoming mailbox attachment through shared attachment storage', async () => {
+    transport.inbox = [
+      {
+        uid: 190,
+        source: rawMailWithPngAttachment({
+          from: 'customer@example.test',
+          messageId: '<attachment-success@example.test>',
+          subject: 'Attachment success',
+        }),
+        internalDate: new Date(),
+      },
+    ];
+    transport.sent = [];
+    await prisma.mailboxConnection.update({
+      where: { id: mailboxId },
+      data: { status: 'CONNECTED', syncState: Prisma.DbNull, safeErrorSummary: null },
+    });
+
+    await expect(mailboxes.syncMailbox(mailboxId)).resolves.toMatchObject({
+      messages: 1,
+      skipped: false,
+    });
+    const attachment = await prisma.emailAttachment.findFirstOrThrow({
+      where: {
+        emailMessage: {
+          mailboxConnectionId: mailboxId,
+          externalMessageId: '<attachment-success@example.test>',
+        },
+      },
+    });
+    await expect(storage.get(attachment.storageKey)).resolves.toEqual(
+      Buffer.from('iVBORw0KGgo=', 'base64'),
+    );
+  });
+
   it('classifies attachment-storage and message-persistence failures without hiding the stage', async () => {
     transport.inbox = [
       {

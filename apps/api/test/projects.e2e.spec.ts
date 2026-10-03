@@ -389,6 +389,15 @@ describe('Milestone 4 projects and tasks', () => {
         contentType: 'application/octet-stream',
       })
       .expect(400);
+    const taskUpload = await mutate(agentA, csrfA, 'post', `/api/v1/tasks/${taskA}/attachments`)
+      .attach('file', Buffer.from('task attachment'), {
+        filename: 'task-note.txt',
+        contentType: 'text/plain',
+      })
+      .expect(201);
+    const taskAttachmentId = body<{ data: { id: string } }>(taskUpload).data.id;
+    await agentA.get(`/api/v1/attachments/${taskAttachmentId}/download`).expect(200);
+    await mutate(agentA, csrfA, 'delete', `/api/v1/attachments/${taskAttachmentId}`).expect(204);
     await mutate(agentA, csrfA, 'delete', `/api/v1/attachments/${attachmentId}`).expect(204);
     await mutate(agentA, csrfA, 'delete', `/api/v1/tasks/${taskA}/comments/${comment.id}`).expect(
       204,

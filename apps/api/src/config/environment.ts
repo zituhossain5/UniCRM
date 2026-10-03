@@ -5,6 +5,11 @@ const booleanFromString = z
   .default('false')
   .transform((value) => value === 'true');
 
+const optionalNonEmptyString = z.preprocess(
+  (value) => (typeof value === 'string' && value.trim() === '' ? undefined : value),
+  z.string().trim().min(1).optional(),
+);
+
 const environmentSchema = z
   .object({
     API_HOST: z.string().min(1).default('0.0.0.0'),
@@ -76,9 +81,11 @@ const environmentSchema = z
     STORAGE_S3_BUCKET: z.string().optional(),
     STORAGE_S3_ENDPOINT: z.url().optional(),
     STORAGE_S3_FORCE_PATH_STYLE: booleanFromString,
+    STORAGE_S3_KMS_KEY_ID: optionalNonEmptyString,
     STORAGE_S3_PREFIX: z.string().default('attachments'),
     STORAGE_S3_REGION: z.string().min(1).default('us-east-1'),
     STORAGE_S3_SECRET_ACCESS_KEY: z.string().optional(),
+    STORAGE_S3_SERVER_SIDE_ENCRYPTION: z.enum(['none', 'AES256', 'aws:kms']).optional(),
     TRUSTED_PROXY_HOPS: z.coerce.number().int().min(0).max(5).default(0),
     UPLOAD_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
     UPLOAD_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
@@ -195,6 +202,7 @@ const environmentSchema = z
         'STORAGE_S3_BUCKET',
         'STORAGE_S3_ENDPOINT',
         'STORAGE_S3_SECRET_ACCESS_KEY',
+        'STORAGE_S3_SERVER_SIDE_ENCRYPTION',
       ] as const) {
         if (!environment[key]) {
           context.addIssue({

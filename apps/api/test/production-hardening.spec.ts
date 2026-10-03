@@ -38,11 +38,16 @@ const baseProductionEnv = {
   STORAGE_S3_BUCKET: 'unicrm-private',
   STORAGE_S3_ENDPOINT: 'https://s3.example.com',
   STORAGE_S3_SECRET_ACCESS_KEY: 'secret',
+  STORAGE_S3_SERVER_SIDE_ENCRYPTION: 'none',
 };
 
 describe('production environment validation', () => {
   it('accepts the internal-beta production shape', () => {
     expect(validateEnvironment(baseProductionEnv).NODE_ENV).toBe('production');
+    expect(
+      validateEnvironment({ ...baseProductionEnv, STORAGE_S3_KMS_KEY_ID: '' })
+        .STORAGE_S3_KMS_KEY_ID,
+    ).toBeUndefined();
   });
 
   it('rejects insecure production origins and cookies', () => {
@@ -64,6 +69,21 @@ describe('production environment validation', () => {
         STORAGE_DRIVER: 'local',
       }),
     ).toThrow(/EMAIL_DELIVERY_MODE must be queue|STORAGE_DRIVER must be s3/);
+  });
+
+  it('requires an explicit supported S3 server-side encryption mode', () => {
+    const missingMode: Partial<typeof baseProductionEnv> = { ...baseProductionEnv };
+    delete missingMode.STORAGE_S3_SERVER_SIDE_ENCRYPTION;
+
+    expect(() => validateEnvironment(missingMode)).toThrow(
+      /STORAGE_S3_SERVER_SIDE_ENCRYPTION is required when STORAGE_DRIVER=s3/,
+    );
+    expect(() =>
+      validateEnvironment({
+        ...baseProductionEnv,
+        STORAGE_S3_SERVER_SIDE_ENCRYPTION: 'unsupported',
+      }),
+    ).toThrow(/STORAGE_S3_SERVER_SIDE_ENCRYPTION/);
   });
 });
 
