@@ -12,6 +12,7 @@ import type {
 import { Button, Input, LoadingState, Select } from '@unicrm/ui';
 import { RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { WebToLeadSettings } from './web-to-lead-settings';
 
 const eventTypes = [
   'lead.created',
@@ -35,11 +36,11 @@ const eventTypes = [
   'payment.created',
 ];
 
-type Tab = 'connections' | 'inbound' | 'outbound' | 'logs';
+type Tab = 'web-to-lead' | 'connections' | 'inbound' | 'outbound' | 'logs';
 
 export function IntegrationsSettings() {
   const current = useCurrentUser();
-  const [tab, setTab] = useState<Tab>('connections');
+  const [tab, setTab] = useState<Tab>('web-to-lead');
   const [connections, setConnections] = useState<IntegrationConnection[]>();
   const [subscriptions, setSubscriptions] = useState<WebhookSubscription[]>([]);
   const [events, setEvents] = useState<IntegrationEventRecord[]>([]);
@@ -156,19 +157,23 @@ export function IntegrationsSettings() {
         </div>
       </header>
       <nav aria-label="Integration sections" className="settings-tabs">
-        {(['connections', 'inbound', 'outbound', 'logs'] as Tab[]).map((value) => (
+        {(['web-to-lead', 'connections', 'inbound', 'outbound', 'logs'] as Tab[]).map((value) => (
           <button
             aria-current={tab === value ? 'page' : undefined}
             key={value}
             onClick={() => setTab(value)}
             type="button"
           >
-            {value[0]!.toUpperCase() + value.slice(1)}
+            {value === 'web-to-lead' ? 'Web-to-Lead' : value[0]!.toUpperCase() + value.slice(1)}
           </button>
         ))}
       </nav>
       {error ? <AuthMessage>{error}</AuthMessage> : null}
       {message ? <AuthMessage>{message}</AuthMessage> : null}
+
+      {tab === 'web-to-lead' ? (
+        <WebToLeadSettings canManage={canManage} canReadLogs={canReadLogs} />
+      ) : null}
 
       {tab === 'connections' ? (
         <div className="configuration-list">

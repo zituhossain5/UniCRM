@@ -144,6 +144,106 @@
   font-size: 0.75rem;
   color: var(--muted-foreground);
 }
+.web-to-lead-settings,
+.web-to-lead-editor,
+.web-to-lead-mappings,
+.web-to-lead-card-list,
+.web-to-lead-logs {
+  display: grid;
+  gap: 0.85rem;
+}
+.web-to-lead-editor,
+.web-to-lead-card,
+.web-to-lead-secret {
+  padding: 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+.web-to-lead-section-heading,
+.web-to-lead-card header,
+.web-to-lead-card footer,
+.web-to-lead-tag-picker,
+.web-to-lead-endpoint {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.web-to-lead-section-heading > div,
+.web-to-lead-card header > div,
+.web-to-lead-secret {
+  display: grid;
+  gap: 0.25rem;
+}
+.web-to-lead-section-heading small,
+.web-to-lead-card small {
+  color: var(--muted-foreground);
+}
+.web-to-lead-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.web-to-lead-form-grid label,
+.web-to-lead-mapping-row label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+.web-to-lead-tag-picker > :first-child {
+  flex: 1;
+}
+.web-to-lead-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.web-to-lead-chips button {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-subtle);
+  color: var(--foreground);
+}
+.web-to-lead-mapping-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
+  align-items: end;
+  gap: 0.6rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border);
+}
+.web-to-lead-card {
+  display: grid;
+  gap: 0.75rem;
+}
+.web-to-lead-card footer {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.web-to-lead-endpoint code,
+.web-to-lead-secret code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.78rem;
+}
+.web-to-lead-secret {
+  border-color: var(--focus);
+}
+@media (max-width: 700px) {
+  .web-to-lead-form-grid,
+  .web-to-lead-mapping-row {
+    grid-template-columns: 1fr;
+  }
+  .web-to-lead-section-heading,
+  .web-to-lead-tag-picker,
+  .web-to-lead-endpoint {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
 .pipeline-settings-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(18rem, 1fr));

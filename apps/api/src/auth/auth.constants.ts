@@ -320,6 +320,7 @@ export const DEFAULT_ROLE_PERMISSIONS: Record<(typeof DEFAULT_ROLES)[number], Pe
     PERMISSIONS.dataDuplicatesRead,
     PERMISSIONS.dataMerge,
     PERMISSIONS.integrationRead,
+    PERMISSIONS.integrationManage,
     PERMISSIONS.integrationLogsRead,
     PERMISSIONS.integrationRetry,
     PERMISSIONS.leadCreate,

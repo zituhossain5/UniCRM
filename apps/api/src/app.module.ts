@@ -43,6 +43,7 @@ import { ActivitiesModule } from './activities/activities.module';
 import { ForecastModule } from './forecast/forecast.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CasesModule } from './cases/cases.module';
+import { WebToLeadModule } from './web-to-lead/web-to-lead.module';
 
 @Module({
   imports: [
@@ -69,6 +70,7 @@ import { CasesModule } from './cases/cases.module';
     SavedViewsModule,
     DataManagementModule,
     IntegrationsModule,
+    WebToLeadModule,
     AutomationsModule,
     ActivitiesModule,
     LeadsModule,

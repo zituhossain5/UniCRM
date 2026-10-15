@@ -12,6 +12,7 @@ import { JobsModule } from './jobs.module';
 import { IntegrationsModule } from '../integrations/integrations.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { MailboxesModule } from '../mailboxes/mailboxes.module';
+import { WebToLeadModule } from '../web-to-lead/web-to-lead.module';
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { MailboxesModule } from '../mailboxes/mailboxes.module';
     IntegrationsModule,
     AutomationsModule,
     MailboxesModule,
+    WebToLeadModule,
   ],
   providers: [JobWorkerService, StructuredLogger],
 })

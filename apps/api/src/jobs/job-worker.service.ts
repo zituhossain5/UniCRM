@@ -23,6 +23,7 @@ import { UNICRM_QUEUE, type EmailJob } from './jobs.types';
 import { MailboxesService } from '../mailboxes/mailboxes.service';
 import { MAILBOX_RECOVERY_JOB, MAILBOX_SYNC_JOB } from '../mailboxes/mailbox.constants';
 import { safeMailboxError, safeMailboxErrorDetails } from '../mailboxes/mailbox.helpers';
+import { WebToLeadService } from '../web-to-lead/web-to-lead.service';
 
 @Injectable()
 export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
@@ -39,6 +40,7 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     @Inject(IntegrationsService) private readonly integrations: IntegrationsService,
     @Inject(AutomationsService) private readonly automations: AutomationsService,
     @Inject(MailboxesService) private readonly mailboxes: MailboxesService,
+    @Inject(WebToLeadService) private readonly webToLead: WebToLeadService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -70,8 +72,11 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
         if (job.name === 'notification-sweep') return this.notifications.generateScheduled();
         if (job.name === 'auth-maintenance')
           return this.authMaintenance.cleanupExpiredCredentials();
-        if (job.name === INTEGRATION_PROCESSING_JOB)
-          return this.integrations.processInboundEvent((job.data as { eventId: string }).eventId);
+        if (job.name === INTEGRATION_PROCESSING_JOB) {
+          const eventId = (job.data as { eventId: string }).eventId;
+          if (await this.webToLead.processEvent(eventId)) return;
+          return this.integrations.processInboundEvent(eventId);
+        }
         if (job.name === WEBHOOK_DELIVERY_JOB)
           return this.integrations.processDelivery((job.data as { deliveryId: string }).deliveryId);
         if (job.name === INTEGRATION_RECOVERY_JOB) return this.integrations.recoverPendingWork();
