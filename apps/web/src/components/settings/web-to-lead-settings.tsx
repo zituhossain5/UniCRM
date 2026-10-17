@@ -8,6 +8,7 @@ import type {
   WebToLeadMapping,
   WebToLeadReferences,
 } from '@/lib/integration-types';
+import { composeWebToLeadEndpointUrl } from '@/lib/web-to-lead-url';
 import { Button, Input, LoadingState, Select } from '@unicrm/ui';
 import { Check, Copy, Plus, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
@@ -480,7 +481,7 @@ export function WebToLeadSettings({
           <div className="configuration-row">No Web-to-Lead integrations yet.</div>
         ) : (
           items.map((item) => {
-            const endpoint = `${apiBaseUrl()}${item.endpoint}`;
+            const endpoint = composeWebToLeadEndpointUrl(apiBaseUrl(), item.endpoint);
             return (
               <article className="web-to-lead-card" key={item.id}>
                 <header>
