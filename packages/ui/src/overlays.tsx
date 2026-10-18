@@ -185,28 +185,65 @@ export function DropdownMenu({
   );
 }
 
-export interface TabItem {
-  content: ReactNode;
+export interface TabItem<Value extends string = string> {
+  content?: ReactNode;
+  disabled?: boolean;
   label: ReactNode;
-  value: string;
+  value: Value;
 }
 
-export function Tabs({ defaultValue, items }: { defaultValue: string; items: readonly TabItem[] }) {
+export interface TabsProps<Value extends string = string> {
+  ariaLabel?: string;
+  defaultValue?: Value;
+  items: readonly TabItem<Value>[];
+  onValueChange?: (value: Value) => void;
+  value?: Value;
+  variant?: 'panel' | 'navigation';
+}
+
+export function Tabs<Value extends string>({
+  ariaLabel,
+  defaultValue,
+  items,
+  onValueChange,
+  value,
+  variant = 'panel',
+}: TabsProps<Value>) {
+  const navigation = variant === 'navigation';
+
   return (
-    <BaseTabs.Root className="ui-tabs" defaultValue={defaultValue}>
-      <BaseTabs.List className="ui-tabs-list">
+    <BaseTabs.Root
+      className={navigation ? 'ui-tabs-root ui-tabs-root--navigation' : 'ui-tabs'}
+      defaultValue={defaultValue}
+      onValueChange={(nextValue) => {
+        if (typeof nextValue === 'string') onValueChange?.(nextValue as Value);
+      }}
+      value={value}
+    >
+      <BaseTabs.List
+        activateOnFocus={navigation}
+        aria-label={ariaLabel}
+        className={navigation ? 'ui-tabs-navigation' : 'ui-tabs-list'}
+      >
         {items.map((item) => (
-          <BaseTabs.Tab className="ui-tab" key={item.value} value={item.value}>
+          <BaseTabs.Tab
+            className={navigation ? 'ui-tab-navigation' : 'ui-tab'}
+            disabled={item.disabled}
+            key={item.value}
+            value={item.value}
+          >
             {item.label}
           </BaseTabs.Tab>
         ))}
-        <BaseTabs.Indicator className="ui-tabs-indicator" />
+        {navigation ? null : <BaseTabs.Indicator className="ui-tabs-indicator" />}
       </BaseTabs.List>
-      {items.map((item) => (
-        <BaseTabs.Panel className="ui-tab-panel" key={item.value} value={item.value}>
-          {item.content}
-        </BaseTabs.Panel>
-      ))}
+      {navigation
+        ? null
+        : items.map((item) => (
+            <BaseTabs.Panel className="ui-tab-panel" key={item.value} value={item.value}>
+              {item.content}
+            </BaseTabs.Panel>
+          ))}
     </BaseTabs.Root>
   );
 }

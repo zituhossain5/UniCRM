@@ -1,8 +1,10 @@
 'use client';
 
-import { AuthMessage, AuthScreen } from '@/components/auth-screen';
+import { AuthAlert, authErrorMessage } from '@/components/auth/auth-feedback';
+import { AuthSubmitButton, AuthTextField } from '@/components/auth/auth-fields';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { apiRequest } from '@/lib/api';
-import { Button, Input } from '@unicrm/ui';
+import { ArrowLeft, AtSign, MailCheck } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 
@@ -22,30 +24,67 @@ export default function ForgotPasswordPage() {
       });
       setMessage(result.message);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Request failed.');
+      setError(authErrorMessage(cause, 'Request failed.'));
     } finally {
       setLoading(false);
     }
   }
+
+  if (message)
+    return (
+      <AuthShell
+        badge={{ icon: MailCheck, tone: 'success' }}
+        description={message}
+        eyebrow="Check your inbox"
+        title="Instructions on the way"
+      >
+        <div className="auth-form">
+          <div className="auth-actions">
+            <Link className="ui-button ui-button--primary auth-submit" href="/login">
+              Return to sign in
+            </Link>
+            <button className="auth-secondary-action" onClick={() => setMessage('')} type="button">
+              Use a different email
+            </button>
+          </div>
+        </div>
+      </AuthShell>
+    );
+
   return (
-    <AuthScreen
-      description="We will send instructions if the account is available."
+    <AuthShell
+      description="Enter your work email and we will send reset instructions if the account is available."
+      eyebrow="Account recovery"
       title="Reset your password"
     >
       <form className="auth-form" onSubmit={(event) => void submit(event)}>
-        <label>
-          <span>Email</span>
-          <Input autoComplete="email" name="email" required type="email" />
-        </label>
-        {message ? <AuthMessage tone="success">{message}</AuthMessage> : null}
-        {error ? <AuthMessage>{error}</AuthMessage> : null}
-        <Button loading={loading} type="submit">
-          Send reset instructions
-        </Button>
-        <Link className="text-link auth-link" href="/login">
-          Back to sign in
-        </Link>
+        <AuthTextField
+          aria-describedby={error ? 'forgot-error' : undefined}
+          autoComplete="email"
+          icon={AtSign}
+          id="forgot-email"
+          invalid={Boolean(error)}
+          label="Email address"
+          name="email"
+          placeholder="you@company.com"
+          required
+          type="email"
+        />
+        {error ? (
+          <AuthAlert id="forgot-error" tone="error">
+            {error}
+          </AuthAlert>
+        ) : null}
+        <div className="auth-actions">
+          <AuthSubmitButton loading={loading} loadingLabel="Sending instructions…">
+            Send reset instructions
+          </AuthSubmitButton>
+          <Link className="auth-back-link" href="/login">
+            <ArrowLeft aria-hidden="true" size={15} strokeWidth={2} />
+            Back to sign in
+          </Link>
+        </div>
       </form>
-    </AuthScreen>
+    </AuthShell>
   );
 }

@@ -1,9 +1,11 @@
 'use client';
 
-import { AuthMessage, AuthScreen } from '@/components/auth-screen';
-import { AuthPasswordField } from '@/components/auth-password-field';
+import { AuthAlert, AuthTrustNote, authErrorMessage } from '@/components/auth/auth-feedback';
+import { AuthPasswordField, AuthSubmitButton } from '@/components/auth/auth-fields';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { apiRequest } from '@/lib/api';
-import { Button, LoadingState } from '@unicrm/ui';
+import { LoadingState } from '@unicrm/ui';
+import { ArrowLeft, CircleCheck, TimerOff } from 'lucide-react';
 import Link from 'next/link';
 import { useEffect, useState, type FormEvent } from 'react';
 
@@ -29,7 +31,7 @@ export function InvitationForm({ token }: { token: string }) {
     )
       .then(({ data }) => setDetails(data))
       .catch((cause: unknown) =>
-        setError(cause instanceof Error ? cause.message : 'Invitation validation failed.'),
+        setError(authErrorMessage(cause, 'Invitation validation failed.')),
       );
   }, [token]);
 
@@ -47,62 +49,116 @@ export function InvitationForm({ token }: { token: string }) {
       });
       setComplete(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Invitation acceptance failed.');
+      setError(authErrorMessage(cause, 'Invitation acceptance failed.'));
     } finally {
       setLoading(false);
     }
   }
 
-  return (
-    <AuthScreen
-      description={
-        details
-          ? `${details.organizationName} invited you as ${details.role}.`
-          : 'Validate your invitation and create your account.'
-      }
-      title="Join UniCRM"
-    >
-      {complete ? (
+  if (complete)
+    return (
+      <AuthShell
+        badge={{ icon: CircleCheck, tone: 'success' }}
+        description={
+          details
+            ? `You can now sign in to ${details.organizationName} with your new password.`
+            : 'You can now sign in with your new password.'
+        }
+        eyebrow="Welcome aboard"
+        title="Your account is active"
+      >
         <div className="auth-form">
-          <AuthMessage tone="success">Your account is active.</AuthMessage>
-          <Link className="ui-button ui-button--primary" href="/login">
+          <Link className="ui-button ui-button--primary auth-submit" href="/login">
             Sign in
           </Link>
         </div>
-      ) : details ? (
+      </AuthShell>
+    );
+
+  if (details)
+    return (
+      <AuthShell
+        description={`${details.organizationName} invited you as ${details.role}. Set a password to activate your account.`}
+        eyebrow="You're invited"
+        title="Join UniCRM"
+      >
         <form className="auth-form" onSubmit={(event) => void submit(event)}>
           <div className="auth-invitee">
-            <strong>
-              {details.firstName} {details.lastName}
-            </strong>
-            <span>{details.email}</span>
+            <span aria-hidden="true" className="auth-invitee-avatar">
+              {details.firstName.charAt(0)}
+              {details.lastName.charAt(0)}
+            </span>
+            <span className="auth-invitee-copy">
+              <strong>
+                {details.firstName} {details.lastName}
+              </strong>
+              <span>{details.email}</span>
+            </span>
           </div>
           <AuthPasswordField
+            aria-describedby={error ? 'invitation-error' : undefined}
             autoComplete="new-password"
             id="invitation-password"
             label="Password"
             minLength={12}
             name="password"
+            placeholder="At least 12 characters"
             required
           />
           <AuthPasswordField
+            aria-describedby={error ? 'invitation-error' : undefined}
             autoComplete="new-password"
             id="invitation-confirm-password"
             label="Confirm password"
             minLength={12}
             name="confirmPassword"
+            placeholder="Re-enter your password"
             required
           />
-          {error ? <AuthMessage>{error}</AuthMessage> : null}
-          <Button loading={loading} type="submit">
-            Accept invitation
-          </Button>
+          {error ? (
+            <AuthAlert id="invitation-error" tone="error">
+              {error}
+            </AuthAlert>
+          ) : null}
+          <div className="auth-actions">
+            <AuthSubmitButton loading={loading} loadingLabel="Activating account…">
+              Accept invitation
+            </AuthSubmitButton>
+            <AuthTrustNote>Access is managed by your workspace administrator.</AuthTrustNote>
+          </div>
         </form>
-      ) : error ? (
-        <AuthMessage>{error}</AuthMessage>
-      ) : (
+      </AuthShell>
+    );
+
+  if (error)
+    return (
+      <AuthShell
+        badge={{ icon: TimerOff, tone: 'warning' }}
+        description="Invitations expire for security. Ask your workspace administrator to send you a new one."
+        eyebrow="Invitation"
+        title="This invitation can't be used"
+      >
+        <div className="auth-form">
+          <AuthAlert tone="error">{error}</AuthAlert>
+          <div className="auth-actions">
+            <Link className="auth-back-link" href="/login">
+              <ArrowLeft aria-hidden="true" size={15} strokeWidth={2} />
+              Back to sign in
+            </Link>
+          </div>
+        </div>
+      </AuthShell>
+    );
+
+  return (
+    <AuthShell
+      description="Validating your invitation and preparing your account."
+      eyebrow="Invitation"
+      title="Join UniCRM"
+    >
+      <div className="auth-form">
         <LoadingState label="Validating invitation" />
-      )}
-    </AuthScreen>
+      </div>
+    </AuthShell>
   );
 }

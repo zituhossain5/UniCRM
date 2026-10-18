@@ -1,9 +1,40 @@
 'use client';
 
 import { Toast as BaseToast } from '@base-ui/react/toast';
-import { AlertCircle, CheckCircle2, Inbox, X } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Inbox, Info, TriangleAlert, X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { IconButton } from './primitives';
+
+export type FeedbackTone = 'success' | 'error' | 'warning' | 'info';
+
+const feedbackIcons = {
+  success: CheckCircle2,
+  error: AlertCircle,
+  warning: TriangleAlert,
+  info: Info,
+} satisfies Record<FeedbackTone, typeof AlertCircle>;
+
+export function FeedbackMessage({
+  children,
+  tone = 'error',
+}: {
+  children: ReactNode;
+  tone?: FeedbackTone;
+}) {
+  const Icon = feedbackIcons[tone];
+  const urgent = tone === 'error';
+
+  return (
+    <div
+      aria-live={urgent ? 'assertive' : 'polite'}
+      className={`ui-feedback ui-feedback--${tone}`}
+      role={urgent ? 'alert' : 'status'}
+    >
+      <Icon aria-hidden="true" size={17} strokeWidth={2} />
+      <span>{children}</span>
+    </div>
+  );
+}
 
 export function EmptyState({
   action,

@@ -1,9 +1,10 @@
 'use client';
 
-import { AuthMessage, AuthScreen } from '@/components/auth-screen';
-import { AuthPasswordField } from '@/components/auth-password-field';
+import { AuthAlert, authErrorMessage } from '@/components/auth/auth-feedback';
+import { AuthPasswordField, AuthSubmitButton } from '@/components/auth/auth-fields';
+import { AuthShell } from '@/components/auth/auth-shell';
 import { apiRequest } from '@/lib/api';
-import { Button } from '@unicrm/ui';
+import { ArrowLeft, CircleCheck, Link2Off } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 
@@ -25,51 +26,92 @@ export function ResetPasswordForm({ token }: { token: string }) {
       });
       setComplete(true);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Password reset failed.');
+      setError(authErrorMessage(cause, 'Password reset failed.'));
     } finally {
       setLoading(false);
     }
   }
-  return (
-    <AuthScreen
-      description="Choose a strong password with at least 12 characters."
-      title="Choose a new password"
-    >
-      {complete ? (
+
+  if (complete)
+    return (
+      <AuthShell
+        badge={{ icon: CircleCheck, tone: 'success' }}
+        description="Your password has been reset. All existing sessions were signed out."
+        eyebrow="All set"
+        title="Password updated"
+      >
         <div className="auth-form">
-          <AuthMessage tone="success">
-            Your password has been reset. All existing sessions were signed out.
-          </AuthMessage>
-          <Link className="ui-button ui-button--primary" href="/login">
+          <Link className="ui-button ui-button--primary auth-submit" href="/login">
             Return to sign in
           </Link>
         </div>
-      ) : token ? (
-        <form className="auth-form" onSubmit={(event) => void submit(event)}>
-          <AuthPasswordField
-            autoComplete="new-password"
-            id="reset-password"
-            label="New password"
-            minLength={12}
-            name="password"
-            required
-          />
-          <AuthPasswordField
-            autoComplete="new-password"
-            id="reset-confirm-password"
-            label="Confirm password"
-            minLength={12}
-            name="confirmPassword"
-            required
-          />
-          {error ? <AuthMessage>{error}</AuthMessage> : null}
-          <Button loading={loading} type="submit">
+      </AuthShell>
+    );
+
+  if (!token)
+    return (
+      <AuthShell
+        badge={{ icon: Link2Off, tone: 'danger' }}
+        description="The reset link is incomplete. Request a new link to choose a password."
+        eyebrow="Account recovery"
+        title="This link can't be used"
+      >
+        <div className="auth-form">
+          <div className="auth-actions">
+            <Link className="ui-button ui-button--primary auth-submit" href="/forgot-password">
+              Request a new link
+            </Link>
+            <Link className="auth-back-link" href="/login">
+              <ArrowLeft aria-hidden="true" size={15} strokeWidth={2} />
+              Back to sign in
+            </Link>
+          </div>
+        </div>
+      </AuthShell>
+    );
+
+  return (
+    <AuthShell
+      description="Choose a strong password with at least 12 characters."
+      eyebrow="Account recovery"
+      title="Choose a new password"
+    >
+      <form className="auth-form" onSubmit={(event) => void submit(event)}>
+        <AuthPasswordField
+          aria-describedby={error ? 'reset-error' : undefined}
+          autoComplete="new-password"
+          id="reset-password"
+          label="New password"
+          minLength={12}
+          name="password"
+          placeholder="At least 12 characters"
+          required
+        />
+        <AuthPasswordField
+          aria-describedby={error ? 'reset-error' : undefined}
+          autoComplete="new-password"
+          id="reset-confirm-password"
+          label="Confirm password"
+          minLength={12}
+          name="confirmPassword"
+          placeholder="Re-enter your new password"
+          required
+        />
+        {error ? (
+          <AuthAlert id="reset-error" tone="error">
+            {error}
+          </AuthAlert>
+        ) : null}
+        <div className="auth-actions">
+          <AuthSubmitButton loading={loading} loadingLabel="Updating password…">
             Reset password
-          </Button>
-        </form>
-      ) : (
-        <AuthMessage>The reset link is incomplete.</AuthMessage>
-      )}
-    </AuthScreen>
+          </AuthSubmitButton>
+          <Link className="auth-back-link" href="/login">
+            <ArrowLeft aria-hidden="true" size={15} strokeWidth={2} />
+            Back to sign in
+          </Link>
+        </div>
+      </form>
+    </AuthShell>
   );
 }

@@ -164,7 +164,7 @@ export function DataManagementSettings() {
         </div>
       </header>
       {error ? <AuthMessage>{error}</AuthMessage> : null}
-      {message ? <AuthMessage>{message}</AuthMessage> : null}
+      {message ? <AuthMessage tone="success">{message}</AuthMessage> : null}
 
       {canImport ? (
         <div className="configuration-list">

@@ -9,7 +9,7 @@ import type {
   WebhookDeliveryRecord,
   WebhookSubscription,
 } from '@/lib/integration-types';
-import { Button, Input, LoadingState, Select } from '@unicrm/ui';
+import { Button, Input, LoadingState, Select, Tabs } from '@unicrm/ui';
 import { RotateCcw } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { WebToLeadSettings } from './web-to-lead-settings';
@@ -37,6 +37,14 @@ const eventTypes = [
 ];
 
 type Tab = 'web-to-lead' | 'connections' | 'inbound' | 'outbound' | 'logs';
+
+const integrationTabs: Array<{ label: string; value: Tab }> = [
+  { label: 'Web-to-Lead', value: 'web-to-lead' },
+  { label: 'Connections', value: 'connections' },
+  { label: 'Inbound', value: 'inbound' },
+  { label: 'Outbound', value: 'outbound' },
+  { label: 'Logs', value: 'logs' },
+];
 
 export function IntegrationsSettings() {
   const current = useCurrentUser();
@@ -156,20 +164,15 @@ export function IntegrationsSettings() {
           <p>Secure generic connections and signed webhook delivery.</p>
         </div>
       </header>
-      <nav aria-label="Integration sections" className="settings-tabs">
-        {(['web-to-lead', 'connections', 'inbound', 'outbound', 'logs'] as Tab[]).map((value) => (
-          <button
-            aria-current={tab === value ? 'page' : undefined}
-            key={value}
-            onClick={() => setTab(value)}
-            type="button"
-          >
-            {value === 'web-to-lead' ? 'Web-to-Lead' : value[0]!.toUpperCase() + value.slice(1)}
-          </button>
-        ))}
-      </nav>
+      <Tabs
+        ariaLabel="Integration sections"
+        items={integrationTabs}
+        onValueChange={setTab}
+        value={tab}
+        variant="navigation"
+      />
       {error ? <AuthMessage>{error}</AuthMessage> : null}
-      {message ? <AuthMessage>{message}</AuthMessage> : null}
+      {message ? <AuthMessage tone="success">{message}</AuthMessage> : null}
 
       {tab === 'web-to-lead' ? (
         <WebToLeadSettings canManage={canManage} canReadLogs={canReadLogs} />

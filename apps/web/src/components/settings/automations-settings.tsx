@@ -1410,7 +1410,7 @@ export function AutomationsSettings({
         </div>
       </header>
       {error ? <AuthMessage>{error}</AuthMessage> : null}
-      {message ? <AuthMessage>{message}</AuthMessage> : null}
+      {message ? <AuthMessage tone="success">{message}</AuthMessage> : null}
       <form
         className={`automation-editor${builderMode === 'visual' ? ' automation-editor--visual' : ''}`}
         id="automation-editor-form"

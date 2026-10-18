@@ -1,9 +1,9 @@
 'use client';
 
-import { AuthMessage } from '@/components/auth-screen';
-import { AuthPasswordField } from '@/components/auth-password-field';
+import { AuthAlert, AuthTrustNote, authErrorMessage } from '@/components/auth/auth-feedback';
+import { AuthPasswordField, AuthSubmitButton, AuthTextField } from '@/components/auth/auth-fields';
 import { apiRequest } from '@/lib/api';
-import { Button, Input } from '@unicrm/ui';
+import { AtSign } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 
@@ -23,47 +23,51 @@ export function LoginForm() {
       });
       window.location.assign('/app/dashboard');
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'Sign in failed.');
+      setError(authErrorMessage(cause, 'Sign in failed.'));
       setLoading(false);
     }
   }
 
   return (
     <form className="auth-form" onSubmit={(event) => void submit(event)}>
-      <label htmlFor="login-email">
-        <span>Email</span>
-        <Input
-          aria-describedby={error ? 'login-error' : undefined}
-          autoComplete="email"
-          id="login-email"
-          invalid={Boolean(error)}
-          name="email"
-          required
-          type="email"
-        />
-      </label>
+      <AuthTextField
+        aria-describedby={error ? 'login-error' : undefined}
+        autoComplete="email"
+        icon={AtSign}
+        id="login-email"
+        invalid={Boolean(error)}
+        label="Email address"
+        name="email"
+        placeholder="you@company.com"
+        required
+        type="email"
+      />
       <AuthPasswordField
         aria-describedby={error ? 'login-error' : undefined}
         autoComplete="current-password"
         id="login-password"
         invalid={Boolean(error)}
         label="Password"
+        labelAction={
+          <Link className="auth-link" href="/forgot-password">
+            Forgot password?
+          </Link>
+        }
         name="password"
+        placeholder="Enter your password"
         required
       />
-      <div className="auth-form-meta">
-        <Link className="text-link auth-link" href="/forgot-password">
-          Forgot password?
-        </Link>
-      </div>
       {error ? (
-        <div id="login-error">
-          <AuthMessage>{error}</AuthMessage>
-        </div>
+        <AuthAlert id="login-error" tone="error">
+          {error}
+        </AuthAlert>
       ) : null}
-      <Button loading={loading} type="submit">
-        Sign in
-      </Button>
+      <div className="auth-actions">
+        <AuthSubmitButton loading={loading} loadingLabel="Signing in…">
+          Sign in
+        </AuthSubmitButton>
+        <AuthTrustNote>Access is managed by your workspace administrator.</AuthTrustNote>
+      </div>
     </form>
   );
 }

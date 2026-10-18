@@ -255,7 +255,7 @@ export function WebToLeadSettings({
   return (
     <div className="web-to-lead-settings">
       {error ? <AuthMessage>{error}</AuthMessage> : null}
-      {message ? <AuthMessage>{message}</AuthMessage> : null}
+      {message ? <AuthMessage tone="success">{message}</AuthMessage> : null}
       {secret ? (
         <div className="web-to-lead-secret" role="status">
           <strong>Signing secret (shown once)</strong>

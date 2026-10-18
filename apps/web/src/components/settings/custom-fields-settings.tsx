@@ -8,11 +8,15 @@ import type {
   CustomFieldDefinition,
   CustomFieldType,
 } from '@/lib/configuration-types';
-import { Badge, Button, Dialog, Input, LoadingState, Select } from '@unicrm/ui';
+import { Badge, Button, Dialog, Input, LoadingState, Select, Tabs } from '@unicrm/ui';
 import { ArrowDown, ArrowUp, Pencil, Plus } from 'lucide-react';
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 
 const entities: ConfigurableEntityType[] = ['LEAD', 'DEAL', 'COMPANY', 'CONTACT', 'PROJECT'];
+const entityTabs = entities.map((value) => ({
+  label: value[0] + value.slice(1).toLowerCase(),
+  value,
+}));
 const fieldTypes: Array<{ label: string; value: CustomFieldType }> = [
   ['Text', 'TEXT'],
   ['Long text', 'LONG_TEXT'],
@@ -145,18 +149,13 @@ export function CustomFieldsSettings() {
           </Button>
         ) : null}
       </div>
-      <div className="crm-view-tabs">
-        {entities.map((entity) => (
-          <button
-            aria-selected={entityType === entity}
-            key={entity}
-            onClick={() => setEntityType(entity)}
-            type="button"
-          >
-            {entity[0] + entity.slice(1).toLowerCase()}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        ariaLabel="Custom field entity"
+        items={entityTabs}
+        onValueChange={setEntityType}
+        value={entityType}
+        variant="navigation"
+      />
       {error ? <AuthMessage>{error}</AuthMessage> : null}
       {!fields ? (
         <LoadingState label="Loading custom fields" />
