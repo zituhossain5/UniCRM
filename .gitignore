@@ -14,6 +14,8 @@ apps/api/src/generated/
 !.env.example
 .env.production
 
+*.dump
+
 *.log
 
 .DS_Store
