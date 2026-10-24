@@ -577,7 +577,10 @@ export class IntegrationsService {
   async processDelivery(deliveryId: string) {
     const delivery = await this.prisma.webhookDelivery.findUnique({
       where: { id: deliveryId },
-      include: { subscription: { include: { connection: true } } },
+      include: {
+        organization: { select: { mode: true } },
+        subscription: { include: { connection: true } },
+      },
     });
     if (
       !delivery ||
@@ -586,13 +589,27 @@ export class IntegrationsService {
       delivery.subscription.connection.status !== 'ACTIVE'
     )
       return;
-    await this.urls.validate(delivery.subscription.targetUrl);
     const attempt = delivery.attempt + 1;
     const claimed = await this.prisma.webhookDelivery.updateMany({
       where: { id: deliveryId, status: delivery.status, attempt: delivery.attempt },
       data: { status: 'PROCESSING', attempt },
     });
     if (claimed.count !== 1) return;
+    if (delivery.organization.mode === 'DEMO') {
+      await this.prisma.webhookDelivery.update({
+        where: { id: deliveryId },
+        data: {
+          status: 'DELIVERED',
+          statusCode: null,
+          retryable: false,
+          deliveredAt: new Date(),
+          lastError: 'Simulated in public demo; no external request was sent.',
+        },
+      });
+      this.logger.log(`Webhook delivery simulated deliveryId=${deliveryId}`);
+      return;
+    }
+    await this.urls.validate(delivery.subscription.targetUrl);
     const body = JSON.stringify({
       eventId: delivery.eventId,
       eventType: delivery.eventType,

@@ -815,6 +815,11 @@ export function EmailThreadSheet({
                   {message.safeErrorSummary ? (
                     <small className="overdue-text">{message.safeErrorSummary}</small>
                   ) : null}
+                  {message.simulated ? (
+                    <small>
+                      Demo mode â€” this email was simulated and was not delivered externally.
+                    </small>
+                  ) : null}
                 </article>
               );
             })}

@@ -61,6 +61,58 @@ The production-validation stack uses these named volumes:
 - `unicrm-m7_redis_data`
 - `unicrm-m7_minio_data`
 
+## Secure public demo runtime
+
+The production template also defines `demo-api`, `demo-worker`, `demo-postgres`, `demo-redis`, and
+`demo-minio`. The API image is built once as `unicrm-api:${UNICRM_IMAGE_TAG:-local}` and is reused by
+both API and both worker containers. Demo PostgreSQL, Redis, queue prefix, cookies, and object storage
+are separate from production. The demo databases and object store have no published host ports.
+
+Prepare both databases before starting application traffic:
+
+```powershell
+docker compose -f docker-compose.prod.example.yml --env-file .env.production run --rm api ./node_modules/.bin/prisma migrate deploy
+docker compose -f docker-compose.prod.example.yml --env-file .env.production run --rm demo-api ./node_modules/.bin/prisma migrate deploy
+docker compose -f docker-compose.prod.example.yml --env-file .env.production up -d api worker demo-api demo-worker web
+```
+
+For a VPS with an existing Traefik instance, attach the explicit routing override:
+
+```powershell
+docker compose -f docker-compose.prod.example.yml -f docker-compose.traefik.example.yml --env-file .env.production up -d --build
+```
+
+The Traefik priorities are intentionally ordered: `/demo-api/v1` routes to `demo-api` at priority
+300, `/api/v1` routes to production `api` at priority 200, and the web application is the host
+fallback at priority 100. The demo prefix is rewritten to the API's internal `/api/v1` prefix.
+
+The Nginx example has the equivalent explicit `/demo-api/` upstream for installations that have not
+migrated to Traefik.
+
+### Local public demo
+
+The browser uses `NEXT_PUBLIC_DEMO_API_URL=http://localhost:4500/api/v1` in development. Port 4500 is
+bound to `127.0.0.1` only by `docker-compose.demo-local.yml`; the demo PostgreSQL, Redis, and MinIO
+services are not exposed to the host. The local override also permits only the Next.js origin at
+`http://localhost:3001` and uses non-secure cookies only because local development runs over HTTP.
+
+Start the normal development infrastructure and the isolated demo runtime from the repository root:
+
+```powershell
+docker compose up -d
+docker compose -p unicrm-demo-local -f docker-compose.prod.example.yml -f docker-compose.demo-local.yml --env-file .env.production.example build demo-api
+docker compose -p unicrm-demo-local -f docker-compose.prod.example.yml -f docker-compose.demo-local.yml --env-file .env.production.example up -d demo-postgres demo-redis demo-minio demo-storage-init
+docker compose -p unicrm-demo-local -f docker-compose.prod.example.yml -f docker-compose.demo-local.yml --env-file .env.production.example run --rm demo-api ./node_modules/.bin/prisma migrate deploy
+docker compose -p unicrm-demo-local -f docker-compose.prod.example.yml -f docker-compose.demo-local.yml --env-file .env.production.example up -d demo-api demo-worker
+corepack pnpm dev
+```
+
+Stop the local demo application without deleting its isolated data:
+
+```powershell
+docker compose -p unicrm-demo-local -f docker-compose.prod.example.yml -f docker-compose.demo-local.yml --env-file .env.production.example stop demo-worker demo-api demo-minio demo-redis demo-postgres
+```
+
 ## Data safety
 
 Use `docker compose stop` for normal shutdown. `docker compose down` removes containers and networks

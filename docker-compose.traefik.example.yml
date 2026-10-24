@@ -1,0 +1,41 @@
+services:
+  api:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.unicrm-api.rule=Host(`${UNICRM_DOMAIN:-crm.unicodeit.com}`) && PathPrefix(`/api/v1`)
+      - traefik.http.routers.unicrm-api.priority=200
+      - traefik.http.routers.unicrm-api.entrypoints=websecure
+      - traefik.http.routers.unicrm-api.tls=true
+      - traefik.http.services.unicrm-api.loadbalancer.server.port=4000
+    networks: [default, traefik]
+
+  demo-api:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.unicrm-demo-api.rule=Host(`${UNICRM_DOMAIN:-crm.unicodeit.com}`) && PathPrefix(`/demo-api/v1`)
+      - traefik.http.routers.unicrm-demo-api.priority=300
+      - traefik.http.routers.unicrm-demo-api.entrypoints=websecure
+      - traefik.http.routers.unicrm-demo-api.tls=true
+      - traefik.http.routers.unicrm-demo-api.middlewares=unicrm-demo-api-rewrite
+      - traefik.http.middlewares.unicrm-demo-api-rewrite.replacepathregex.regex=^/demo-api/(.*)
+      - traefik.http.middlewares.unicrm-demo-api-rewrite.replacepathregex.replacement=/api/$${1}
+      - traefik.http.services.unicrm-demo-api.loadbalancer.server.port=4000
+    networks: [default, traefik]
+
+  web:
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.unicrm-web.rule=Host(`${UNICRM_DOMAIN:-crm.unicodeit.com}`)
+      - traefik.http.routers.unicrm-web.priority=100
+      - traefik.http.routers.unicrm-web.entrypoints=websecure
+      - traefik.http.routers.unicrm-web.tls=true
+      - traefik.http.services.unicrm-web.loadbalancer.server.port=3001
+    networks: [default, traefik]
+
+  nginx:
+    profiles: [nginx-edge]
+
+networks:
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-traefik}

@@ -19,7 +19,9 @@ FROM deps AS build
 COPY apps/web apps/web
 COPY packages packages
 ARG NEXT_PUBLIC_API_URL=/api/v1
+ARG NEXT_PUBLIC_DEMO_API_URL=/demo-api/v1
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL
+ENV NEXT_PUBLIC_DEMO_API_URL=$NEXT_PUBLIC_DEMO_API_URL
 RUN mkdir -p apps/web/public
 RUN pnpm --filter @unicrm/web build
 

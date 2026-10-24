@@ -19,6 +19,7 @@ const { combinedEnv } = loadEnvConfig(
   true,
 );
 const apiBaseUrl = combinedEnv.NEXT_PUBLIC_API_URL;
+const demoApiBaseUrl = combinedEnv.NEXT_PUBLIC_DEMO_API_URL;
 
 if (!apiBaseUrl) {
   throw new Error('NEXT_PUBLIC_API_URL is required in the root environment configuration');
@@ -28,6 +29,9 @@ const nextConfig: NextConfig = {
   allowedDevOrigins: ['localhost', '127.0.0.1'],
   env: {
     NEXT_PUBLIC_API_URL: apiBaseUrl,
+    NEXT_PUBLIC_DEMO_API_URL: demoApiBaseUrl,
+    NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME:
+      combinedEnv.NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME ?? 'unicrm_demo_csrf',
   },
   poweredByHeader: false,
   reactStrictMode: true,

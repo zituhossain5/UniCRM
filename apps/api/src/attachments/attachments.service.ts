@@ -132,6 +132,13 @@ export class AttachmentsService {
       limit: this.config.get('UPLOAD_RATE_LIMIT_MAX', { infer: true }),
       windowSeconds: this.config.get('UPLOAD_RATE_LIMIT_WINDOW_SECONDS', { infer: true }),
     });
+    if (principal.organizationMode === 'DEMO') {
+      const count = await this.prisma.attachment.count({
+        where: { organizationId: principal.organizationId },
+      });
+      if (count >= this.config.get('DEMO_ATTACHMENT_MAX_FILES', { infer: true }))
+        throw new BadRequestException('Public demo workspaces allow up to 5 attachments');
+    }
     this.validateFile(file);
     const safeName = [...basename(file.originalname)]
       .filter((character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127)
@@ -139,7 +146,10 @@ export class AttachmentsService {
       .trim();
     if (!safeName || safeName !== file.originalname || safeName.length > 255)
       throw new BadRequestException('Invalid file name');
-    const storageKey = crypto.randomUUID();
+    const storageKey =
+      principal.organizationMode === 'DEMO'
+        ? `demo/${principal.organizationId}/${crypto.randomUUID()}`
+        : crypto.randomUUID();
     await this.storage.put(storageKey, file.buffer, { contentType: file.mimetype });
     try {
       return await this.prisma.$transaction(async (tx) => {
@@ -176,7 +186,10 @@ export class AttachmentsService {
 
   private validateFile(file?: UploadedFile): asserts file is UploadedFile {
     if (!file) throw new BadRequestException('A file is required');
-    const maxBytes = this.config.get('FILE_UPLOAD_MAX_BYTES', { infer: true });
+    const maxBytes =
+      this.config.get('RUNTIME_MODE', { infer: true }) === 'demo'
+        ? this.config.get('DEMO_ATTACHMENT_MAX_BYTES', { infer: true })
+        : this.config.get('FILE_UPLOAD_MAX_BYTES', { infer: true });
     if (file.size < 1 || file.size > maxBytes)
       throw new BadRequestException(
         `File size must be between 1 byte and ${Math.floor(maxBytes / (1024 * 1024))} MB`,

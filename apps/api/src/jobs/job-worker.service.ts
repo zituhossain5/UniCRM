@@ -24,6 +24,8 @@ import { MailboxesService } from '../mailboxes/mailboxes.service';
 import { MAILBOX_RECOVERY_JOB, MAILBOX_SYNC_JOB } from '../mailboxes/mailbox.constants';
 import { safeMailboxError, safeMailboxErrorDetails } from '../mailboxes/mailbox.helpers';
 import { WebToLeadService } from '../web-to-lead/web-to-lead.service';
+import { DemoCleanupService } from '../demo/demo-cleanup.service';
+import { DEMO_CLEANUP_JOB } from '../demo/demo.constants';
 
 @Injectable()
 export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
@@ -41,6 +43,7 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
     @Inject(AutomationsService) private readonly automations: AutomationsService,
     @Inject(MailboxesService) private readonly mailboxes: MailboxesService,
     @Inject(WebToLeadService) private readonly webToLead: WebToLeadService,
+    @Inject(DemoCleanupService) private readonly demoCleanup: DemoCleanupService,
   ) {}
 
   async onModuleInit(): Promise<void> {
@@ -72,6 +75,7 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
         if (job.name === 'notification-sweep') return this.notifications.generateScheduled();
         if (job.name === 'auth-maintenance')
           return this.authMaintenance.cleanupExpiredCredentials();
+        if (job.name === DEMO_CLEANUP_JOB) return this.demoCleanup.cleanupExpired();
         if (job.name === INTEGRATION_PROCESSING_JOB) {
           const eventId = (job.data as { eventId: string }).eventId;
           if (await this.webToLead.processEvent(eventId)) return;

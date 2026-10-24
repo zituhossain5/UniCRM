@@ -12,7 +12,15 @@ import { TokenService } from './token.service';
 
 const userInclude = {
   organization: {
-    select: { id: true, name: true, slug: true, status: true, defaultCurrency: true },
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      status: true,
+      mode: true,
+      demoExpiresAt: true,
+      defaultCurrency: true,
+    },
   },
   userRoles: {
     include: { role: { include: { rolePermissions: { include: { permission: true } } } } },
@@ -41,6 +49,8 @@ export class AuthService {
       user?.passwordHash &&
       user.status === 'ACTIVE' &&
       user.organization.status === 'ACTIVE' &&
+      user.organization.mode === 'NORMAL' &&
+      this.config.get('RUNTIME_MODE', { infer: true }) === 'production' &&
       (await this.passwords.verify(user.passwordHash, password)),
     );
     if (!user || !valid) {

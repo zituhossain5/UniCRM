@@ -297,6 +297,7 @@ export class CrmEmailService {
           failedAt: true,
           createdAt: true,
           safeErrorSummary: true,
+          simulated: true,
         },
         orderBy: { createdAt: 'desc' },
         skip: (query.page - 1) * query.limit,
@@ -326,7 +327,7 @@ export class CrmEmailService {
   async processDelivery(messageId: string, attemptsMade: number, maxAttempts: number) {
     const message = await this.prisma.emailMessage.findUnique({
       where: { id: messageId },
-      include: { mailboxConnection: true },
+      include: { mailboxConnection: true, organization: { select: { mode: true } } },
     });
     if (!message || message.status === EmailMessageStatus.SENT) return;
     await this.prisma.emailMessage.update({
@@ -335,7 +336,11 @@ export class CrmEmailService {
     });
     try {
       let deliveredMessageId: string | undefined;
-      if (message.mailboxConnection) {
+      const simulated = message.organization.mode === 'DEMO';
+      if (simulated) {
+        // Public demo delivery is deliberately local-only. The normal message,
+        // activity and thread lifecycle is preserved without opening a socket.
+      } else if (message.mailboxConnection) {
         deliveredMessageId = (
           await this.mailboxTransport.send(
             message.mailboxConnection,
@@ -371,6 +376,7 @@ export class CrmEmailService {
             sentAt,
             failedAt: null,
             safeErrorSummary: null,
+            simulated,
             ...(deliveredMessageId ? { externalMessageId: deliveredMessageId } : {}),
           },
         });

@@ -61,6 +61,7 @@ const environmentSchema = z
     MAILBOX_SYNC_BATCH_SIZE: z.coerce.number().int().min(1).max(250).default(100),
     MAILBOX_SYNC_INTERVAL_SECONDS: z.coerce.number().int().min(30).max(3600).default(60),
     REQUEST_ID_HEADER: z.string().min(1).default('x-request-id'),
+    RUNTIME_MODE: z.enum(['production', 'demo']).default('production'),
     NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
     PASSWORD_RESET_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
     REDIS_URL: z.string().startsWith('redis://'),
@@ -90,6 +91,22 @@ const environmentSchema = z
     UPLOAD_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(20),
     UPLOAD_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
     WORKER_ENABLED: booleanFromString,
+    DEMO_SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(5_400),
+    DEMO_START_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+    DEMO_START_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+    DEMO_RECORD_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
+    DEMO_RECORD_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+    DEMO_QUERY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
+    DEMO_QUERY_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+    DEMO_ATTACHMENT_MAX_BYTES: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(2 * 1024 * 1024)
+      .default(2 * 1024 * 1024),
+    DEMO_ATTACHMENT_MAX_FILES: z.coerce.number().int().positive().max(20).default(5),
+    DEMO_CLEANUP_BATCH_SIZE: z.coerce.number().int().positive().max(100).default(20),
+    DEMO_CLEANUP_INTERVAL_SECONDS: z.coerce.number().int().min(60).default(300),
   })
   .superRefine((environment, context) => {
     if (environment.NODE_ENV === 'production' && environment.CORS_ORIGINS.includes('*')) {
@@ -182,7 +199,11 @@ const environmentSchema = z
     if (environment.EMAIL_TRANSPORT === 'smtp' && !environment.SMTP_HOST) {
       context.addIssue({ code: 'custom', message: 'SMTP_HOST is required', path: ['SMTP_HOST'] });
     }
-    if (environment.NODE_ENV === 'production' && environment.EMAIL_TRANSPORT === 'console') {
+    if (
+      environment.NODE_ENV === 'production' &&
+      environment.RUNTIME_MODE === 'production' &&
+      environment.EMAIL_TRANSPORT === 'console'
+    ) {
       context.addIssue({
         code: 'custom',
         message: 'EMAIL_TRANSPORT must be smtp in production',

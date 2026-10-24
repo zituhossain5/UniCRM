@@ -4,6 +4,7 @@ import { PasswordService } from './auth/password.service';
 import { PrismaService } from './database/prisma.service';
 import { DEFAULT_DEAL_STAGES, DEFAULT_STAGES } from './pipelines/pipelines.service';
 import type { Prisma } from './generated/prisma/client';
+import type { OrganizationMode } from './generated/prisma/client';
 
 @Injectable()
 export class IdentityBootstrapService {
@@ -19,6 +20,8 @@ export class IdentityBootstrapService {
     adminPassword: string;
     adminFirstName: string;
     adminLastName: string;
+    organizationMode?: OrganizationMode;
+    demoExpiresAt?: Date;
   }): Promise<{ organizationCreated: boolean; ownerCreated: boolean }> {
     if (input.adminPassword.length < 12)
       throw new Error('Bootstrap password must be at least 12 characters');
@@ -40,7 +43,12 @@ export class IdentityBootstrapService {
       const organization =
         existingOrganization ??
         (await tx.organization.create({
-          data: { name: input.organizationName.trim(), slug: input.organizationSlug },
+          data: {
+            name: input.organizationName.trim(),
+            slug: input.organizationSlug,
+            mode: input.organizationMode ?? 'NORMAL',
+            demoExpiresAt: input.demoExpiresAt,
+          },
         }));
 
       await tx.permission.createMany({ data: [...PERMISSION_CATALOG], skipDuplicates: true });

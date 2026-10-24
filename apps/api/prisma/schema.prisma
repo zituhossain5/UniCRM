@@ -15,6 +15,11 @@ enum OrganizationStatus {
   DISABLED
 }
 
+enum OrganizationMode {
+  NORMAL
+  DEMO
+}
+
 enum UserStatus {
   INVITED
   ACTIVE
@@ -437,6 +442,8 @@ model Organization {
   name                   String
   slug                   String                     @unique
   status                 OrganizationStatus         @default(ACTIVE)
+  mode                   OrganizationMode           @default(NORMAL)
+  demoExpiresAt          DateTime?                  @map("demo_expires_at")
   timezone               String                     @default("UTC") @db.VarChar(64)
   defaultCurrency        String                     @default("BDT") @map("default_currency") @db.VarChar(3)
   emailFromName          String?                    @map("email_from_name") @db.VarChar(160)
@@ -500,6 +507,7 @@ model Organization {
   customerCases          CustomerCase[]
   caseComments           CustomerCaseComment[]
 
+  @@index([mode, demoExpiresAt])
   @@map("organizations")
 }
 
@@ -1045,6 +1053,7 @@ model EmailMessage {
   providerUid         String?                 @map("provider_uid") @db.VarChar(128)
   folder              String?                 @db.VarChar(64)
   status              EmailMessageStatus      @default(DRAFT)
+  simulated           Boolean                 @default(false)
   queuedAt            DateTime?               @map("queued_at")
   sentAt              DateTime?               @map("sent_at")
   failedAt            DateTime?               @map("failed_at")

@@ -14,6 +14,8 @@ export interface CurrentUser {
     slug: string;
     status: string;
     defaultCurrency: string;
+    mode: 'NORMAL' | 'DEMO';
+    demoExpiresAt: string | null;
   };
 }
 

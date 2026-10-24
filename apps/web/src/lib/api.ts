@@ -1,11 +1,17 @@
 import { env } from './env';
+import { configuredApiBaseUrl, joinApiUrl } from './api-url';
+import { runtimeModeFromPath, type RuntimeMode } from './runtime';
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 
-export function apiBaseUrl(): string {
-  if (typeof window === 'undefined') return env.NEXT_PUBLIC_API_URL;
+export function apiBaseUrlForRuntime(mode: RuntimeMode): string {
+  const base = configuredApiBaseUrl(mode, {
+    normal: env.NEXT_PUBLIC_API_URL,
+    demo: env.NEXT_PUBLIC_DEMO_API_URL,
+  });
+  if (typeof window === 'undefined') return base;
 
-  const configured = new URL(env.NEXT_PUBLIC_API_URL);
+  const configured = new URL(base, window.location.origin);
   if (
     process.env.NODE_ENV === 'development' &&
     LOOPBACK_HOSTNAMES.has(configured.hostname) &&
@@ -17,11 +23,23 @@ export function apiBaseUrl(): string {
   return configured.toString().replace(/\/$/, '');
 }
 
-function csrfToken(): string | undefined {
+export function apiUrlForRuntime(mode: RuntimeMode, path: string): string {
+  return joinApiUrl(apiBaseUrlForRuntime(mode), path);
+}
+
+export function apiBaseUrl(): string {
+  return apiBaseUrlForRuntime(runtimeModeFromPath());
+}
+
+function csrfToken(mode = runtimeModeFromPath()): string | undefined {
   if (typeof document === 'undefined') return undefined;
   return document.cookie
     .split('; ')
-    .find((cookie) => cookie.startsWith(`${env.NEXT_PUBLIC_CSRF_COOKIE_NAME}=`))
+    .find((cookie) =>
+      cookie.startsWith(
+        `${mode === 'DEMO' ? env.NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME : env.NEXT_PUBLIC_CSRF_COOKIE_NAME}=`,
+      ),
+    )
     ?.split('=')
     .slice(1)
     .join('=');
@@ -44,7 +62,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (csrf && !['GET', 'HEAD'].includes(init.method ?? 'GET'))
     headers.set('x-csrf-token', decodeURIComponent(csrf));
 
-  const response = await fetch(`${apiBaseUrl()}${path}`, {
+  const response = await fetch(joinApiUrl(apiBaseUrl(), path), {
     ...init,
     credentials: 'include',
     headers,

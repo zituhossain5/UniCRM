@@ -44,6 +44,8 @@ import { ForecastModule } from './forecast/forecast.module';
 import { CatalogModule } from './catalog/catalog.module';
 import { CasesModule } from './cases/cases.module';
 import { WebToLeadModule } from './web-to-lead/web-to-lead.module';
+import { DemoModule } from './demo/demo.module';
+import { DemoSafetyGuard } from './demo/demo-safety.guard';
 
 @Module({
   imports: [
@@ -53,6 +55,7 @@ import { WebToLeadModule } from './web-to-lead/web-to-lead.module';
       validate: validateEnvironment,
     }),
     DatabaseModule,
+    DemoModule,
     RedisModule,
     JobsModule,
     EmailModule,
@@ -92,6 +95,7 @@ import { WebToLeadModule } from './web-to-lead/web-to-lead.module';
     IdentityBootstrapService,
     StructuredLogger,
     { provide: APP_GUARD, useClass: AuthGuard },
+    { provide: APP_GUARD, useClass: DemoSafetyGuard },
     { provide: APP_GUARD, useClass: CsrfGuard },
     { provide: APP_GUARD, useClass: PermissionGuard },
   ],

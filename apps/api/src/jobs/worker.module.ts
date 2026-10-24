@@ -13,6 +13,7 @@ import { IntegrationsModule } from '../integrations/integrations.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { MailboxesModule } from '../mailboxes/mailboxes.module';
 import { WebToLeadModule } from '../web-to-lead/web-to-lead.module';
+import { DemoModule } from '../demo/demo.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { WebToLeadModule } from '../web-to-lead/web-to-lead.module';
     AutomationsModule,
     MailboxesModule,
     WebToLeadModule,
+    DemoModule,
   ],
   providers: [JobWorkerService, StructuredLogger],
 })

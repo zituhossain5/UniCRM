@@ -2,14 +2,15 @@
 
 import { AuthAlert, AuthTrustNote, authErrorMessage } from '@/components/auth/auth-feedback';
 import { AuthPasswordField, AuthSubmitButton, AuthTextField } from '@/components/auth/auth-fields';
-import { apiRequest } from '@/lib/api';
+import { ApiError, apiRequest, apiUrlForRuntime } from '@/lib/api';
 import { AtSign } from 'lucide-react';
 import Link from 'next/link';
 import { useState, type FormEvent } from 'react';
 
-export function LoginForm() {
+export function LoginForm({ demoExpired = false }: { demoExpired?: boolean }) {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [demoLoading, setDemoLoading] = useState(false);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,6 +26,32 @@ export function LoginForm() {
     } catch (cause) {
       setError(authErrorMessage(cause, 'Sign in failed.'));
       setLoading(false);
+    }
+  }
+
+  async function startDemo() {
+    setError('');
+    setDemoLoading(true);
+    try {
+      const response = await fetch(apiUrlForRuntime('DEMO', '/demo/start'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      if (!response.ok) {
+        throw new ApiError('The demo environment is currently unavailable.', response.status);
+      }
+      window.location.assign('/demo');
+    } catch (cause) {
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Demo start request failed', {
+          errorName: cause instanceof Error ? cause.name : 'UnknownError',
+          status: cause instanceof ApiError ? cause.status : undefined,
+        });
+      }
+      setError('The demo environment is currently unavailable.');
+      setDemoLoading(false);
     }
   }
 
@@ -62,11 +89,28 @@ export function LoginForm() {
           {error}
         </AuthAlert>
       ) : null}
+      {demoExpired && !error ? (
+        <AuthAlert tone="success">
+          Your demo session has expired. Start a new demo to continue.
+        </AuthAlert>
+      ) : null}
       <div className="auth-actions">
         <AuthSubmitButton loading={loading} loadingLabel="Signing in…">
           Sign in
         </AuthSubmitButton>
         <AuthTrustNote>Access is managed by your workspace administrator.</AuthTrustNote>
+        <div className="auth-demo-divider" role="separator">
+          <span>or</span>
+        </div>
+        <button
+          className="ui-button ui-button--outline auth-demo-button"
+          disabled={loading || demoLoading}
+          onClick={() => void startDemo()}
+          type="button"
+        >
+          {demoLoading ? 'Preparing your demo...' : 'Explore Live Demo'}
+        </button>
+        <AuthTrustNote>Explore UniCRM with sample data. No account required.</AuthTrustNote>
       </div>
     </form>
   );

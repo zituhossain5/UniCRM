@@ -1,4 +1,5 @@
 import type { Request } from 'express';
+import type { OrganizationMode } from '../generated/prisma/client';
 
 export interface AuthenticatedPrincipal {
   userId: string;
@@ -7,6 +8,8 @@ export interface AuthenticatedPrincipal {
   csrfTokenHash: string;
   roles: string[];
   permissions: string[];
+  organizationMode: OrganizationMode;
+  demoExpiresAt: Date | null;
 }
 
 export interface AuthenticatedRequest extends Request {

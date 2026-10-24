@@ -30,6 +30,7 @@ type Message = {
   safeErrorSummary?: string;
   direction?: 'INBOUND' | 'OUTBOUND';
   receivedAt?: string;
+  simulated?: boolean;
 };
 type Context = {
   recipient?: string;
@@ -285,6 +286,9 @@ export function RecordEmail({
                   ).toLocaleString()}
                 </p>
                 {message.safeErrorSummary ? <p>{message.safeErrorSummary}</p> : null}
+                {message.simulated ? (
+                  <p>Demo mode â€” this email was simulated and was not delivered externally.</p>
+                ) : null}
               </div>
               <Badge
                 tone={

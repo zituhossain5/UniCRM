@@ -58,6 +58,7 @@ import type { SearchResults } from '@/lib/operational-types';
 import { NotificationBellContent, UnreadBadge } from './operational/notification-center';
 import { ActivitySheet } from './activities/activity-sheet';
 import { CaseCreateSheet } from './cases/case-create-sheet';
+import { runtimeModeFromPath, toRuntimePath } from '@/lib/runtime';
 
 interface NavItem {
   href: string;
@@ -148,10 +149,14 @@ type GlobalCreateTarget =
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const isAutomationEditor = pathname.startsWith('/app/settings/automations/');
+  const user = useCurrentUser();
+  const logicalPathname =
+    user.organization.mode === 'DEMO'
+      ? pathname.replace(/^\/demo/, '/app').replace(/^\/app$/, '/app/dashboard')
+      : pathname;
+  const isAutomationEditor = logicalPathname.startsWith('/app/settings/automations/');
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
-  const user = useCurrentUser();
   const [collapsed, setCollapsed] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [createTarget, setCreateTarget] = useState<GlobalCreateTarget | null>(null);
@@ -253,7 +258,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     return items;
   }, [router, user.permissions]);
   const navigation = (
-    <Navigation collapsed={collapsed} pathname={pathname} permissions={user.permissions} />
+    <Navigation collapsed={collapsed} pathname={logicalPathname} permissions={user.permissions} />
   );
 
   return (
@@ -273,7 +278,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             href="/app/settings"
             icon={Settings}
             label="Settings"
-            pathname={pathname}
+            pathname={logicalPathname}
           />
           <Tooltip content={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
             <IconButton
@@ -311,7 +316,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               <Navigation
                 collapsed={collapsed}
                 onNavigate={() => setMobileNavOpen(false)}
-                pathname={pathname}
+                pathname={logicalPathname}
                 permissions={user.permissions}
               />
               <NavLink
@@ -319,7 +324,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 icon={Settings}
                 label="Settings"
                 onNavigate={() => setMobileNavOpen(false)}
-                pathname={pathname}
+                pathname={logicalPathname}
               />
             </div>
           </Sheet>
@@ -409,6 +414,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="app-main">
+        {user.organization.mode === 'DEMO' ? (
+          <div className="demo-workspace-banner" role="status">
+            <strong>DEMO WORKSPACE</strong>
+            <span>
+              You're exploring UniCRM with sample data. Changes are temporary and reset
+              automatically.
+            </span>
+          </div>
+        ) : null}
         <PageContainer className={isAutomationEditor ? 'page-container--automation-editor' : ''}>
           {children}
         </PageContainer>
@@ -780,7 +794,7 @@ function NavLink({
     <Link
       aria-current={pathname === href || pathname.startsWith(`${href}/`) ? 'page' : undefined}
       className="nav-link"
-      href={href}
+      href={toRuntimePath(href, runtimeModeFromPath())}
       onClick={onNavigate}
     >
       <Icon aria-hidden="true" size={16} />

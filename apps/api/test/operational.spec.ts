@@ -9,6 +9,8 @@ import type { PrismaService } from '../src/database/prisma.service';
 import type { ForecastService } from '../src/forecast/forecast.service';
 
 const principal = (permissions: string[] = []): AuthenticatedPrincipal => ({
+  demoExpiresAt: null,
+  organizationMode: 'NORMAL',
   userId: '11111111-1111-4111-8111-111111111111',
   organizationId: '22222222-2222-4222-8222-222222222222',
   sessionId: 'session',

@@ -18,6 +18,7 @@ import {
   MAILBOX_SYNC_BACKOFF_MS,
   MAILBOX_SYNC_JOB,
 } from '../mailboxes/mailbox.constants';
+import { DEMO_CLEANUP_JOB } from '../demo/demo.constants';
 
 @Injectable()
 export class JobsService implements OnModuleDestroy {
@@ -182,6 +183,20 @@ export class JobsService implements OnModuleDestroy {
         },
       ),
     ]);
+    if (this.config.get('RUNTIME_MODE', { infer: true }) === 'demo') {
+      await this.getQueue().add(
+        DEMO_CLEANUP_JOB,
+        {},
+        {
+          jobId: DEMO_CLEANUP_JOB,
+          repeat: {
+            every: this.config.get('DEMO_CLEANUP_INTERVAL_SECONDS', { infer: true }) * 1000,
+          },
+          removeOnComplete: { age: 86_400, count: 1000 },
+          removeOnFail: { age: 604_800, count: 5000 },
+        },
+      );
+    }
     this.logger.log(
       `Scheduled recurring jobs queue=${UNICRM_QUEUE} prefix=${this.config.get('JOB_QUEUE_PREFIX', { infer: true })}`,
     );

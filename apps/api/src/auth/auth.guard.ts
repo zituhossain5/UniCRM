@@ -6,12 +6,14 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
+import { ConfigService } from '@nestjs/config';
 import type { Request } from 'express';
 import { PrismaService } from '../database/prisma.service';
 import { PUBLIC_ROUTE } from './auth.constants';
 import { CookieService } from './cookie.service';
 import { TokenService } from './token.service';
 import type { AuthenticatedRequest } from './auth.types';
+import type { EnvironmentVariables } from '../config/environment';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -20,6 +22,7 @@ export class AuthGuard implements CanActivate {
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(Reflector) private readonly reflector: Reflector,
     @Inject(TokenService) private readonly tokens: TokenService,
+    @Inject(ConfigService) private readonly config: ConfigService<EnvironmentVariables, true>,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -39,7 +42,7 @@ export class AuthGuard implements CanActivate {
     const session = await this.prisma.authSession.findUnique({
       where: { tokenHash: this.tokens.hash(rawToken) },
       include: {
-        organization: { select: { status: true } },
+        organization: { select: { status: true, mode: true, demoExpiresAt: true } },
         user: {
           include: {
             userRoles: {
@@ -60,7 +63,12 @@ export class AuthGuard implements CanActivate {
       session.revokedAt ||
       session.expiresAt <= now ||
       session.user.status !== 'ACTIVE' ||
-      session.organization.status !== 'ACTIVE'
+      session.organization.status !== 'ACTIVE' ||
+      (session.organization.mode === 'DEMO' &&
+        (!session.organization.demoExpiresAt || session.organization.demoExpiresAt <= now)) ||
+      (this.config.get('RUNTIME_MODE', { infer: true }) === 'demo'
+        ? session.organization.mode !== 'DEMO'
+        : session.organization.mode !== 'NORMAL')
     ) {
       throw new UnauthorizedException('Authentication required');
     }
@@ -76,6 +84,8 @@ export class AuthGuard implements CanActivate {
     (request as AuthenticatedRequest).auth = {
       csrfTokenHash: session.csrfTokenHash,
       organizationId: session.organizationId,
+      organizationMode: session.organization.mode,
+      demoExpiresAt: session.organization.demoExpiresAt,
       permissions,
       roles,
       sessionId: session.id,

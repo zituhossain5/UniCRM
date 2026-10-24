@@ -45,6 +45,7 @@ export interface MailMessageSummary {
   subject: string;
   body: string;
   status: 'QUEUED' | 'SENDING' | 'SENT' | 'FAILED';
+  simulated: boolean;
   receivedAt: string | null;
   sentAt: string | null;
   createdAt: string;

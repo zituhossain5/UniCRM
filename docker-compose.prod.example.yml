@@ -28,7 +28,66 @@ services:
       timeout: 3s
       retries: 10
 
+  demo-postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DEMO_POSTGRES_DB:?Set DEMO_POSTGRES_DB}
+      POSTGRES_PASSWORD: ${DEMO_POSTGRES_PASSWORD:?Set DEMO_POSTGRES_PASSWORD}
+      POSTGRES_USER: ${DEMO_POSTGRES_USER:?Set DEMO_POSTGRES_USER}
+    volumes:
+      - demo_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  demo-redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ['redis-server', '--appendonly', 'yes', '--appendfsync', 'everysec']
+    volumes:
+      - demo_redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  demo-minio:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: unless-stopped
+    command: ['server', '/data']
+    environment:
+      MINIO_ROOT_USER: ${DEMO_MINIO_ROOT_USER:?Set DEMO_MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${DEMO_MINIO_ROOT_PASSWORD:?Set DEMO_MINIO_ROOT_PASSWORD}
+    volumes:
+      - demo_minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  demo-storage-init:
+    image: minio/minio:RELEASE.2025-09-07T16-13-09Z
+    restart: 'no'
+    depends_on:
+      demo-minio:
+        condition: service_healthy
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >-
+        mc alias set demo http://demo-minio:9000 "$${DEMO_MINIO_ROOT_USER}" "$${DEMO_MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing "demo/$${DEMO_STORAGE_S3_BUCKET}"
+    environment:
+      DEMO_MINIO_ROOT_USER: ${DEMO_MINIO_ROOT_USER:?Set DEMO_MINIO_ROOT_USER}
+      DEMO_MINIO_ROOT_PASSWORD: ${DEMO_MINIO_ROOT_PASSWORD:?Set DEMO_MINIO_ROOT_PASSWORD}
+      DEMO_STORAGE_S3_BUCKET: ${DEMO_STORAGE_S3_BUCKET:-unicrm-demo-private}
+
   api:
+    image: unicrm-api:${UNICRM_IMAGE_TAG:-local}
     build:
       context: .
       dockerfile: apps/api/Dockerfile
@@ -46,9 +105,7 @@ services:
       retries: 5
 
   worker:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: unicrm-api:${UNICRM_IMAGE_TAG:-local}
     restart: unless-stopped
     command: ['node', 'dist/worker.js']
     env_file: .env.production.example
@@ -58,18 +115,94 @@ services:
       api:
         condition: service_healthy
 
+  demo-api:
+    image: unicrm-api:${UNICRM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    env_file: .env.production.example
+    environment:
+      RUNTIME_MODE: demo
+      DATABASE_URL: postgresql://${DEMO_POSTGRES_USER}:${DEMO_POSTGRES_PASSWORD}@demo-postgres:5432/${DEMO_POSTGRES_DB}?schema=public
+      REDIS_URL: redis://demo-redis:6379
+      JOB_QUEUE_PREFIX: unicrm-demo
+      SESSION_TTL_SECONDS: ${DEMO_SESSION_TTL_SECONDS:-5400}
+      SESSION_COOKIE_NAME: unicrm_demo_session
+      CSRF_COOKIE_NAME: unicrm_demo_csrf
+      EMAIL_DELIVERY_MODE: queue
+      EMAIL_TRANSPORT: console
+      STORAGE_DRIVER: s3
+      STORAGE_S3_ENDPOINT: http://demo-minio:9000
+      STORAGE_S3_REGION: us-east-1
+      STORAGE_S3_BUCKET: ${DEMO_STORAGE_S3_BUCKET:-unicrm-demo-private}
+      STORAGE_S3_ACCESS_KEY_ID: ${DEMO_MINIO_ROOT_USER}
+      STORAGE_S3_SECRET_ACCESS_KEY: ${DEMO_MINIO_ROOT_PASSWORD}
+      STORAGE_S3_FORCE_PATH_STYLE: 'true'
+      STORAGE_S3_PREFIX: demo
+      STORAGE_S3_SERVER_SIDE_ENCRYPTION: none
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ${DEMO_INTEGRATION_SECRET_ENCRYPTION_KEY}
+      WORKER_ENABLED: 'false'
+    depends_on:
+      demo-postgres:
+        condition: service_healthy
+      demo-redis:
+        condition: service_healthy
+      demo-minio:
+        condition: service_healthy
+      demo-storage-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:4000/api/v1/health/ready >/dev/null']
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  demo-worker:
+    image: unicrm-api:${UNICRM_IMAGE_TAG:-local}
+    restart: unless-stopped
+    command: ['node', 'dist/worker.js']
+    env_file: .env.production.example
+    environment:
+      RUNTIME_MODE: demo
+      DATABASE_URL: postgresql://${DEMO_POSTGRES_USER}:${DEMO_POSTGRES_PASSWORD}@demo-postgres:5432/${DEMO_POSTGRES_DB}?schema=public
+      REDIS_URL: redis://demo-redis:6379
+      JOB_QUEUE_PREFIX: unicrm-demo
+      SESSION_TTL_SECONDS: ${DEMO_SESSION_TTL_SECONDS:-5400}
+      SESSION_COOKIE_NAME: unicrm_demo_session
+      CSRF_COOKIE_NAME: unicrm_demo_csrf
+      EMAIL_DELIVERY_MODE: queue
+      EMAIL_TRANSPORT: console
+      STORAGE_DRIVER: s3
+      STORAGE_S3_ENDPOINT: http://demo-minio:9000
+      STORAGE_S3_REGION: us-east-1
+      STORAGE_S3_BUCKET: ${DEMO_STORAGE_S3_BUCKET:-unicrm-demo-private}
+      STORAGE_S3_ACCESS_KEY_ID: ${DEMO_MINIO_ROOT_USER}
+      STORAGE_S3_SECRET_ACCESS_KEY: ${DEMO_MINIO_ROOT_PASSWORD}
+      STORAGE_S3_FORCE_PATH_STYLE: 'true'
+      STORAGE_S3_PREFIX: demo
+      STORAGE_S3_SERVER_SIDE_ENCRYPTION: none
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ${DEMO_INTEGRATION_SECRET_ENCRYPTION_KEY}
+      WORKER_ENABLED: 'true'
+    depends_on:
+      demo-api:
+        condition: service_healthy
+
   web:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
       args:
         NEXT_PUBLIC_API_URL: https://crm.example.com/api/v1
+        NEXT_PUBLIC_DEMO_API_URL: https://crm.example.com/demo-api/v1
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: https://crm.example.com/api/v1
       NEXT_PUBLIC_CSRF_COOKIE_NAME: ${NEXT_PUBLIC_CSRF_COOKIE_NAME:-unicrm_csrf}
+      NEXT_PUBLIC_DEMO_API_URL: https://crm.example.com/demo-api/v1
+      NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME: unicrm_demo_csrf
+      DEMO_API_INTERNAL_URL: http://demo-api:4000/api/v1
     depends_on:
       api:
+        condition: service_healthy
+      demo-api:
         condition: service_healthy
 
   nginx:
@@ -90,3 +223,6 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  demo_postgres_data:
+  demo_redis_data:
+  demo_minio_data:

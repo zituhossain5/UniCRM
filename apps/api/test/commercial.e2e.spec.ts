@@ -189,8 +189,8 @@ describe('Milestone 5 quotations and payments', () => {
     contactId: contactA,
     leadId: leadA,
     projectId: projectA,
-    issueDate: '2026-09-03',
-    expiryDate: '2026-09-17',
+    issueDate: new Date().toISOString().slice(0, 10),
+    expiryDate: new Date(Date.now() + 30 * 86_400_000).toISOString().slice(0, 10),
     currency: 'BDT',
     items: [
       { description: 'Website UI Design', quantity: '1', unitPrice: '40000' },

@@ -1,0 +1,41 @@
+services:
+  demo-api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    ports:
+      - '127.0.0.1:${DEMO_API_PORT:-4500}:4000'
+    environment:
+      NODE_ENV: development
+      APP_URL: http://localhost:${WEB_PORT:-3001}
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-3001}
+      SESSION_COOKIE_SECURE: 'false'
+      LOG_FORMAT: pretty
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ''
+
+  demo-worker:
+    environment:
+      NODE_ENV: development
+      APP_URL: http://localhost:${WEB_PORT:-3001}
+      CORS_ORIGINS: http://localhost:${WEB_PORT:-3001}
+      SESSION_COOKIE_SECURE: 'false'
+      LOG_FORMAT: pretty
+      INTEGRATION_SECRET_ENCRYPTION_KEY: ''
+
+  api:
+    profiles: [production]
+
+  worker:
+    profiles: [production]
+
+  web:
+    profiles: [production]
+
+  postgres:
+    profiles: [production]
+
+  redis:
+    profiles: [production]
+
+  nginx:
+    profiles: [production]
