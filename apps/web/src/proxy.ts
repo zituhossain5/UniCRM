@@ -1,16 +1,21 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { runtimeRouteDecision } from '@/lib/runtime-routing';
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isDemo = pathname === '/demo' || pathname.startsWith('/demo/');
   const hasDemoSession = Boolean(request.cookies.get('unicrm_demo_session')?.value);
+  const hasNormalSession = Boolean(request.cookies.get('unicrm_session')?.value);
+  const decision = runtimeRouteDecision(pathname, {
+    demo: hasDemoSession,
+    normal: hasNormalSession,
+  });
 
-  if (pathname.startsWith('/app') && hasDemoSession) {
+  if (decision === 'redirect-to-demo') {
     const url = request.nextUrl.clone();
     url.pathname = pathname.replace(/^\/app(?:\/dashboard)?/, '/demo') || '/demo';
     return NextResponse.redirect(url);
   }
-  if (!isDemo) return NextResponse.next();
+  if (decision !== 'demo') return NextResponse.next();
 
   const url = request.nextUrl.clone();
   url.pathname = pathname === '/demo' ? '/app/dashboard' : pathname.replace(/^\/demo/, '/app');

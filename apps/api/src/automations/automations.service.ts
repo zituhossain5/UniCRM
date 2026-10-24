@@ -28,6 +28,8 @@ import {
 import { IntegrationsService } from '../integrations/integrations.service';
 import { JobsService } from '../jobs/jobs.service';
 import { CrmEmailService } from '../email/crm-email.service';
+import { ConfigService } from '@nestjs/config';
+import type { EnvironmentVariables } from '../config/environment';
 import {
   AUTOMATION_EVENT_MAP,
   AUTOMATION_MAX_ATTEMPTS,
@@ -95,6 +97,7 @@ export class AutomationsService {
     @Inject(JobsService) private readonly jobs: JobsService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(CrmEmailService) private readonly crmEmail: CrmEmailService,
+    @Inject(ConfigService) private readonly config: ConfigService<EnvironmentVariables, true>,
   ) {}
 
   listRules(principal: AuthenticatedPrincipal) {
@@ -177,6 +180,7 @@ export class AutomationsService {
 
   async createRule(principal: AuthenticatedPrincipal, dto: CreateAutomationRuleDto) {
     const definition = await this.compileDefinition(principal.organizationId, dto);
+    this.assertDemoActionLimit(definition.actions);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const rule = await tx.automationRule.create({
@@ -233,6 +237,7 @@ export class AutomationsService {
       baseDefinition,
       dto.graphMetadata === undefined,
     );
+    this.assertDemoActionLimit(definition.actions);
     try {
       return await this.prisma.$transaction(async (tx) => {
         const rule = await tx.automationRule.update({
@@ -322,7 +327,10 @@ export class AutomationsService {
       triggerEventId.slice(0, 160),
     );
     const depth = context.depth ?? 0;
-    if (depth >= AUTOMATION_MAX_DEPTH) {
+    const maxDepth = this.isDemoRuntime()
+      ? this.config.get('DEMO_AUTOMATION_MAX_DEPTH', { infer: true })
+      : AUTOMATION_MAX_DEPTH;
+    if (depth >= maxDepth) {
       this.logger.warn(
         `Automation depth limit reached event=${eventType} entityId=${entityId} depth=${depth}`,
       );
@@ -338,8 +346,20 @@ export class AutomationsService {
         triggerType: mapping.triggerType,
       },
     });
+    let availableDemoRuns = Number.POSITIVE_INFINITY;
+    if (this.isDemoRuntime()) {
+      const runCount = await this.prisma.automationRun.count({ where: { organizationId } });
+      availableDemoRuns = this.config.get('DEMO_AUTOMATION_MAX_RUNS', { infer: true }) - runCount;
+      if (availableDemoRuns <= 0) {
+        this.logger.warn(
+          JSON.stringify({ event: 'demo_automation_run_limit', organizationId, result: 'blocked' }),
+        );
+        return { queued: 0, triggerEventId };
+      }
+    }
     let queued = 0;
     for (const rule of rules) {
+      if (queued >= availableDemoRuns) break;
       if (!this.matchesTriggerConfig(rule.triggerConfig, data)) continue;
       const run = await this.prisma.automationRun.upsert({
         where: {
@@ -401,6 +421,13 @@ export class AutomationsService {
       return;
     }
     const actions = run.automationRule.actions as unknown as AutomationActionDto[];
+    if (
+      this.isDemoRuntime() &&
+      actions.length > this.config.get('DEMO_AUTOMATION_MAX_ACTIONS_PER_RUN', { infer: true })
+    ) {
+      await this.finishRun(id, 'FAILED', false, 'Automation exceeds the public demo action limit');
+      return;
+    }
     const results = this.actionResults(run.actionResults);
     try {
       for (let index = 0; index < actions.length; index += 1) {
@@ -457,6 +484,19 @@ export class AutomationsService {
     if (runs.length || failures)
       this.logger.log(`Automation recovery queued=${runs.length} failures=${failures}`);
     return { runs: runs.length };
+  }
+
+  private isDemoRuntime(): boolean {
+    return this.config.get('RUNTIME_MODE', { infer: true }) === 'demo';
+  }
+
+  private assertDemoActionLimit(actions: readonly AutomationActionDto[]): void {
+    if (
+      this.isDemoRuntime() &&
+      actions.length > this.config.get('DEMO_AUTOMATION_MAX_ACTIONS_PER_RUN', { infer: true })
+    ) {
+      throw new BadRequestException('Public demo automations have a bounded number of actions');
+    }
   }
 
   private async executeAction(

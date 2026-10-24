@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { configuredApiBaseUrl, configuredApiUrl } from '../../web/src/lib/api-url';
 import { runtimeModeFromPath } from '../../web/src/lib/runtime';
+import { runtimeRouteDecision } from '../../web/src/lib/runtime-routing';
 
 describe('Milestone 21A demo API routing', () => {
   const localUrls = {
@@ -38,6 +39,14 @@ describe('Milestone 21A demo API routing', () => {
   it('fails closed when the demo API is not configured', () => {
     expect(() => configuredApiBaseUrl('DEMO', { normal: '/api/v1' })).toThrow(
       'NEXT_PUBLIC_DEMO_API_URL is required for demo mode',
+    );
+  });
+
+  it('keeps normal /app auth authoritative when both isolated cookies coexist', () => {
+    expect(runtimeRouteDecision('/app/dashboard', { normal: true, demo: true })).toBe('normal');
+    expect(runtimeRouteDecision('/demo/dashboard', { normal: true, demo: true })).toBe('demo');
+    expect(runtimeRouteDecision('/app/dashboard', { normal: false, demo: true })).toBe(
+      'redirect-to-demo',
     );
   });
 

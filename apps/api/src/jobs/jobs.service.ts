@@ -189,6 +189,8 @@ export class JobsService implements OnModuleDestroy {
         {},
         {
           jobId: DEMO_CLEANUP_JOB,
+          attempts: 3,
+          backoff: { type: 'exponential', delay: 5_000 },
           repeat: {
             every: this.config.get('DEMO_CLEANUP_INTERVAL_SECONDS', { infer: true }) * 1000,
           },

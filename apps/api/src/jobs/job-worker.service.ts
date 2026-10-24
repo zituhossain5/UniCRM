@@ -117,6 +117,11 @@ export class JobWorkerService implements OnModuleInit, OnApplicationShutdown {
       this.logger.error(`Job failed: ${job?.name ?? 'unknown'} ${error.message}`, error.stack);
     });
     await this.jobs.scheduleRecurringMaintenance();
+    if (this.config.get('RUNTIME_MODE', { infer: true }) === 'demo') {
+      await this.demoCleanup.cleanupExpired().catch(() => {
+        this.logger.error('Demo startup cleanup deferred');
+      });
+    }
     const recovered = await this.integrations.recoverPendingWork();
     this.logger.log(
       `Integration recovery queued events=${recovered.events} deliveries=${recovered.deliveries}`,

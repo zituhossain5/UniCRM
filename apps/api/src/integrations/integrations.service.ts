@@ -606,7 +606,14 @@ export class IntegrationsService {
           lastError: 'Simulated in public demo; no external request was sent.',
         },
       });
-      this.logger.log(`Webhook delivery simulated deliveryId=${deliveryId}`);
+      this.logger.log(
+        JSON.stringify({
+          event: 'demo_simulated_webhook',
+          organizationId: delivery.organizationId,
+          deliveryId,
+          result: 'simulated',
+        }),
+      );
       return;
     }
     await this.urls.validate(delivery.subscription.targetUrl);

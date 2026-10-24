@@ -18,12 +18,14 @@ export interface AuthenticatedRequest extends Request {
 
 export interface RequestMetadata {
   ipAddress?: string;
+  requestId?: string;
   userAgent?: string;
 }
 
 export function requestMetadata(request: Request): RequestMetadata {
   return {
     ipAddress: request.ip,
+    requestId: (request as Request & { requestId?: string }).requestId,
     userAgent: request.get('user-agent')?.slice(0, 500),
   };
 }

@@ -3,6 +3,7 @@ import { ConfigService } from '@nestjs/config';
 import { ATTACHMENT_STORAGE, type AttachmentStorage } from '../attachments/storage.service';
 import type { EnvironmentVariables } from '../config/environment';
 import { PrismaService } from '../database/prisma.service';
+import { DemoObservabilityService } from './demo-observability.service';
 
 @Injectable()
 export class DemoCleanupService {
@@ -12,10 +13,13 @@ export class DemoCleanupService {
     @Inject(ConfigService) private readonly config: ConfigService<EnvironmentVariables, true>,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(ATTACHMENT_STORAGE) private readonly storage: AttachmentStorage,
+    @Inject(DemoObservabilityService) private readonly observability: DemoObservabilityService,
   ) {}
 
   async cleanupExpired(now = new Date()): Promise<number> {
     if (this.config.get('RUNTIME_MODE', { infer: true }) !== 'demo') return 0;
+    const startedAt = Date.now();
+    this.observability.record('demo_cleanup_started', { result: 'started' });
     const organizations = await this.prisma.organization.findMany({
       where: { mode: 'DEMO', demoExpiresAt: { lte: now } },
       take: this.config.get('DEMO_CLEANUP_BATCH_SIZE', { infer: true }),
@@ -24,9 +28,21 @@ export class DemoCleanupService {
     });
     let deleted = 0;
     for (const organization of organizations) {
-      deleted += await this.destroyDemoOrganization(organization.id, now);
+      try {
+        deleted += await this.destroyDemoOrganization(organization.id, now);
+      } catch {
+        this.observability.record(
+          'demo_cleanup_failed',
+          { organizationId: organization.id, result: 'deferred' },
+          'warn',
+        );
+      }
     }
-    if (deleted) this.logger.log(`Expired demo workspaces removed count=${deleted}`);
+    this.observability.record('demo_cleanup_completed', {
+      deleted,
+      durationMs: Date.now() - startedAt,
+      result: 'completed',
+    });
     return deleted;
   }
 
@@ -56,6 +72,7 @@ export class DemoCleanupService {
         await this.storage.delete(storageKey);
       } catch {
         this.logger.warn(`Demo attachment cleanup deferred organizationId=${organizationId}`);
+        throw new Error('Demo attachment cleanup failed');
       }
     }
     const result = await this.prisma.organization.deleteMany({
@@ -65,6 +82,9 @@ export class DemoCleanupService {
         ...(expiredAt ? { demoExpiresAt: { lte: expiredAt } } : {}),
       },
     });
+    if (result.count) {
+      this.observability.record('demo_expired', { organizationId, result: 'deleted' });
+    }
     return result.count;
   }
 }

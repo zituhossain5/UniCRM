@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
@@ -43,6 +44,7 @@ type Context = {
 
 @Injectable()
 export class CrmEmailService {
+  private readonly logger = new Logger(CrmEmailService.name);
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(JobsService) private readonly jobs: JobsService,
@@ -340,6 +342,14 @@ export class CrmEmailService {
       if (simulated) {
         // Public demo delivery is deliberately local-only. The normal message,
         // activity and thread lifecycle is preserved without opening a socket.
+        this.logger.log(
+          JSON.stringify({
+            event: 'demo_simulated_email',
+            organizationId: message.organizationId,
+            messageId: message.id,
+            result: 'simulated',
+          }),
+        );
       } else if (message.mailboxConnection) {
         deliveredMessageId = (
           await this.mailboxTransport.send(

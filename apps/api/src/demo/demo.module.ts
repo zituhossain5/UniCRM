@@ -7,6 +7,9 @@ import { DemoSeederService } from './demo-seeder.service';
 import { DemoCleanupService } from './demo-cleanup.service';
 import { AttachmentsModule } from '../attachments/attachments.module';
 import { IdentityBootstrapService } from '../bootstrap.service';
+import { DemoObservabilityService } from './demo-observability.service';
+import { DemoQuotaService } from './demo-quota.service';
+import { DemoTurnstileService } from './demo-turnstile.service';
 
 @Module({
   imports: [AuthModule, AttachmentsModule],
@@ -16,8 +19,11 @@ import { IdentityBootstrapService } from '../bootstrap.service';
     DemoService,
     DemoSeederService,
     DemoCleanupService,
+    DemoObservabilityService,
+    DemoQuotaService,
+    DemoTurnstileService,
     IdentityBootstrapService,
   ],
-  exports: [DemoCapabilityService, DemoCleanupService],
+  exports: [DemoCapabilityService, DemoCleanupService, DemoObservabilityService, DemoQuotaService],
 })
 export class DemoModule {}

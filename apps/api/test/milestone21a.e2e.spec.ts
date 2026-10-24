@@ -30,6 +30,7 @@ describe('Milestone 21A secure public demo foundation', () => {
   let demoCsrf: string;
   let normalOrganizationId: string;
   const marker = crypto.randomUUID();
+  const createdOrganizationIds = new Set<string>();
 
   beforeAll(async () => {
     process.env.AUTH_RATE_LIMIT_MAX = '1000';
@@ -57,14 +58,7 @@ describe('Milestone 21A secure public demo foundation', () => {
   }, 30_000);
 
   afterAll(async () => {
-    await prisma?.organization.deleteMany({
-      where: {
-        OR: [
-          { mode: 'DEMO', name: { startsWith: 'UniCRM Demo' } },
-          { slug: { startsWith: `demo-normal-${marker}` } },
-        ],
-      },
-    });
+    await prisma?.organization.deleteMany({ where: { id: { in: [...createdOrganizationIds] } } });
     await app?.close();
   }, 30_000);
 
@@ -80,6 +74,7 @@ describe('Milestone 21A secure public demo foundation', () => {
     ).data;
     demoUserId = user.id;
     demoOrganizationId = user.organization.id;
+    createdOrganizationIds.add(demoOrganizationId);
     expect(user.organization.mode).toBe('DEMO');
     expect(new Date(user.organization.demoExpiresAt).getTime()).toBeGreaterThan(Date.now());
 
@@ -98,9 +93,10 @@ describe('Milestone 21A secure public demo foundation', () => {
     const secondAgent = request.agent(server);
     await secondAgent.post('/api/v1/demo/start').send({}).expect(201);
     const secondMe = await secondAgent.get('/api/v1/auth/me').expect(200);
-    expect(
-      (secondMe.body as { data: { organization: { id: string } } }).data.organization.id,
-    ).not.toBe(demoOrganizationId);
+    const secondOrganizationId = (secondMe.body as { data: { organization: { id: string } } }).data
+      .organization.id;
+    createdOrganizationIds.add(secondOrganizationId);
+    expect(secondOrganizationId).not.toBe(demoOrganizationId);
   }, 60_000);
 
   it('keeps the seeder idempotent and blocks sensitive direct API calls', async () => {
@@ -131,6 +127,31 @@ describe('Milestone 21A secure public demo foundation', () => {
       .set('x-csrf-token', demoCsrf)
       .send({})
       .expect(403);
+
+    const blocked = [
+      ['post', '/api/v1/users/invitations'],
+      ['patch', `/api/v1/roles/${crypto.randomUUID()}`],
+      ['post', '/api/v1/mailboxes'],
+      ['post', '/api/v1/integrations/connections'],
+      ['post', `/api/v1/integrations/connections/${crypto.randomUUID()}/rotate-secret`],
+      ['post', `/api/v1/integrations/webhooks/${crypto.randomUUID()}`],
+      ['post', '/api/v1/data-management/exports'],
+      ['post', '/api/v1/data-management/imports'],
+      ['delete', '/api/v1/organization'],
+      ['patch', '/api/v1/organization'],
+      ['patch', '/api/v1/email-settings'],
+      ['post', '/api/v1/auth/forgot-password'],
+    ] as const;
+    for (const [method, path] of blocked) {
+      const result = await demoAgent[method](path)
+        .set('origin', origin)
+        .set('x-csrf-token', demoCsrf)
+        .send({ email: 'visitor@example.test' })
+        .expect(403);
+      expect((result.body as { message: string }).message).toBe(
+        'This action is unavailable in the public demo.',
+      );
+    }
   });
 
   it('simulates CRM email without opening an external transport', async () => {
@@ -162,6 +183,43 @@ describe('Milestone 21A secure public demo foundation', () => {
     ).toMatchObject({ status: 'SENT', simulated: true });
   });
 
+  it('isolates demo attachments and enforces content and size limits', async () => {
+    const project = await prisma.project.findFirstOrThrow({
+      where: { organizationId: demoOrganizationId },
+    });
+    const uploaded = await demoAgent
+      .post(`/api/v1/projects/${project.id}/attachments`)
+      .set('origin', origin)
+      .set('x-csrf-token', demoCsrf)
+      .attach('file', Buffer.from('%PDF-1.4\nDemo'), {
+        filename: 'demo-brief.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(201);
+    expect((uploaded.body as { data: { storageKey: string } }).data.storageKey).toMatch(
+      new RegExp(`^demo/${demoOrganizationId}/[0-9a-f-]{36}$`),
+    );
+
+    await demoAgent
+      .post(`/api/v1/projects/${project.id}/attachments`)
+      .set('origin', origin)
+      .set('x-csrf-token', demoCsrf)
+      .attach('file', Buffer.from('not a real PDF'), {
+        filename: 'invalid.pdf',
+        contentType: 'application/pdf',
+      })
+      .expect(400);
+    await demoAgent
+      .post(`/api/v1/projects/${project.id}/attachments`)
+      .set('origin', origin)
+      .set('x-csrf-token', demoCsrf)
+      .attach('file', Buffer.alloc(2 * 1024 * 1024 + 1, 65), {
+        filename: 'oversized.txt',
+        contentType: 'text/plain',
+      })
+      .expect(400);
+  });
+
   it('rejects NORMAL tenant sessions and keeps tenant-scoped reads isolated', async () => {
     const slug = `demo-normal-${marker}`;
     const email = `${slug}@example.test`;
@@ -175,6 +233,8 @@ describe('Milestone 21A secure public demo foundation', () => {
     });
     const normalUser = await prisma.user.findUniqueOrThrow({ where: { normalizedEmail: email } });
     normalOrganizationId = normalUser.organizationId;
+    createdOrganizationIds.add(normalOrganizationId);
+    await app.get(DemoSeederService).seed(normalOrganizationId, normalUser.id);
     const pipeline = await prisma.pipeline.findFirstOrThrow({
       where: { organizationId: normalOrganizationId, entityType: 'LEAD' },
       include: { stages: { orderBy: { position: 'asc' }, take: 1 } },
@@ -189,6 +249,69 @@ describe('Milestone 21A secure public demo foundation', () => {
       },
     });
     await demoAgent.get(`/api/v1/leads/${normalLead.id}`).expect(404);
+
+    const [
+      company,
+      contact,
+      deal,
+      project,
+      task,
+      quotation,
+      payment,
+      thread,
+      message,
+      customerCase,
+    ] = await Promise.all([
+      prisma.company.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.contact.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.deal.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.project.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.task.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.quotation.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.payment.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.emailThread.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.emailMessage.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+      prisma.customerCase.findFirstOrThrow({ where: { organizationId: normalOrganizationId } }),
+    ]);
+    const attachment = await prisma.attachment.create({
+      data: {
+        organizationId: normalOrganizationId,
+        projectId: project.id,
+        fileName: 'normal-only.txt',
+        mimeType: 'text/plain',
+        size: 1,
+        storageKey: crypto.randomUUID(),
+        uploadedById: normalUser.id,
+      },
+    });
+    const notification = await prisma.notification.findFirstOrThrow({
+      where: { organizationId: normalOrganizationId },
+    });
+    const copiedIds: ReadonlyArray<[string, string]> = [
+      ['/api/v1/organization', normalOrganizationId],
+      ['/api/v1/users', normalUser.id],
+      ['/api/v1/companies', company.id],
+      ['/api/v1/contacts', contact.id],
+      ['/api/v1/leads', normalLead.id],
+      ['/api/v1/deals', deal.id],
+      ['/api/v1/projects', project.id],
+      ['/api/v1/tasks', task.id],
+      ['/api/v1/quotations', quotation.id],
+      ['/api/v1/payments', payment.id],
+      ['/api/v1/mail/threads', thread.id],
+      ['/api/v1/emails', message.id],
+      ['/api/v1/cases', customerCase.id],
+      ['/api/v1/attachments', attachment.id],
+    ];
+    for (const [base, id] of copiedIds) {
+      await demoAgent.get(`${base}/${id}`).expect(404);
+    }
+    await demoAgent
+      .patch(`/api/v1/notifications/${notification.id}/read`)
+      .set('origin', origin)
+      .set('x-csrf-token', demoCsrf)
+      .send({})
+      .expect(404);
 
     const tokens = app.get(TokenService);
     const rawToken = tokens.generate();
@@ -206,6 +329,55 @@ describe('Milestone 21A secure public demo foundation', () => {
       .set('Cookie', `unicrm_demo_session=${rawToken}`)
       .expect(401);
   });
+
+  it('isolates three concurrently created demo workspaces and cleans only one', async () => {
+    const agents = [request.agent(server), request.agent(server), request.agent(server)];
+    const starts = await Promise.all(
+      agents.map((agent) => agent.post('/api/v1/demo/start').send({}).expect(201)),
+    );
+    const csrfTokens = starts.map((response) => cookieValue(response, 'unicrm_demo_csrf'));
+    const identities = await Promise.all(
+      agents.map((agent) => agent.get('/api/v1/auth/me').expect(200)),
+    );
+    const organizationIds = identities.map(
+      (response) =>
+        (response.body as { data: { organization: { id: string } } }).data.organization.id,
+    );
+    organizationIds.forEach((id) => createdOrganizationIds.add(id));
+    expect(new Set(organizationIds).size).toBe(3);
+
+    const titles = organizationIds.map((id, index) => `Isolation ${index + 1} ${id}`);
+    await Promise.all(
+      agents.map((agent, index) =>
+        agent
+          .post('/api/v1/leads')
+          .set('origin', origin)
+          .set('x-csrf-token', csrfTokens[index]!)
+          .send({ title: titles[index] })
+          .expect(201),
+      ),
+    );
+    for (let agentIndex = 0; agentIndex < agents.length; agentIndex += 1) {
+      for (let titleIndex = 0; titleIndex < titles.length; titleIndex += 1) {
+        const result = await agents[agentIndex]!.get('/api/v1/leads')
+          .query({ search: titles[titleIndex] })
+          .expect(200);
+        expect((result.body as { data: unknown[] }).data).toHaveLength(
+          agentIndex === titleIndex ? 1 : 0,
+        );
+      }
+    }
+
+    const expiredAt = new Date(Date.now() - 1_000);
+    await prisma.organization.update({
+      where: { id: organizationIds[0] },
+      data: { demoExpiresAt: expiredAt },
+    });
+    await app.get(DemoCleanupService).cleanupExpired();
+    expect(await prisma.organization.findUnique({ where: { id: organizationIds[0] } })).toBeNull();
+    await agents[1]!.get('/api/v1/auth/me').expect(200);
+    await agents[2]!.get('/api/v1/auth/me').expect(200);
+  }, 120_000);
 
   it('restarts only the authenticated demo workspace and preserves normal tenants', async () => {
     const previousOrganizationId = demoOrganizationId;
@@ -225,6 +397,7 @@ describe('Milestone 21A secure public demo foundation', () => {
     ).data;
     demoUserId = user.id;
     demoOrganizationId = user.organization.id;
+    createdOrganizationIds.add(demoOrganizationId);
     expect(demoOrganizationId).not.toBe(previousOrganizationId);
     expect(user.organization.mode).toBe('DEMO');
     expect(

@@ -63,11 +63,20 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
   if (csrf && !['GET', 'HEAD'].includes(init.method ?? 'GET'))
     headers.set('x-csrf-token', decodeURIComponent(csrf));
 
-  const response = await fetch(joinApiUrl(apiBaseUrl(), path), {
-    ...init,
-    credentials: 'include',
-    headers,
-  });
+  const mode = runtimeModeFromPath();
+  let response: Response;
+  try {
+    response = await fetch(joinApiUrl(apiBaseUrl(), path), {
+      ...init,
+      credentials: 'include',
+      headers,
+    });
+  } catch (cause) {
+    if (mode === 'DEMO') {
+      throw new ApiError('The demo environment is temporarily unavailable.', 503);
+    }
+    throw cause;
+  }
   if (!response.ok) {
     let message = 'The request could not be completed.';
     try {
@@ -78,7 +87,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     } catch {
       // Keep the generic message when an error response has no JSON body.
     }
-    if (response.status === 403 && runtimeModeFromPath() === 'DEMO') announceDemoBlocked(path);
+    if (response.status === 403 && mode === 'DEMO') announceDemoBlocked(path);
     throw new ApiError(message, response.status);
   }
   if (response.status === 204) return undefined as T;

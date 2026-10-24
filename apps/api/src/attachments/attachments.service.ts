@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Inject,
   Injectable,
@@ -14,6 +15,8 @@ import { PrismaService } from '../database/prisma.service';
 import { RateLimitService } from '../auth/rate-limit.service';
 import { PERMISSIONS } from '../auth/auth.constants';
 import { ATTACHMENT_STORAGE, type AttachmentStorage } from './storage.service';
+import { RedisService } from '../redis/redis.service';
+import { DEMO_QUOTA_MESSAGE } from '../demo/demo.constants';
 
 export interface UploadedFile {
   buffer: Buffer;
@@ -40,6 +43,7 @@ export class AttachmentsService {
     @Inject(ATTACHMENT_STORAGE) private readonly storage: AttachmentStorage,
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Inject(RateLimitService) private readonly rateLimit: RateLimitService,
+    @Inject(RedisService) private readonly redis: RedisService,
   ) {}
 
   async listProject(principal: AuthenticatedPrincipal, projectId: string) {
@@ -132,14 +136,19 @@ export class AttachmentsService {
       limit: this.config.get('UPLOAD_RATE_LIMIT_MAX', { infer: true }),
       windowSeconds: this.config.get('UPLOAD_RATE_LIMIT_WINDOW_SECONDS', { infer: true }),
     });
+    this.validateFile(file);
     if (principal.organizationMode === 'DEMO') {
       const count = await this.prisma.attachment.count({
         where: { organizationId: principal.organizationId },
       });
-      if (count >= this.config.get('DEMO_ATTACHMENT_MAX_FILES', { infer: true }))
-        throw new BadRequestException('Public demo workspaces allow up to 5 attachments');
+      const reserved = await this.redis.reserveBounded(
+        `demo:quota:${principal.organizationId}:attachment`,
+        count,
+        this.config.get('DEMO_ATTACHMENT_MAX_FILES', { infer: true }),
+        this.config.get('DEMO_SESSION_TTL_SECONDS', { infer: true }),
+      );
+      if (!reserved) throw new ConflictException(DEMO_QUOTA_MESSAGE);
     }
-    this.validateFile(file);
     const safeName = [...basename(file.originalname)]
       .filter((character) => character.charCodeAt(0) >= 32 && character.charCodeAt(0) !== 127)
       .join('')

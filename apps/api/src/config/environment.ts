@@ -94,10 +94,32 @@ const environmentSchema = z
     DEMO_SESSION_TTL_SECONDS: z.coerce.number().int().min(60).max(86_400).default(5_400),
     DEMO_START_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
     DEMO_START_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
+    DEMO_START_MAX_BODY_BYTES: z.coerce.number().int().min(256).max(16_384).default(4_096),
+    DEMO_MAX_ACTIVE_WORKSPACES: z.coerce.number().int().positive().max(10_000).default(100),
+    DEMO_TURNSTILE_ENABLED: booleanFromString,
+    DEMO_TURNSTILE_SECRET: optionalNonEmptyString,
     DEMO_RECORD_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(120),
     DEMO_RECORD_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(900),
     DEMO_QUERY_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(60),
     DEMO_QUERY_RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+    DEMO_QUERY_MAX_PAGE_SIZE: z.coerce.number().int().positive().max(100).default(50),
+    DEMO_QUERY_MAX_URL_LENGTH: z.coerce.number().int().min(512).max(16_384).default(4_096),
+    DEMO_QUOTA_LEADS: z.coerce.number().int().positive().default(50),
+    DEMO_QUOTA_DEALS: z.coerce.number().int().positive().default(30),
+    DEMO_QUOTA_COMPANIES: z.coerce.number().int().positive().default(30),
+    DEMO_QUOTA_CONTACTS: z.coerce.number().int().positive().default(50),
+    DEMO_QUOTA_PROJECTS: z.coerce.number().int().positive().default(30),
+    DEMO_QUOTA_TASKS: z.coerce.number().int().positive().default(100),
+    DEMO_QUOTA_CASES: z.coerce.number().int().positive().default(30),
+    DEMO_QUOTA_ACTIVITIES: z.coerce.number().int().positive().default(100),
+    DEMO_QUOTA_SAVED_VIEWS: z.coerce.number().int().positive().default(20),
+    DEMO_QUOTA_CUSTOM_FIELDS: z.coerce.number().int().positive().default(20),
+    DEMO_QUOTA_TAGS: z.coerce.number().int().positive().default(20),
+    DEMO_QUOTA_AUTOMATIONS: z.coerce.number().int().positive().default(10),
+    DEMO_QUOTA_NOTIFICATIONS: z.coerce.number().int().positive().default(500),
+    DEMO_AUTOMATION_MAX_ACTIONS_PER_RUN: z.coerce.number().int().positive().max(10).default(8),
+    DEMO_AUTOMATION_MAX_RUNS: z.coerce.number().int().positive().default(500),
+    DEMO_AUTOMATION_MAX_DEPTH: z.coerce.number().int().positive().max(5).default(3),
     DEMO_ATTACHMENT_MAX_BYTES: z.coerce
       .number()
       .int()
@@ -115,6 +137,36 @@ const environmentSchema = z
         message: 'CORS_ORIGINS cannot contain a wildcard in production',
         path: ['CORS_ORIGINS'],
       });
+    }
+    if (environment.DEMO_TURNSTILE_ENABLED && !environment.DEMO_TURNSTILE_SECRET) {
+      context.addIssue({
+        code: 'custom',
+        message: 'DEMO_TURNSTILE_SECRET is required when DEMO_TURNSTILE_ENABLED=true',
+        path: ['DEMO_TURNSTILE_SECRET'],
+      });
+    }
+    if (environment.NODE_ENV === 'production' && environment.RUNTIME_MODE === 'demo') {
+      if (environment.SESSION_COOKIE_NAME === 'unicrm_session') {
+        context.addIssue({
+          code: 'custom',
+          message: 'Demo runtime must use an isolated SESSION_COOKIE_NAME',
+          path: ['SESSION_COOKIE_NAME'],
+        });
+      }
+      if (environment.CSRF_COOKIE_NAME === 'unicrm_csrf') {
+        context.addIssue({
+          code: 'custom',
+          message: 'Demo runtime must use an isolated CSRF_COOKIE_NAME',
+          path: ['CSRF_COOKIE_NAME'],
+        });
+      }
+      if (environment.JOB_QUEUE_PREFIX === 'unicrm') {
+        context.addIssue({
+          code: 'custom',
+          message: 'Demo runtime must use an isolated JOB_QUEUE_PREFIX',
+          path: ['JOB_QUEUE_PREFIX'],
+        });
+      }
     }
     if (environment.NODE_ENV === 'production' && !environment.INTEGRATION_SECRET_ENCRYPTION_KEY) {
       context.addIssue({

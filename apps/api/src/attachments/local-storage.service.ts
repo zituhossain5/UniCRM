@@ -1,7 +1,7 @@
 import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { dirname, resolve, sep } from 'node:path';
 import type { EnvironmentVariables } from '../config/environment';
 import type { AttachmentStorage } from './storage.service';
 
@@ -14,8 +14,9 @@ export class LocalStorageService implements AttachmentStorage {
   }
 
   async put(key: string, content: Buffer): Promise<void> {
-    await mkdir(this.root, { recursive: true });
-    await writeFile(this.path(key), content, { flag: 'wx' });
+    const path = this.path(key);
+    await mkdir(dirname(path), { recursive: true });
+    await writeFile(path, content, { flag: 'wx' });
   }
 
   async get(key: string): Promise<Buffer> {
@@ -36,9 +37,14 @@ export class LocalStorageService implements AttachmentStorage {
   }
 
   private path(key: string) {
-    if (!/^[0-9a-f-]{36}$/.test(key)) throw new NotFoundException('Attachment content not found');
+    const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    if (!new RegExp(`^(?:${uuid}|demo/${uuid}/${uuid})$`, 'i').test(key)) {
+      throw new NotFoundException('Attachment content not found');
+    }
     const path = resolve(this.root, key);
-    if (!path.startsWith(this.root)) throw new NotFoundException('Attachment content not found');
+    if (!path.startsWith(`${this.root}${sep}`)) {
+      throw new NotFoundException('Attachment content not found');
+    }
     return path;
   }
 }

@@ -74,7 +74,10 @@ export class S3StorageService implements AttachmentStorage {
   }
 
   private objectKey(key: string): string {
-    if (!/^[0-9a-f-]{36}$/.test(key)) throw new NotFoundException('Attachment content not found');
+    const uuid = '[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    if (!new RegExp(`^(?:${uuid}|demo/${uuid}/${uuid})$`, 'i').test(key)) {
+      throw new NotFoundException('Attachment content not found');
+    }
     return this.prefix ? `${this.prefix}/${key}` : key;
   }
 }

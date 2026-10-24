@@ -1,4 +1,13 @@
-import { Body, Controller, Get, Inject, Patch } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  HttpException,
+  HttpStatus,
+  Inject,
+  Patch,
+} from '@nestjs/common';
 import { CurrentPrincipal, RequirePermission } from '../auth/auth.decorators';
 import { PERMISSIONS } from '../auth/auth.constants';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
@@ -27,6 +36,15 @@ export class OrganizationsController {
         },
       }),
     };
+  }
+
+  @RequirePermission(PERMISSIONS.settingsUpdate)
+  @Delete()
+  remove() {
+    throw new HttpException(
+      'Organization deletion is not supported',
+      HttpStatus.METHOD_NOT_ALLOWED,
+    );
   }
 
   @RequirePermission(PERMISSIONS.settingsUpdate)

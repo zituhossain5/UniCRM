@@ -35,6 +35,9 @@ describe('Milestone 21A demo policy', () => {
       NODE_ENV: 'production',
       REDIS_URL: 'redis://demo-redis:6379',
       RUNTIME_MODE: 'demo',
+      SESSION_COOKIE_NAME: 'unicrm_demo_session',
+      CSRF_COOKIE_NAME: 'unicrm_demo_csrf',
+      JOB_QUEUE_PREFIX: 'unicrm-demo',
       SESSION_COOKIE_SECURE: 'true',
       STORAGE_DRIVER: 's3',
       STORAGE_S3_ACCESS_KEY_ID: 'demo',
@@ -68,7 +71,12 @@ describe('Milestone 21A demo policy', () => {
       attachment: { findMany: vi.fn().mockResolvedValue([]) },
       emailAttachment: { findMany: vi.fn().mockResolvedValue([]) },
     } as never;
-    const cleanup = new DemoCleanupService(config, prisma, { delete: vi.fn() } as never);
+    const cleanup = new DemoCleanupService(
+      config,
+      prisma,
+      { delete: vi.fn() } as never,
+      { record: vi.fn() } as never,
+    );
     const now = new Date();
     expect(await cleanup.cleanupExpired(now)).toBe(1);
     expect(deleteMany).toHaveBeenCalledWith({

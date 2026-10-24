@@ -1,4 +1,5 @@
-import { Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ConflictException, Inject, Injectable, NotFoundException, Optional } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import type { NotificationType, Prisma } from '../generated/prisma/client';
 import type { AuthenticatedPrincipal } from '../auth/auth.types';
 import { addUtcDays, utcToday } from '../common/date-range';
@@ -6,6 +7,9 @@ import { paginationMeta } from '../common/dto/list-query.dto';
 import { PrismaService } from '../database/prisma.service';
 import type { NotificationListQueryDto } from './dto/notifications.dto';
 import { AutomationsService } from '../automations/automations.service';
+import type { EnvironmentVariables } from '../config/environment';
+import { DEMO_QUOTA_MESSAGE } from '../demo/demo.constants';
+import { RedisService } from '../redis/redis.service';
 
 type NotificationInput = {
   organizationId: string;
@@ -23,12 +27,43 @@ export class NotificationsService {
   constructor(
     @Inject(PrismaService) private readonly prisma: PrismaService,
     @Optional() @Inject(AutomationsService) private readonly automations?: AutomationsService,
+    @Optional()
+    @Inject(ConfigService)
+    private readonly config?: ConfigService<EnvironmentVariables, true>,
+    @Optional() @Inject(RedisService) private readonly redis?: RedisService,
   ) {}
 
   async create(
     input: NotificationInput,
     tx: Prisma.TransactionClient | PrismaService = this.prisma,
   ) {
+    if (this.config?.get('RUNTIME_MODE', { infer: true }) === 'demo') {
+      const existing = await tx.notification.findUnique({
+        where: {
+          organizationId_userId_dedupeKey: {
+            organizationId: input.organizationId,
+            userId: input.userId,
+            dedupeKey: input.dedupeKey,
+          },
+        },
+      });
+      if (existing) return existing;
+      const count = await tx.notification.count({
+        where: { organizationId: input.organizationId },
+      });
+      const limit = this.config.get('DEMO_QUOTA_NOTIFICATIONS', { infer: true });
+      const reserved = this.redis
+        ? await this.redis.reserveBounded(
+            `demo:quota:${input.organizationId}:notification`,
+            count,
+            limit,
+            this.config.get('DEMO_SESSION_TTL_SECONDS', { infer: true }),
+          )
+        : count < limit;
+      if (!reserved) {
+        throw new ConflictException(DEMO_QUOTA_MESSAGE);
+      }
+    }
     return tx.notification.upsert({
       where: {
         organizationId_userId_dedupeKey: {
