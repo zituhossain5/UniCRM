@@ -103,7 +103,7 @@ export function ForecastView() {
       .join(' · ') || '—';
 
   return (
-    <section className="crm-page forecast-page">
+    <section className="crm-page forecast-page" data-demo-tour="forecast">
       <PageHeader
         title="Sales Forecast"
         description={`Backend-authoritative pipeline forecast${meta ? ` · ${meta.timezone} · ${meta.visibility === 'own' ? 'My deals' : 'Organization'}` : ''}`}

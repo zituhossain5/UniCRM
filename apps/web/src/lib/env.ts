@@ -5,6 +5,7 @@ const publicEnvironmentSchema = z.object({
   NEXT_PUBLIC_CSRF_COOKIE_NAME: z.string().min(1).default('unicrm_csrf'),
   NEXT_PUBLIC_DEMO_API_URL: z.union([z.url(), z.string().regex(/^\//)]).optional(),
   NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME: z.string().min(1).default('unicrm_demo_csrf'),
+  NEXT_PUBLIC_DEMO_CONTACT_URL: z.union([z.url(), z.string().regex(/^mailto:/)]).optional(),
 });
 
 const parsedEnvironment = publicEnvironmentSchema.safeParse({
@@ -12,6 +13,7 @@ const parsedEnvironment = publicEnvironmentSchema.safeParse({
   NEXT_PUBLIC_CSRF_COOKIE_NAME: process.env.NEXT_PUBLIC_CSRF_COOKIE_NAME,
   NEXT_PUBLIC_DEMO_API_URL: process.env.NEXT_PUBLIC_DEMO_API_URL,
   NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME: process.env.NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME,
+  NEXT_PUBLIC_DEMO_CONTACT_URL: process.env.NEXT_PUBLIC_DEMO_CONTACT_URL,
 });
 
 if (!parsedEnvironment.success) {

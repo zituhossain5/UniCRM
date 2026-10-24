@@ -94,7 +94,7 @@ export function TasksView() {
   const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
 
   return (
-    <div className="crm-page">
+    <div className="crm-page" data-demo-tour="tasks">
       <PageHeader
         description="Delivery work across projects, people, and deadlines."
         title="Tasks"

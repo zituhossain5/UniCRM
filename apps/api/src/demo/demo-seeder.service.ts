@@ -114,7 +114,10 @@ export class DemoSeederService {
           data: dealIds.map((id, index) => ({
             id,
             organizationId,
-            name: `${companyNames[index % companyNames.length]} Growth Program`,
+            name:
+              index === 0
+                ? 'Customer Portal Development Deal'
+                : `${companyNames[index % companyNames.length]} Growth Program`,
             companyId: pick(companyIds, index % companyIds.length),
             contactId: pick(contactIds, index),
             ownerId,
@@ -211,11 +214,11 @@ export class DemoSeederService {
         const catalogIds = Array.from({ length: 5 }, () => randomUUID());
         await tx.catalogItem.createMany({
           data: [
-            ['CRM Discovery Workshop', 'SERVICE', 'SRV-001', '45000'],
-            ['Customer Portal Build', 'SERVICE', 'SRV-002', '350000'],
-            ['Analytics Dashboard', 'PRODUCT', 'PRD-001', '125000'],
-            ['Managed Support', 'SERVICE', 'SRV-003', '60000'],
-            ['Data Migration Package', 'SERVICE', 'SRV-004', '85000'],
+            ['Website Development', 'SERVICE', 'SRV-001', '150000'],
+            ['UI/UX Design', 'SERVICE', 'SRV-002', '225000'],
+            ['Maintenance', 'SERVICE', 'SRV-003', '300000'],
+            ['Managed Support', 'SERVICE', 'SRV-004', '60000'],
+            ['Data Migration Package', 'SERVICE', 'SRV-005', '85000'],
           ].map(([name, type, sku, unitPrice], index) => ({
             id: pick(catalogIds, index),
             organizationId,
@@ -256,21 +259,11 @@ export class DemoSeederService {
             quotationId,
             catalogItemId: pick(catalogIds, index),
             catalogItemName: pick(
-              [
-                'CRM Discovery Workshop',
-                'Customer Portal Build',
-                'Analytics Dashboard',
-                'Managed Support',
-              ],
+              ['Website Development', 'UI/UX Design', 'Maintenance', 'Managed Support'],
               index,
             ),
             description: pick(
-              [
-                'CRM Discovery Workshop',
-                'Customer Portal Build',
-                'Analytics Dashboard',
-                'Managed Support',
-              ],
+              ['Website Development', 'UI/UX Design', 'Maintenance', 'Managed Support'],
               index,
             ),
             quantity: '1',
@@ -310,7 +303,11 @@ export class DemoSeederService {
             inboxPriority: index === 0 ? 'HIGH' : 'NORMAL',
             isUnread: index === 2,
             subject: pick(
-              ['Portal launch timeline', 'Analytics proposal question', 'CRM migration support'],
+              [
+                'Revised customer portal proposal',
+                'Analytics proposal question',
+                'CRM migration support',
+              ],
               index,
             ),
             lastMessageAt: addDays(-index),
@@ -329,10 +326,17 @@ export class DemoSeederService {
               toAddresses: ['demo@unicrm.invalid'],
               ccAddresses: [],
               subject: pick(
-                ['Portal launch timeline', 'Analytics proposal question', 'CRM migration support'],
+                [
+                  'Revised customer portal proposal',
+                  'Analytics proposal question',
+                  'CRM migration support',
+                ],
                 index,
               ),
-              body: 'Thanks for the update. Could you confirm the next milestone and owner?',
+              body:
+                index === 0
+                  ? 'Can you send the revised proposal?'
+                  : 'Thanks for the update. Could you confirm the next milestone and owner?',
               status: 'SENT' as const,
               receivedAt: addDays(-index),
             },
@@ -345,7 +349,7 @@ export class DemoSeederService {
               fromAddress: 'demo@unicrm.invalid',
               toAddresses: [`customer${index + 1}@example.invalid`],
               ccAddresses: [],
-              subject: `Re: ${pick(['Portal launch timeline', 'Analytics proposal question', 'CRM migration support'], index)}`,
+              subject: `Re: ${pick(['Revised customer portal proposal', 'Analytics proposal question', 'CRM migration support'], index)}`,
               body: 'Absolutely. I have added the next step to the shared plan.',
               status: 'SENT' as const,
               simulated: true,

@@ -287,7 +287,10 @@ export function RecordEmail({
                 </p>
                 {message.safeErrorSummary ? <p>{message.safeErrorSummary}</p> : null}
                 {message.simulated ? (
-                  <p>Demo mode â€” this email was simulated and was not delivered externally.</p>
+                  <p className="demo-simulation-notice">
+                    <strong>Demo simulation</strong>
+                    <span>This email was recorded in UniCRM but was not delivered externally.</span>
+                  </p>
                 ) : null}
               </div>
               <Badge

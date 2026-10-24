@@ -63,7 +63,7 @@ export function QuotationsView() {
   }, [load]);
 
   return (
-    <div className="crm-page">
+    <div className="crm-page" data-demo-tour="quotation">
       <PageHeader
         title="Quotations"
         description="Client proposals, acceptance, and commercial value."

@@ -816,8 +816,11 @@ export function EmailThreadSheet({
                     <small className="overdue-text">{message.safeErrorSummary}</small>
                   ) : null}
                   {message.simulated ? (
-                    <small>
-                      Demo mode â€” this email was simulated and was not delivered externally.
+                    <small className="demo-simulation-notice">
+                      <strong>Demo simulation</strong>
+                      <span>
+                        This email was recorded in UniCRM but was not delivered externally.
+                      </span>
                     </small>
                   ) : null}
                 </article>

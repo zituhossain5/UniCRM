@@ -132,7 +132,7 @@ export function LeadsView() {
   );
   const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
   return (
-    <div className="crm-page">
+    <div className="crm-page" data-demo-tour="leads">
       <PageHeader
         title="Leads"
         description={`${meta.total} records in this view`}
@@ -143,7 +143,7 @@ export function LeadsView() {
               onOpenChange={setCreateOpen}
               onCreated={load}
               trigger={
-                <Button>
+                <Button data-demo-tour="create-lead">
                   <Plus size={15} />
                   New lead
                 </Button>
@@ -321,7 +321,12 @@ export function LeadsView() {
             </thead>
             <tbody>
               {leads.map((lead) => (
-                <tr key={lead.id}>
+                <tr
+                  data-demo-tour={
+                    lead.title === 'Customer Portal Development' ? 'demo-lead' : undefined
+                  }
+                  key={lead.id}
+                >
                   <td>
                     <button
                       className="crm-record-button"

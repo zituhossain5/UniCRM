@@ -59,6 +59,7 @@ import { NotificationBellContent, UnreadBadge } from './operational/notification
 import { ActivitySheet } from './activities/activity-sheet';
 import { CaseCreateSheet } from './cases/case-create-sheet';
 import { runtimeModeFromPath, toRuntimePath } from '@/lib/runtime';
+import { DemoExperience } from '@/components/demo/demo-experience';
 
 interface NavItem {
   href: string;
@@ -414,15 +415,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="app-main">
-        {user.organization.mode === 'DEMO' ? (
-          <div className="demo-workspace-banner" role="status">
-            <strong>DEMO WORKSPACE</strong>
-            <span>
-              You're exploring UniCRM with sample data. Changes are temporary and reset
-              automatically.
-            </span>
-          </div>
-        ) : null}
+        <DemoExperience />
         <PageContainer className={isAutomationEditor ? 'page-container--automation-editor' : ''}>
           {children}
         </PageContainer>

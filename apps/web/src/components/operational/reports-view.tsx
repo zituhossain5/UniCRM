@@ -65,7 +65,7 @@ export function ReportsView() {
     staleTime: 60_000,
   });
   return (
-    <section className="operational-page reports-page">
+    <section className="operational-page reports-page" data-demo-tour="reports">
       <PageHeader
         title="Reports"
         description="Operational CRM, delivery, and financial reporting from live records."

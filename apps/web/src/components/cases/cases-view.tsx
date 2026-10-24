@@ -90,7 +90,7 @@ export function CasesView({ initialView = 'all' }: { initialView?: string }) {
   };
 
   return (
-    <div className="crm-page cases-page">
+    <div className="crm-page cases-page" data-demo-tour="cases">
       <PageHeader
         title="Cases"
         description={`${meta.total} customer cases in this view`}

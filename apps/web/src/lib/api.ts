@@ -1,6 +1,7 @@
 import { env } from './env';
 import { configuredApiBaseUrl, joinApiUrl } from './api-url';
 import { runtimeModeFromPath, type RuntimeMode } from './runtime';
+import { announceDemoBlocked } from './demo-events';
 
 const LOOPBACK_HOSTNAMES = new Set(['localhost', '127.0.0.1']);
 
@@ -77,6 +78,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
     } catch {
       // Keep the generic message when an error response has no JSON body.
     }
+    if (response.status === 403 && runtimeModeFromPath() === 'DEMO') announceDemoBlocked(path);
     throw new ApiError(message, response.status);
   }
   if (response.status === 204) return undefined as T;

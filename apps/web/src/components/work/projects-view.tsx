@@ -105,7 +105,7 @@ export function ProjectsView() {
   const [sortField, sortOrder] = sorting.split(':') as [string, 'asc' | 'desc'];
 
   return (
-    <div className="crm-page">
+    <div className="crm-page" data-demo-tour="projects">
       <PageHeader
         description="Client delivery work, ownership, deadlines, and progress."
         title="Projects"

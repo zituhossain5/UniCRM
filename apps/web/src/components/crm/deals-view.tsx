@@ -137,7 +137,7 @@ export function DealsView() {
   );
 
   return (
-    <div className="crm-page">
+    <div className="crm-page" data-demo-tour="deal-pipeline">
       <PageHeader
         title="Deals"
         description={`${meta.total} opportunities in this view`}

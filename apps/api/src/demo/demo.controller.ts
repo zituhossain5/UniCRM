@@ -1,7 +1,7 @@
 import { Controller, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
 import type { Request, Response } from 'express';
-import { Public } from '../auth/auth.decorators';
-import { requestMetadata } from '../auth/auth.types';
+import { CurrentPrincipal, Public } from '../auth/auth.decorators';
+import { requestMetadata, type AuthenticatedPrincipal } from '../auth/auth.types';
 import { CookieService } from '../auth/cookie.service';
 import { DemoService } from './demo.service';
 
@@ -17,6 +17,18 @@ export class DemoController {
   @HttpCode(201)
   async start(@Req() request: Request, @Res({ passthrough: true }) response: Response) {
     const result = await this.demo.start(requestMetadata(request));
+    this.cookies.set(response, result.sessionToken, result.csrfToken);
+    return { data: { expiresAt: result.expiresAt } };
+  }
+
+  @Post('restart')
+  @HttpCode(201)
+  async restart(
+    @CurrentPrincipal() principal: AuthenticatedPrincipal,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+  ) {
+    const result = await this.demo.restart(principal, requestMetadata(request));
     this.cookies.set(response, result.sessionToken, result.csrfToken);
     return { data: { expiresAt: result.expiresAt } };
   }

@@ -62,6 +62,7 @@ describe('Milestone 21A demo policy', () => {
     const prisma = {
       organization: {
         findMany: vi.fn().mockResolvedValue([{ id: 'demo-id' }]),
+        findFirst: vi.fn().mockResolvedValue({ id: 'demo-id' }),
         deleteMany,
       },
       attachment: { findMany: vi.fn().mockResolvedValue([]) },

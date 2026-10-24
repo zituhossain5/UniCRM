@@ -207,6 +207,35 @@ describe('Milestone 21A secure public demo foundation', () => {
       .expect(401);
   });
 
+  it('restarts only the authenticated demo workspace and preserves normal tenants', async () => {
+    const previousOrganizationId = demoOrganizationId;
+    const restarted = await demoAgent
+      .post('/api/v1/demo/restart')
+      .set('origin', origin)
+      .set('x-csrf-token', demoCsrf)
+      .send({})
+      .expect(201);
+    demoCsrf = cookieValue(restarted, 'unicrm_demo_csrf');
+
+    const me = await demoAgent.get('/api/v1/auth/me').expect(200);
+    const user = (
+      me.body as {
+        data: { id: string; organization: { id: string; mode: string; demoExpiresAt: string } };
+      }
+    ).data;
+    demoUserId = user.id;
+    demoOrganizationId = user.organization.id;
+    expect(demoOrganizationId).not.toBe(previousOrganizationId);
+    expect(user.organization.mode).toBe('DEMO');
+    expect(
+      await prisma.organization.findUnique({ where: { id: previousOrganizationId } }),
+    ).toBeNull();
+    expect(
+      await prisma.organization.findUnique({ where: { id: normalOrganizationId } }),
+    ).not.toBeNull();
+    expect(await prisma.lead.count({ where: { organizationId: demoOrganizationId } })).toBe(10);
+  }, 60_000);
+
   it('rejects expiry and cleanup deletes only expired DEMO organizations', async () => {
     await prisma.organization.update({
       where: { id: demoOrganizationId },

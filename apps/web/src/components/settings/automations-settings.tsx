@@ -1299,7 +1299,7 @@ export function AutomationsSettings({
 
   if (view === 'list')
     return (
-      <section className="settings-section settings-section--wide">
+      <section className="settings-section settings-section--wide" data-demo-tour="automations">
         <header className="settings-section-header">
           <div>
             <h2>Automations</h2>

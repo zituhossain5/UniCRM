@@ -192,12 +192,14 @@ services:
       args:
         NEXT_PUBLIC_API_URL: https://crm.example.com/api/v1
         NEXT_PUBLIC_DEMO_API_URL: https://crm.example.com/demo-api/v1
+        NEXT_PUBLIC_DEMO_CONTACT_URL: ${NEXT_PUBLIC_DEMO_CONTACT_URL:-mailto:sales@example.com}
     restart: unless-stopped
     environment:
       NEXT_PUBLIC_API_URL: https://crm.example.com/api/v1
       NEXT_PUBLIC_CSRF_COOKIE_NAME: ${NEXT_PUBLIC_CSRF_COOKIE_NAME:-unicrm_csrf}
       NEXT_PUBLIC_DEMO_API_URL: https://crm.example.com/demo-api/v1
       NEXT_PUBLIC_DEMO_CSRF_COOKIE_NAME: unicrm_demo_csrf
+      NEXT_PUBLIC_DEMO_CONTACT_URL: ${NEXT_PUBLIC_DEMO_CONTACT_URL:-mailto:sales@example.com}
       DEMO_API_INTERNAL_URL: http://demo-api:4000/api/v1
     depends_on:
       api:

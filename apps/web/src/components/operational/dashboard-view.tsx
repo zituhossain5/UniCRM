@@ -151,7 +151,7 @@ export function DashboardView() {
     },
   ].filter((metric) => metric.value !== null);
   return (
-    <section className="operational-page">
+    <section className="operational-page" data-demo-tour="dashboard">
       <PageHeader title="Dashboard" description="What needs your attention today?" />
       <div className="metric-grid">
         {metrics.map((metric) => (

@@ -200,7 +200,7 @@ export function MailboxInbox({ initialThreadId = null }: { initialThreadId?: str
   const hasMailboxError = mailboxes.data?.data.some((mailbox) => mailbox.status === 'ERROR');
 
   return (
-    <div className="mail-page shared-inbox-page">
+    <div className="mail-page shared-inbox-page" data-demo-tour="shared-inbox">
       <PageHeader
         title="Shared inbox"
         description="Assign, prioritize, and resolve synchronized customer conversations together."
